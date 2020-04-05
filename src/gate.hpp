@@ -30,7 +30,6 @@
 namespace mage {
     using GatePageID = std::uint64_t;
 
-    //constexpr const std::uint64_t page_magic = UINT64_C(0xfd908b96364a2e73);
     constexpr const std::uint32_t gate_page_magic = UINT32_C(0x347b0c33);
 
     /* Truth table: MSB corresponds to (0, 0) and LSB corresponds to (1, 1). */
@@ -45,9 +44,9 @@ namespace mage {
     };
 
     struct GateStructure {
-        WireID input1;
-        WireID input2;
-        WireID output;
+        PageWireID input1;
+        PageWireID input2;
+        PageWireID output;
     };
 
     // template <typename T>

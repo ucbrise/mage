@@ -27,6 +27,7 @@
 namespace mage::platform {
     /* I'd prefer off_t instead of std::size_t, but off_t is POSIX. */
     int create_file(const char* filename, std::size_t length);
+    int open_file(const char* filename, std::size_t* length);
     void close_file(int fd);
 }
 

@@ -30,10 +30,10 @@ namespace mage {
     using WireLocalID = std::int64_t;
 
     /*
-     * WireIDs are PODs that are small enough that they should just be passed
-     * by value.
+     * PageWireIDs are PODs that are small enough that they should just be
+     * passed by value.
      */
-    struct WireID {
+    struct PageWireID {
     private:
         std::uint64_t data;
 

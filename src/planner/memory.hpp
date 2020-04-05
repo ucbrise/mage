@@ -19,16 +19,15 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef MAGE_PLANNER_EMP_HPP_
-#define MAGE_PLANNER_EMP_HPP_
+#ifndef MAGE_PLANNER_MEMORY_HPP_
+#define MAGE_PLANNER_MEMORY_HPP_
 
-#include <istream>
-#include <string>
+#include <cstdint>
+
 #include "circuit.hpp"
 
 namespace mage::planner {
-    bool parse_emp_circuit_header(std::istream& emp_file, CircuitInfo& header);
-    std::uint64_t parse_emp_circuit_gates(std::istream& emp_file, CircuitGate* gates, const CircuitInfo& header);
+    std::uint64_t compute_max_working_set_size(Circuit& c);
 }
 
 #endif

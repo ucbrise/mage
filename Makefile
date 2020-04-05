@@ -11,9 +11,12 @@ MAGE_OBJECTS = $(addprefix $(BINDIR)/,$(MAGE_CPP_SOURCES:.cpp=.o))
 
 .PHONY: clean
 
-all: $(BINDIR)/converter
+all: $(BINDIR)/converter $(BINDIR)/allocator
 
 $(BINDIR)/converter: $(MAGE_OBJECTS) $(BINDIR)/src/executables/converter.o
+	$(CXX) $(LDFLAGS) $+ -o $@
+
+$(BINDIR)/allocator: $(MAGE_OBJECTS) $(BINDIR)/src/executables/allocator.o
 	$(CXX) $(LDFLAGS) $+ -o $@
 
 $(BINDIR)/%.o: %.cpp $(MAGE_HEADERS)

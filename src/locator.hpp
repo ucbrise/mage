@@ -31,8 +31,8 @@ namespace mage {
     /* Locator finds wire data in memory to execute a gate. */
     template <typename Wire>
     class Locator {
-        virtual Wire* acquire(WireID w) = 0;
-        virtual void release(WireID w) = 0;
+        virtual Wire* acquire(PageWireID w) = 0;
+        virtual void release(PageWireID w) = 0;
     };
 
     /* WireFitLocator assumes all wires fit in memory. */
@@ -51,12 +51,12 @@ namespace mage {
             platform::deallocate_resident_memory(this->wires, this->numwires * sizeof(Wire));
         }
 
-        virtual Wire* acquire(WireID w) {
+        virtual Wire* acquire(PageWireID w) {
             assert(w.global_id() < this->numwires);
             return &this->wires[w.global_id()];
         }
 
-        virtual void release(WireID w) {
+        virtual void release(PageWireID w) {
             // Do nothing
         }
     };

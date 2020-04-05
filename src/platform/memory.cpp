@@ -25,8 +25,12 @@
 #include <sys/mman.h>
 
 namespace mage::platform {
-    void* allocate_resident_memory(std::size_t numbytes) {
-        void* region = mmap(NULL, numbytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_POPULATE, -1, 0);
+    void* allocate_resident_memory(std::size_t numbytes, bool swappable) {
+        int flags = MAP_PRIVATE | MAP_ANONYMOUS;
+        if (!swappable) {
+            flags |= (MAP_NORESERVE | MAP_POPULATE);
+        }
+        void* region = mmap(NULL, numbytes, PROT_READ | PROT_WRITE, flags, -1, 0);
         if (region == MAP_FAILED) {
             std::perror("allocate_resident_memory -> mmap");
             std::abort();
@@ -41,8 +45,8 @@ namespace mage::platform {
         }
     }
 
-    void* map_file(int fd, std::size_t length) {
-        void* region = mmap(NULL, length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    void* map_file(int fd, std::size_t length, bool mutate) {
+        void* region = mmap(NULL, length, PROT_READ | PROT_WRITE, mutate ? MAP_SHARED : MAP_PRIVATE, fd, 0);
         if (region == MAP_FAILED) {
             std::perror("map_file -> mmap");
             std::abort();

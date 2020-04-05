@@ -22,27 +22,65 @@
 #ifndef MAGE_CIRCUIT_HPP_
 #define MAGE_CIRCUIT_HPP_
 
+#include <cstdint>
+
 #include "gate.hpp"
 
 namespace mage {
+    const constexpr std::uint64_t circuit_magic = UINT64_C(0xfd908b96364a2e73);
+    using WireID = std::uint64_t;
+    using GateID = std::uint64_t;
+
     struct CircuitInfo {
         std::uint64_t num_gates;
-        std::uint64_t num_wires;
         std::uint64_t num_party1_inputs;
         std::uint64_t num_party2_inputs;
         std::uint64_t num_outputs;
+        std::uint64_t magic;
+
+        std::uint64_t get_num_input_wires() const {
+            return this->num_party1_inputs + this->num_party2_inputs;
+        }
+
+        std::uint64_t get_num_wires() const {
+            return this->num_gates + this->get_num_input_wires();
+        }
+
+        WireID gate_to_output_wire(GateID gate) const {
+            return gate + this->get_num_input_wires();
+        }
+
+        GateID output_wire_to_gate(WireID wire) const {
+            return wire - this->get_num_input_wires();
+        }
     };
 
     struct CircuitGate {
         std::uint64_t input1_wire;
         std::uint64_t input2_wire;
-        std::uint64_t output_wire;
         GateType type;
+        bool dead; /* Used for dead gate elimination. */
     };
 
     struct Circuit {
         CircuitInfo header;
         CircuitGate gates[0];
+
+        std::uint64_t get_num_input_wires() const {
+            return this->header.get_num_input_wires();
+        }
+
+        std::uint64_t get_num_wires() const {
+            return this->header.get_num_wires();
+        }
+
+        WireID gate_to_output_wire(GateID gate) const {
+            return this->header.gate_to_output_wire(gate);
+        }
+
+        GateID output_wire_to_gate(WireID wire) const {
+            return this->header.output_wire_to_gate(wire);
+        }
     };
 }
 

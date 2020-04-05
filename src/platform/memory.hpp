@@ -24,12 +24,58 @@
 
 #include <cstddef>
 
+#include "platform/filesystem.hpp"
+
 namespace mage::platform {
-    void* allocate_resident_memory(std::size_t numbytes);
+    void* allocate_resident_memory(std::size_t numbytes, bool swappable = false);
     void deallocate_resident_memory(void* memory, std::size_t numbytes);
 
-    void* map_file(int fd, std::size_t length);
+    template <typename T>
+    T* allocate_resident_memory(std::size_t numbytes, bool swappable = false) {
+        void* memory = allocate_resident_memory(numbytes, swappable);
+        return reinterpret_cast<T*>(memory);
+    }
+
+    void* map_file(int fd, std::size_t length, bool mutate = true);
     void unmap_file(void* memory, std::size_t length);
+
+    template <typename T>
+    T* map_file(int fd, std::size_t length, bool mutate = true) {
+        void* memory = map_file(fd, length, mutate);
+        return reinterpret_cast<T*>(memory);
+    }
+
+    template <typename T>
+    class MappedFile {
+        T* data;
+        std::size_t length;
+
+    public:
+        MappedFile(const char* filename, bool mutate = true) {
+            int fd = open_file(filename, &this->length);
+            this->data = map_file<T>(fd, this->length, mutate);
+            close_file(fd);
+        }
+
+        MappedFile(const char* filename, std::size_t length) {
+            int fd = create_file(filename, length);
+            this->data = map_file<T>(fd, length);
+            close_file(fd);
+            this->length = length;
+        }
+
+        ~MappedFile() {
+            unmap_file(this->data, this->length);
+        }
+
+        T* mapping() const {
+            return this->data;
+        }
+
+        std::size_t size() const {
+            return this->length;
+        }
+    };
 }
 
 #endif

@@ -41,6 +41,23 @@ namespace mage::platform {
         return fd;
     }
 
+    int open_file(const char* filename, std::size_t* length) {
+        int fd = open(filename, O_RDWR);
+        if (fd == -1) {
+            std::perror("open_file -> open");
+            std::abort();
+        }
+        if (length != nullptr) {
+            off_t end = lseek(fd, 0, SEEK_END);
+            if (end == (off_t) -1) {
+                std::perror("open_file -> lseek");
+                std::abort();
+            }
+            *length = (std::size_t) end;
+        }
+        return fd;
+    }
+
     void close_file(int fd) {
         if (close(fd) == -1) {
             std::perror("close_file -> close");

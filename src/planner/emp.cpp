@@ -21,6 +21,8 @@
 
 #include "planner/emp.hpp"
 
+#include <cassert>
+
 #include <istream>
 #include <sstream>
 #include <string>
@@ -29,6 +31,7 @@
 
 namespace mage::planner {
     bool parse_emp_circuit_header(std::istream& emp_file, CircuitInfo& header) {
+        std::uint64_t num_wires;
         {
             std::string line;
             std::getline(emp_file, line);
@@ -37,7 +40,7 @@ namespace mage::planner {
             }
             std::istringstream stream(line);
             stream >> header.num_gates;
-            stream >> header.num_wires;
+            stream >> num_wires;
             if (stream.fail() || stream.bad()) {
                 return false;
             }
@@ -56,16 +59,18 @@ namespace mage::planner {
                 return false;
             }
         }
+        assert(num_wires == header.get_num_wires());
+        header.magic = circuit_magic;
         return true;
     }
 
-    std::uint64_t parse_emp_circuit_gates(std::istream& emp_file, std::uint64_t num_gates, CircuitGate* gates) {
-        std::uint64_t gate_number = 0;
-        while (gate_number != num_gates) {
+    std::uint64_t parse_emp_circuit_gates(std::istream& emp_file, CircuitGate* gates, const CircuitInfo& header) {
+        GateID gate_number = 0;
+        while (gate_number != header.num_gates) {
             CircuitGate* gate = &gates[gate_number];
             std::string line;
             std::getline(emp_file, line);
-            if (gate_number == num_gates - 1) {
+            if (gate_number == header.num_gates - 1) {
                 if (emp_file.fail() || emp_file.bad()) {
                     return gate_number;
                 }
@@ -80,19 +85,19 @@ namespace mage::planner {
                 continue;
             }
 
-            gate_number++;
+            std::uint64_t output_wire;
             if (num_inputs == 1) {
                 // NOT gate
                 stream >> num_inputs; // drop first item
                 stream >> gate->input1_wire;
                 gate->input2_wire = gate->input1_wire;
-                stream >> gate->output_wire;
+                stream >> output_wire; // drop last item
             } else if (num_inputs == 2) {
                 // AND or XOR gate
                 stream >> num_inputs; // drop first item
                 stream >> gate->input1_wire;
                 stream >> gate->input2_wire;
-                stream >> gate->output_wire;
+                stream >> output_wire;
             } else {
                 return gate_number;
             }
@@ -109,7 +114,9 @@ namespace mage::planner {
             } else {
                 return gate_number;
             }
+            assert(header.gate_to_output_wire(gate_number) == output_wire);
+            gate_number++;
         }
-        return num_gates;
+        return header.num_gates;
     }
 }

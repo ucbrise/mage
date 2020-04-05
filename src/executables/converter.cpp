@@ -54,20 +54,18 @@ int main(int argc, char** argv) {
 
     std::filesystem::path emp_path(argv[1]);
     std::string out_file(emp_path.filename());
-    out_file.append(".circuit");
+    out_file.append(".cir");
     std::size_t out_file_length = sizeof(Circuit) + header.num_gates * sizeof(CircuitGate);
 
-    int fd = platform::create_file(out_file.c_str(), out_file_length);
-    Circuit* circuit = reinterpret_cast<Circuit*>(platform::map_file(fd, out_file_length));
+    platform::MappedFile<Circuit> mapped(out_file.c_str(), out_file_length);
+
+    Circuit* circuit = mapped.mapping();
     circuit->header = header;
-    std::uint64_t num_parsed = planner::parse_emp_circuit_gates(emp_file, header.num_gates, &circuit->gates[0]);
+    std::uint64_t num_parsed = planner::parse_emp_circuit_gates(emp_file, &circuit->gates[0], header);
     if (num_parsed != header.num_gates) {
         std::cerr << "Could not parse gates in " << argv[1] << ": failed on gate " << (num_parsed + 1) << "/" << header.num_gates << std::endl;
         return 1;
     }
-
-    platform::unmap_file(circuit, out_file_length);
-    platform::close_file(fd);
 
     return 0;
 }
