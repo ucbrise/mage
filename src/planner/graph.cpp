@@ -25,12 +25,7 @@
 #include <cstdint>
 
 #include <algorithm>
-#include <fstream>
-#include <iostream>
-#include <memory>
-#include <queue>
 #include <utility>
-#include <vector>
 
 #include "platform/memory.hpp"
 
@@ -100,96 +95,5 @@ namespace mage::planner {
 
     std::uint64_t WireGraph::get_num_input_wires() const {
         return this->num_input_wires;
-    }
-
-    std::vector<GateID> kahn_traversal(WireGraph& wg, std::uint64_t num_input_wires, std::uint64_t num_noninput_wires) {
-        std::vector<GateID> linearization;
-        linearization.reserve(num_noninput_wires);
-        std::vector<bool> one_input_ready(num_noninput_wires);
-        std::queue<WireID> both_inputs_ready;
-        for (WireID i = 0; i != num_input_wires; i++) {
-            both_inputs_ready.push(i);
-        }
-        while (!both_inputs_ready.empty()) {
-            WireID w = both_inputs_ready.front();
-            both_inputs_ready.pop();
-            if (w > num_input_wires) {
-                linearization.push_back(w);
-            }
-
-            auto pair = wg.outputs_of(w);
-            const WireID* enabled = pair.first;
-            std::uint64_t num_enabled = pair.second;
-            for (std::uint64_t i = 0; i != num_enabled; i++) {
-                WireID output = enabled[i];
-                if (one_input_ready[output]) {
-                    one_input_ready[output] = false;
-                    both_inputs_ready.push(output);
-                } else {
-                    one_input_ready[output] = true;
-                }
-            }
-        }
-        return linearization;
-    }
-
-    KahnTraversal::KahnTraversal(const WireGraph& graph) : wg(graph) {
-    }
-
-    void KahnTraversal::traverse() {
-        WireID evaluated;
-        while (this->select_ready_gate(evaluated)) {
-            auto pair = this->wg.outputs_of(evaluated);
-            const WireID* enabled = pair.first;
-            std::uint64_t num_enabled = pair.second;
-            for (std::uint64_t i = 0; i != num_enabled; i++) {
-                this->mark_input_ready(enabled[i]);
-            }
-        }
-    }
-
-    FileTraversalWriter::FileTraversalWriter(std::string filename) {
-        this->output.exceptions(std::ios::failbit | std::ios::badbit);
-        this->output.open(filename, std::ios::out | std::ios::binary | std::ios::trunc);
-    }
-
-    void FileTraversalWriter::append(WireID gate_output) {
-        this->output.write(reinterpret_cast<char*>(&gate_output), sizeof(output));
-    }
-
-    FileTraversalReader::FileTraversalReader(std::string filename) {
-        this->input.exceptions(std::ios::failbit | std::ios::badbit);
-        this->input.open(filename, std::ios::in | std::ios::binary);
-    }
-
-    bool FileTraversalReader::next(WireID& gate_output) {
-        this->input.read(reinterpret_cast<char*>(&gate_output), sizeof(gate_output));
-        return this->input.good();
-    }
-
-    FIFOKahnTraversal::FIFOKahnTraversal(const WireGraph& graph, std::unique_ptr<TraversalWriter>&& out)
-        : KahnTraversal(graph), one_input_ready(graph.get_num_wires()), output(std::move(out)) {
-        for (WireID i = 0; i != graph.get_num_input_wires(); i++) {
-            this->ready_gate_outputs.push(i);
-        }
-    }
-
-    bool FIFOKahnTraversal::select_ready_gate(WireID& gate_output) {
-        if (this->ready_gate_outputs.empty()) {
-            return false;
-        }
-        gate_output = this->ready_gate_outputs.front();
-        this->ready_gate_outputs.pop();
-        this->output->append(gate_output);
-        return true;
-    }
-
-    void FIFOKahnTraversal::mark_input_ready(WireID output) {
-        if (this->one_input_ready[output]) {
-            this->one_input_ready[output] = false;
-            this->ready_gate_outputs.push(output);
-        } else {
-            this->one_input_ready[output] = true;
-        }
     }
 }

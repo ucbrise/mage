@@ -23,12 +23,9 @@
 #define MAGE_PLANNER_GRAPH_HPP_
 
 #include <cstdint>
-#include <fstream>
-#include <iostream>
-#include <memory>
-#include <queue>
+
 #include <utility>
-#include <vector>
+
 #include "circuit.hpp"
 
 namespace mage::planner {
@@ -53,59 +50,6 @@ namespace mage::planner {
         std::uint64_t adjacency_len;
         std::uint64_t num_wires;
         std::uint64_t num_input_wires;
-    };
-
-    class KahnTraversal {
-    protected:
-        KahnTraversal(const WireGraph& wg);
-        virtual bool select_ready_gate(WireID& gate_output) = 0;
-        virtual void mark_input_ready(WireID output) = 0;
-
-    public:
-        void traverse();
-
-    private:
-        const WireGraph& wg;
-    };
-
-    class TraversalWriter {
-    public:
-        virtual void append(WireID gate_output) = 0;
-    };
-
-    class TraversalReader {
-    public:
-        virtual bool next(WireID& gate_output) = 0;
-    };
-
-    class FileTraversalWriter : public TraversalWriter {
-    public:
-        FileTraversalWriter(std::string filename);
-        void append(WireID gate_output) override;
-
-    private:
-        std::ofstream output;
-    };
-
-    class FileTraversalReader : public TraversalReader {
-    public:
-        FileTraversalReader(std::string filename);
-        bool next(WireID& gate_output) override;
-
-    private:
-        std::ifstream input;
-    };
-
-    class FIFOKahnTraversal : public KahnTraversal {
-    public:
-        FIFOKahnTraversal(const WireGraph& wg, std::unique_ptr<TraversalWriter>&& out);
-        bool select_ready_gate(WireID& gate_output) override;
-        void mark_input_ready(WireID output) override;
-
-    private:
-        std::queue<WireID> ready_gate_outputs;
-        std::vector<bool> one_input_ready;
-        std::unique_ptr<TraversalWriter> output;
     };
 }
 

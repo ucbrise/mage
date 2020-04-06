@@ -47,9 +47,6 @@ namespace mage::platform {
 
     template <typename T>
     class MappedFile {
-        T* data;
-        std::size_t length;
-
     public:
         MappedFile(const char* filename, bool mutate = true) {
             int fd = open_file(filename, &this->length);
@@ -64,8 +61,17 @@ namespace mage::platform {
             this->length = length;
         }
 
+        MappedFile(MappedFile<T>&& other) {
+            this->data = other.data;
+            this->length = other.length;
+            other.data = nullptr;
+            other.length = 0;
+        }
+
         ~MappedFile() {
-            unmap_file(this->data, this->length);
+            if (this->length != 0) {
+                unmap_file(this->data, this->length);
+            }
         }
 
         T* mapping() const {
@@ -75,6 +81,10 @@ namespace mage::platform {
         std::size_t size() const {
             return this->length;
         }
+
+    private:
+        T* data;
+        std::size_t length;
     };
 }
 

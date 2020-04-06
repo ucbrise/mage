@@ -25,6 +25,7 @@
 #include "circuit.hpp"
 #include "planner/graph.hpp"
 #include "planner/memory.hpp"
+#include "planner/traversal.hpp"
 #include "platform/memory.hpp"
 
 using namespace mage;
@@ -41,22 +42,51 @@ int main(int argc, char** argv) {
     std::cout << circuit->header.num_party1_inputs + circuit->header.num_party2_inputs << " inputs, " << circuit->header.num_outputs << " outputs" << std::endl;
 
     std::cout << "Computing working set of existing ordering... ";
+    std::cout.flush();
     std::uint64_t max_working_set_size = planner::compute_max_working_set_size(*circuit);
     std::cout << max_working_set_size << " wires" << std::endl;
 
-    std::cout << "Computing wire graph representation... ";
-    planner::WireGraph wg(*circuit);
-    std::cout << "done" << std::endl;
-
     std::filesystem::path circuit_path(argv[1]);
-    std::string out_file(circuit_path.filename());
-    out_file.append(".lin");
+    std::string lin_file(circuit_path.filename());
+    lin_file.append(".lin");
 
-    std::cout << "Computing linearization... ";
-    std::unique_ptr<planner::FileTraversalWriter> output(new planner::FileTraversalWriter(out_file));
-    planner::FIFOKahnTraversal traversal(wg, std::move(output));
-    traversal.traverse();
-    std::cout << "done" << std::endl;
+    {
+        std::cout << "Computing wire graph representation... ";
+        std::cout.flush();
+        planner::WireGraph wg(*circuit);
+        std::cout << "done" << std::endl;
+
+        std::cout << "Computing linearization... ";
+        std::cout.flush();
+        std::unique_ptr<planner::FileTraversalWriter> output(new planner::FileTraversalWriter(lin_file));
+        planner::FIFOKahnTraversal traversal(wg, std::move(output));
+        traversal.traverse();
+        std::cout << "done" << std::endl;
+    }
+
+    std::string ann_file(circuit_path.filename());
+    ann_file.append(".ann");
+
+    {
+        std::cout << "Annotating linearization... ";
+        std::cout.flush();
+        std::uint64_t new_max_working_set_size = planner::annotate_traversal(ann_file, *circuit, lin_file);
+        std::cout << "new maximum working set size: " << new_max_working_set_size << " wires" << std::endl;
+    }
+
+    std::string plan_file(circuit_path.filename());
+    plan_file.append(".pln");
+
+    {
+        const constexpr std::uint64_t num_wire_slots = 132000;
+        std::cout << "Planning evaluation... ";
+        std::cout.flush();
+        std::unique_ptr<planner::FileAnnotatedTraversalReader> input(new planner::FileAnnotatedTraversalReader(ann_file));
+        std::unique_ptr<FilePlanWriter> output(new FilePlanWriter(plan_file, num_wire_slots));
+        planner::SimpleAllocator allocator(std::move(input), std::move(output), *circuit, num_wire_slots);
+        allocator.allocate();
+        std::cout << allocator.get_num_swapins() << " swapins, " << allocator.get_num_swapouts() << " swapouts" << std::endl;
+    }
 
     return 0;
 }

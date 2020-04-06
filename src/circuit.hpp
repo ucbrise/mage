@@ -56,8 +56,8 @@ namespace mage {
     };
 
     struct CircuitGate {
-        std::uint64_t input1_wire;
-        std::uint64_t input2_wire;
+        WireID input1_wire;
+        WireID input2_wire;
         GateType type;
         bool dead; /* Used for dead gate elimination. */
     };
