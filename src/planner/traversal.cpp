@@ -36,35 +36,20 @@
 #include "graph.hpp"
 
 namespace mage::planner {
-    std::vector<GateID> kahn_traversal(WireGraph& wg, std::uint64_t num_input_wires, std::uint64_t num_noninput_wires) {
-        std::vector<GateID> linearization;
-        linearization.reserve(num_noninput_wires);
-        std::vector<bool> one_input_ready(num_noninput_wires);
-        std::queue<WireID> both_inputs_ready;
-        for (WireID i = 0; i != num_input_wires; i++) {
-            both_inputs_ready.push(i);
-        }
-        while (!both_inputs_ready.empty()) {
-            WireID w = both_inputs_ready.front();
-            both_inputs_ready.pop();
-            if (w > num_input_wires) {
-                linearization.push_back(w);
-            }
+    NopTraversal::NopTraversal(const Circuit& c, std::unique_ptr<TraversalWriter>&& out)
+        : circuit(c), output(std::move(out)) {
+    }
 
-            auto pair = wg.outputs_of(w);
-            const WireID* enabled = pair.first;
-            std::uint64_t num_enabled = pair.second;
-            for (std::uint64_t i = 0; i != num_enabled; i++) {
-                WireID output = enabled[i];
-                if (one_input_ready[output]) {
-                    one_input_ready[output] = false;
-                    both_inputs_ready.push(output);
-                } else {
-                    one_input_ready[output] = true;
-                }
+    void NopTraversal::traverse() {
+        for (WireID i = 0; i != this->circuit.get_num_input_wires(); i++) {
+            this->output->append(i);
+        }
+        for (GateID i = 0; i != this->circuit.header.num_gates; i++) {
+            if (!this->circuit.gates[i].dead) {
+                WireID w = this->circuit.gate_to_output_wire(i);
+                this->output->append(w);
             }
         }
-        return linearization;
     }
 
     KahnTraversal::KahnTraversal(const WireGraph& graph, std::unique_ptr<TraversalWriter>&& out)

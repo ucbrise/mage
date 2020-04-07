@@ -26,6 +26,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -101,7 +102,7 @@ namespace mage::planner {
         AnnotatedTraversalNode* annotated_traversal = annotated_traversal_file.mapping();
         std::unordered_map<WireID, TraversalIndex> next_access;
         for (WireID wire = c.get_num_wires() - c.header.num_outputs; wire != c.get_num_wires(); wire++) {
-            next_access[wire] = never_used_again;
+            next_access[wire] = output_wire;
         }
         for (TraversalIndex i = traversal_length - 1; i != UINT64_MAX; i--) {
             WireID gate_output = traversal[i];
@@ -291,9 +292,6 @@ namespace mage::planner {
     }
 
     bool SimpleAllocator::update_residency_state(WireMemoryLocation slot, WireID wire, bool just_swapped_in, bool final_use) {
-        if ((this->resident.find(wire) == this->resident.end()) != just_swapped_in) {
-            std::cout << wire << " " << just_swapped_in << std::endl;
-        }
         assert((this->resident.find(wire) == this->resident.end()) == just_swapped_in);
         if (final_use) {
             if (!just_swapped_in) {
@@ -304,6 +302,7 @@ namespace mage::planner {
         } else if (just_swapped_in) {
             this->resident[wire] = slot;
         } else {
+            /* Needed since we "pinned" this entry and need to reset its this->resident value. */
             this->resident[wire] = slot;
         }
         return true;
@@ -327,6 +326,7 @@ namespace mage::planner {
         }
 
         slots.output = this->allocate_slot();
+
         this->resident[gate.output] = slots.output;
     }
 
@@ -345,6 +345,62 @@ namespace mage::planner {
         this->emit_swapout(iter->second, iter->first);
         WireMemoryLocation slot = iter->second;
         this->resident.erase(iter);
+        return slot;
+    }
+
+    BeladyAllocator::BeladyAllocator(std::unique_ptr<AnnotatedTraversalReader>&& annotated, std::unique_ptr<PlanWriter>&& out, const Circuit& c, std::uint64_t num_wire_slots)
+        : SimpleAllocator(std::move(annotated), std::move(out), c, num_wire_slots) {
+    }
+
+    void BeladyAllocator::insert_next_use_order(WireID wire, WireMemoryLocation slot, TraversalIndex next_use) {
+        assert(next_use != never_used_again);
+        this->next_use_by_slot[slot] = next_use;
+        this->next_use_order.insert(std::make_pair(next_use, std::make_pair(slot, wire)));
+    }
+
+    void BeladyAllocator::update_next_use_order(WireID wire, WireMemoryLocation slot, TraversalIndex next_use) {
+        auto i = this->next_use_by_slot.find(slot);
+        if (i != this->next_use_by_slot.end()) {
+            auto j = this->next_use_order.find(i->second);
+            assert(j != this->next_use_order.end());
+            while (j->second.first != slot) {
+                j++;
+                assert(j->first == i->second);
+            }
+            assert(j->second.second == wire);
+            this->next_use_order.erase(j);
+            this->next_use_by_slot.erase(i);
+        }
+        if (next_use != never_used_again) {
+            this->insert_next_use_order(wire, slot, next_use);
+        }
+    }
+
+    void BeladyAllocator::allocate_gate(GateExecAction& slots, const RawGate& gate, const AnnotatedTraversalNode& annotation) {
+        this->SimpleAllocator::allocate_gate(slots, gate, annotation);
+        this->update_next_use_order(gate.input1, slots.input1, annotation.next_input1_use);
+        if (gate.input1 == gate.input2) {
+            assert(slots.input1 == slots.input2);
+        } else {
+            this->update_next_use_order(gate.input2, slots.input2, annotation.next_input2_use);
+        }
+        this->insert_next_use_order(gate.output, slots.output, annotation.next_output_use);
+    }
+
+    WireMemoryLocation BeladyAllocator::evict_wire() {
+        auto iter = this->next_use_order.end();
+
+        do {
+            assert(iter != this->next_use_order.begin());
+            iter--;
+        } while (this->resident.at(iter->second.second) == this->size);
+
+        WireMemoryLocation slot = iter->second.first;
+        WireID wire = iter->second.second;
+        this->emit_swapout(slot, wire);
+        this->next_use_order.erase(iter);
+        this->next_use_by_slot.erase(slot);
+        this->resident.erase(wire);
         return slot;
     }
 }

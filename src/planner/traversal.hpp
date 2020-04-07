@@ -41,6 +41,20 @@ namespace mage::planner {
     using FileTraversalWriter = FileStreamWriter<WireID>;
     using FileTraversalReader = FileStreamReader<WireID>;
 
+    /*
+     * Write out the Traversal concept once we have a C++20 compiler.
+     */
+
+    class NopTraversal {
+    public:
+        NopTraversal(const Circuit& c, std::unique_ptr<TraversalWriter>&& out);
+        void traverse();
+
+    private:
+        const Circuit& circuit;
+        std::unique_ptr<TraversalWriter> output;
+    };
+
     class KahnTraversal {
     protected:
         KahnTraversal(const WireGraph& wg, std::unique_ptr<TraversalWriter>&& out);

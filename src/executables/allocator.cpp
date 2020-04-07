@@ -60,7 +60,8 @@ int main(int argc, char** argv) {
         std::cout.flush();
         std::unique_ptr<planner::FileTraversalWriter> output(new planner::FileTraversalWriter(lin_file));
         //planner::FIFOKahnTraversal traversal(wg, std::move(output));
-        planner::WorkingSetTraversal traversal(wg, std::move(output), *circuit);
+        //planner::WorkingSetTraversal traversal(wg, std::move(output), *circuit);
+        planner::NopTraversal traversal(*circuit, std::move(output));
         traversal.traverse();
         std::cout << "done" << std::endl;
     }
@@ -79,12 +80,13 @@ int main(int argc, char** argv) {
     plan_file.append(".pln");
 
     {
-        const constexpr std::uint64_t num_wire_slots = 132000;
+        const constexpr std::uint64_t num_wire_slots = 32768;
         std::cout << "Planning evaluation... ";
         std::cout.flush();
         std::unique_ptr<planner::FileAnnotatedTraversalReader> input(new planner::FileAnnotatedTraversalReader(ann_file));
         std::unique_ptr<FilePlanWriter> output(new FilePlanWriter(plan_file, num_wire_slots));
-        planner::SimpleAllocator allocator(std::move(input), std::move(output), *circuit, num_wire_slots);
+        //planner::SimpleAllocator allocator(std::move(input), std::move(output), *circuit, num_wire_slots);
+        planner::BeladyAllocator allocator(std::move(input), std::move(output), *circuit, num_wire_slots);
         allocator.allocate();
         std::cout << allocator.get_num_swapins() << " swapins, " << allocator.get_num_swapouts() << " swapouts" << std::endl;
     }

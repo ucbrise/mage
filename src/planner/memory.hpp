@@ -24,8 +24,10 @@
 
 #include <cstdint>
 
+#include <map>
 #include <memory>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "circuit.hpp"
@@ -39,6 +41,7 @@ namespace mage::planner {
 
     using TraversalIndex = std::uint64_t;
     const constexpr TraversalIndex never_used_again = 0;
+    const constexpr TraversalIndex output_wire = UINT64_MAX;
     struct AnnotatedTraversalNode {
         WireID gate_output;
         TraversalIndex next_input1_use;
@@ -106,7 +109,19 @@ namespace mage::planner {
         std::unordered_map<WireID, WireMemoryLocation> resident;
     };
 
-    std::uint64_t simple_allocator(std::unique_ptr<TraversalReader> traversal, std::unique_ptr<PlanWriter> writer, std::uint64_t num_wire_slots, const Circuit& circuit);
+    class BeladyAllocator : public SimpleAllocator {
+    public:
+        BeladyAllocator(std::unique_ptr<AnnotatedTraversalReader>&& annotated, std::unique_ptr<PlanWriter>&& out, const Circuit& c, std::uint64_t num_wire_slots);
+        void allocate_gate(GateExecAction& slots, const RawGate& gate, const AnnotatedTraversalNode& annotation) override;
+        WireMemoryLocation evict_wire() override;
+
+    private:
+        void insert_next_use_order(WireID wire, WireMemoryLocation slot, TraversalIndex next_use);
+        void update_next_use_order(WireID wire, WireMemoryLocation slot, TraversalIndex next_use);
+
+        std::multimap<TraversalIndex, std::pair<WireMemoryLocation, WireID>> next_use_order;
+        std::unordered_map<WireMemoryLocation, TraversalIndex> next_use_by_slot;
+    };
 }
 
 #endif
