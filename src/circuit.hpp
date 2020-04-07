@@ -22,6 +22,7 @@
 #ifndef MAGE_CIRCUIT_HPP_
 #define MAGE_CIRCUIT_HPP_
 
+#include <cassert>
 #include <cstdint>
 
 #include "gate.hpp"
@@ -47,10 +48,13 @@ namespace mage {
         }
 
         WireID gate_to_output_wire(GateID gate) const {
+            assert(gate < this->num_gates);
             return gate + this->get_num_input_wires();
         }
 
         GateID output_wire_to_gate(WireID wire) const {
+            assert(wire > this->get_num_input_wires());
+            assert(wire < this->get_num_wires());
             return wire - this->get_num_input_wires();
         }
     };

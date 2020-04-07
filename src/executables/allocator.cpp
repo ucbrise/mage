@@ -59,7 +59,8 @@ int main(int argc, char** argv) {
         std::cout << "Computing linearization... ";
         std::cout.flush();
         std::unique_ptr<planner::FileTraversalWriter> output(new planner::FileTraversalWriter(lin_file));
-        planner::FIFOKahnTraversal traversal(wg, std::move(output));
+        //planner::FIFOKahnTraversal traversal(wg, std::move(output));
+        planner::WorkingSetTraversal traversal(wg, std::move(output), *circuit);
         traversal.traverse();
         std::cout << "done" << std::endl;
     }

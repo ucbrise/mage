@@ -28,6 +28,8 @@
 #include <iostream>
 #include <memory>
 #include <queue>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -65,23 +67,23 @@ namespace mage::planner {
         return linearization;
     }
 
-    KahnTraversal::KahnTraversal(const WireGraph& graph) : wg(graph) {
+    KahnTraversal::KahnTraversal(const WireGraph& graph, std::unique_ptr<TraversalWriter>&& out)
+        : wg(graph), output(std::move(out)) {
     }
 
     void KahnTraversal::traverse() {
         WireID evaluated;
         while (this->select_ready_gate(evaluated)) {
+            this->output->append(evaluated);
             auto pair = this->wg.outputs_of(evaluated);
             const WireID* enabled = pair.first;
             std::uint64_t num_enabled = pair.second;
-            for (std::uint64_t i = 0; i != num_enabled; i++) {
-                this->mark_input_ready(enabled[i]);
-            }
+            this->mark_inputs_ready(evaluated, enabled, num_enabled);
         }
     }
 
     FIFOKahnTraversal::FIFOKahnTraversal(const WireGraph& graph, std::unique_ptr<TraversalWriter>&& out)
-        : KahnTraversal(graph), one_input_ready(graph.get_num_wires()), output(std::move(out)) {
+        : KahnTraversal(graph, std::move(out)), one_input_ready(graph.get_num_wires()) {
         for (WireID i = 0; i != graph.get_num_input_wires(); i++) {
             this->ready_gate_outputs.push(i);
         }
@@ -93,16 +95,116 @@ namespace mage::planner {
         }
         gate_output = this->ready_gate_outputs.front();
         this->ready_gate_outputs.pop();
-        this->output->append(gate_output);
         return true;
     }
 
-    void FIFOKahnTraversal::mark_input_ready(WireID output) {
-        if (this->one_input_ready[output]) {
-            this->one_input_ready[output] = false;
-            this->ready_gate_outputs.push(output);
-        } else {
-            this->one_input_ready[output] = true;
+    void FIFOKahnTraversal::mark_inputs_ready(WireID input, const WireID* outputs, std::uint64_t num_outputs) {
+        for (std::uint64_t i = 0; i != num_outputs; i++) {
+            WireID output = outputs[i];
+            if (this->one_input_ready[output]) {
+                this->one_input_ready[output] = false;
+                this->ready_gate_outputs.push(output);
+            } else {
+                this->one_input_ready[output] = true;
+            }
+        }
+    }
+
+    WorkingSetTraversal::WorkingSetTraversal(const WireGraph& graph, std::unique_ptr<TraversalWriter>&& out, const Circuit& c)
+        : KahnTraversal(graph, std::move(out)), circuit(c) {
+        for (WireID i = 0; i != graph.get_num_input_wires(); i++) {
+            this->ready_gate_outputs_harmful.insert(i);
+        }
+    }
+
+    bool pop_item(std::unordered_set<WireID>& set, WireID& item) {
+        if (!set.empty()) {
+            auto iter = set.begin();
+            item = *iter;
+            set.erase(iter);
+            return true;
+        }
+        return false;
+    }
+
+    bool WorkingSetTraversal::select_ready_gate(WireID& gate_output) {
+        bool rv = pop_item(this->ready_gate_outputs_preferred, gate_output)
+            || pop_item(this->ready_gate_outputs_harmless, gate_output)
+            || pop_item(this->ready_gate_outputs_harmful, gate_output);
+
+        if (rv) {
+            /*
+             * If we just obtained an input wire, that doesn't actually make
+             * it more advantageous to bring in any more wires, so we can skip
+             * this step. That's why there's no "else" clause.
+             */
+            if (gate_output >= this->circuit.get_num_input_wires()) {
+                GateID gate_id = this->circuit.output_wire_to_gate(gate_output);
+                const CircuitGate& gate = this->circuit.gates[gate_id];
+                assert(!gate.dead);
+                this->decrement_score(gate.input1_wire);
+                this->decrement_score(gate.input2_wire);
+            }
+        }
+
+        return rv;
+    }
+
+    void WorkingSetTraversal::decrement_score(WireID input) {
+        auto iter = this->unfired_gate_count.find(input);
+        assert(iter != this->unfired_gate_count.end());
+        iter->second--;
+        if (iter->second == 0) {
+            this->unfired_gate_count.erase(iter);
+        } else if (iter->second == 1) {
+            /* Update any gates that this wire feeds into */
+            auto pair = wg.outputs_of(input);
+            const WireID* enabled = pair.first;
+            std::uint64_t num_enabled = pair.second;
+            for (std::uint64_t i = 0; i != num_enabled; i++) {
+                WireID gate_output = enabled[i];
+                auto j = this->ready_gate_outputs_harmful.find(gate_output);
+                if (j != this->ready_gate_outputs_harmful.end()) {
+                    this->ready_gate_outputs_harmful.erase(j);
+                    this->ready_gate_outputs_harmless.insert(gate_output);
+                } else {
+                    j = this->ready_gate_outputs_harmless.find(gate_output);
+                    if (j != this->ready_gate_outputs_harmless.end()) {
+                        this->ready_gate_outputs_harmless.erase(j);
+                        this->ready_gate_outputs_preferred.insert(gate_output);
+                    } else {
+                        assert(this->ready_gate_outputs_preferred.find(gate_output) == this->ready_gate_outputs_preferred.end());
+                    }
+                }
+            }
+        }
+    }
+
+    void WorkingSetTraversal::mark_inputs_ready(WireID input, const WireID* outputs, std::uint64_t num_outputs) {
+        assert(input < this->circuit.get_num_wires());
+        if (input >= this->circuit.get_num_wires() - this->circuit.header.num_outputs) {
+            return;
+        }
+        assert(num_outputs != 0);
+        assert(this->unfired_gate_count.find(input) == this->unfired_gate_count.end());
+        this->unfired_gate_count[input] = num_outputs;
+        for (std::uint64_t i = 0; i != num_outputs; i++) {
+            WireID output = outputs[i];
+            auto iter = this->one_input_ready.find(output);
+            if (iter == this->one_input_ready.end()) {
+                this->one_input_ready[output] = input;
+            } else {
+                WireID other_input = iter->second;
+                std::uint64_t other_num_outputs = this->unfired_gate_count.at(other_input);
+                if (num_outputs == 1 && other_num_outputs == 1) {
+                    this->ready_gate_outputs_preferred.insert(output);
+                } else if (num_outputs == 1 || other_num_outputs == 1) {
+                    this->ready_gate_outputs_harmless.insert(output);
+                } else {
+                    this->ready_gate_outputs_harmful.insert(output);
+                }
+                this->one_input_ready.erase(iter);
+            }
         }
     }
 }

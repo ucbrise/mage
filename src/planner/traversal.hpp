@@ -27,6 +27,8 @@
 #include <iostream>
 #include <memory>
 #include <queue>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 #include "circuit.hpp"
@@ -34,34 +36,76 @@
 #include "planner/graph.hpp"
 
 namespace mage::planner {
-    class KahnTraversal {
-    protected:
-        KahnTraversal(const WireGraph& wg);
-        virtual bool select_ready_gate(WireID& gate_output) = 0;
-        virtual void mark_input_ready(WireID output) = 0;
-
-    public:
-        void traverse();
-
-    private:
-        const WireGraph& wg;
-    };
-
     using TraversalWriter = StreamWriter<WireID>;
     using TraversalReader = StreamReader<WireID>;
     using FileTraversalWriter = FileStreamWriter<WireID>;
     using FileTraversalReader = FileStreamReader<WireID>;
 
+    class KahnTraversal {
+    protected:
+        KahnTraversal(const WireGraph& wg, std::unique_ptr<TraversalWriter>&& out);
+        virtual bool select_ready_gate(WireID& gate_output) = 0;
+        virtual void mark_inputs_ready(WireID input, const WireID* outputs, std::uint64_t num_outputs) = 0;
+
+        const WireGraph& wg;
+
+    public:
+        void traverse();
+
+    private:
+        std::unique_ptr<TraversalWriter> output;
+    };
+
     class FIFOKahnTraversal : public KahnTraversal {
     public:
         FIFOKahnTraversal(const WireGraph& wg, std::unique_ptr<TraversalWriter>&& out);
         bool select_ready_gate(WireID& gate_output) override;
-        void mark_input_ready(WireID output) override;
+        void mark_inputs_ready(WireID input, const WireID* outputs, std::uint64_t num_outputs) override;
 
     private:
         std::queue<WireID> ready_gate_outputs;
         std::vector<bool> one_input_ready;
-        std::unique_ptr<TraversalWriter> output;
+    };
+
+    class WorkingSetTraversal : public KahnTraversal {
+    public:
+        WorkingSetTraversal(const WireGraph& wg, std::unique_ptr<TraversalWriter>&& out, const Circuit& c);
+        bool select_ready_gate(WireID& gate_output) override;
+        void mark_inputs_ready(WireID input, const WireID* outputs, std::uint64_t num_outputs) override;
+
+    private:
+        void decrement_score(WireID input);
+
+        /*
+         * The score of a wire is "unfired gate count" --- the number of
+         * unfired gates it feeds into. this->unfired_gate_count keeps track of
+         * the score of each wire whose corresponding gate has been executed
+         * and whose score is nonzero.
+         *
+         * An unfired gate is PREFERRED if both of its input wires have score
+         * 1. It is HARMLESS if at least one of its input wires has score 1. It
+         * is HARMFUL if neither of its input wires has score 1.
+         */
+
+        /* Ready gates whose execution would reduce the working set size. */
+        std::unordered_set<WireID> ready_gate_outputs_preferred;
+
+        /* Ready gates whose execution would not change the working set size. */
+        std::unordered_set<WireID> ready_gate_outputs_harmless;
+
+        /* Ready gates whose execution would increase the working set size. */
+        std::unordered_set<WireID> ready_gate_outputs_harmful;
+
+        /* Maps an input wire to the number of unfired gates it feeds into. */
+        std::unordered_map<WireID, std::uint64_t> unfired_gate_count;
+
+        /*
+         * Maps gate output wires where one input is ready to the input wire
+         * that is ready.
+         */
+        std::unordered_map<WireID, WireID> one_input_ready;
+
+        const Circuit& circuit;
     };
 }
 
