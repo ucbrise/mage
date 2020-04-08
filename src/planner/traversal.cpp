@@ -24,6 +24,7 @@
 #include <cstdint>
 
 #include <algorithm>
+#include <forward_list>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -54,6 +55,9 @@ namespace mage::planner {
 
     KahnTraversal::KahnTraversal(const WireGraph& graph, std::unique_ptr<TraversalWriter>&& out)
         : wg(graph), output(std::move(out)) {
+    }
+
+    KahnTraversal::~KahnTraversal() {
     }
 
     void KahnTraversal::traverse() {
@@ -189,6 +193,97 @@ namespace mage::planner {
                     this->ready_gate_outputs_harmful.insert(output);
                 }
                 this->one_input_ready.erase(iter);
+            }
+        }
+    }
+
+    MRUTraversal::MRUTraversal(const WireGraph& graph, std::unique_ptr<TraversalWriter>&& out, const Circuit& c)
+        : KahnTraversal(graph, std::move(out)), current_step(1), one_input_ready(graph.get_num_wires()), circuit(c) {
+        for (WireID i = 0; i != graph.get_num_input_wires(); i++) {
+            this->ready_gate_outputs.push_front(i);
+        }
+    }
+
+    bool MRUTraversal::select_ready_gate(WireID& gate_output) {
+        if (this->ready_gate_outputs.empty()) {
+            return false;
+        }
+        std::uint64_t max_score = 0;
+        auto max_score_iter = this->ready_gate_outputs.end();
+        auto i = this->ready_gate_outputs.begin();
+        auto j = this->ready_gate_outputs.before_begin();
+        while (i != this->ready_gate_outputs.end()) {
+            WireID output = *i;
+            std::uint64_t score;
+            if (output < this->circuit.get_num_input_wires()) {
+                score = 0;
+            } else {
+                GateID gate_id = this->circuit.output_wire_to_gate(output);
+                WireID input1 = this->circuit.gates[gate_id].input1_wire;
+                WireID input2 = this->circuit.gates[gate_id].input2_wire;
+                WireInfo& info1 = this->wire_info.at(input1);
+                WireInfo& info2 = this->wire_info.at(input2);
+                score = std::min(info1.mru_step, info2.mru_step);
+            }
+            if (score > max_score || max_score == 0) {
+                max_score = score;
+                max_score_iter = j;
+            }
+            j = i;
+            i++;
+        }
+        assert(max_score_iter != this->ready_gate_outputs.end());
+        auto before_max_score_iter = max_score_iter++;
+        gate_output = *max_score_iter;
+        this->ready_gate_outputs.erase_after(before_max_score_iter);
+
+        if (gate_output >= this->circuit.get_num_input_wires()) {
+            GateID gate_id = this->circuit.output_wire_to_gate(gate_output);
+
+            WireID input1 = this->circuit.gates[gate_id].input1_wire;
+            auto iter1 = this->wire_info.find(input1);
+            assert(iter1 != this->wire_info.end());
+            WireInfo& info1 = iter1->second;
+            info1.unfired_gate_count--;
+            if (info1.unfired_gate_count == 0) {
+                this->wire_info.erase(iter1);
+            } else {
+                info1.mru_step = this->current_step;
+            }
+
+            WireID input2 = this->circuit.gates[gate_id].input2_wire;
+            auto iter2 = this->wire_info.find(input2);
+            assert(iter2 != this->wire_info.end());
+            WireInfo& info2 = iter2->second;
+            info2.unfired_gate_count--;
+            if (info2.unfired_gate_count == 0) {
+                this->wire_info.erase(iter2);
+            } else {
+                info2.mru_step = this->current_step;
+            }
+        }
+
+        std::uint64_t fanout = this->wg.outputs_of(gate_output).second;
+        assert(this->wire_info.find(gate_output) == this->wire_info.end());
+        this->wire_info.insert(std::make_pair(gate_output, WireInfo(fanout, this->current_step)));
+
+        if (this->current_step % 1000 == 0) {
+            std::cout << "Finished " << this->current_step << " / " << this->circuit.get_num_wires() << std::endl;
+        }
+
+        this->current_step++;
+
+        return true;
+    }
+
+    void MRUTraversal::mark_inputs_ready(WireID input, const WireID* outputs, std::uint64_t num_outputs) {
+        for (std::uint64_t i = 0; i != num_outputs; i++) {
+            WireID output = outputs[i];
+            if (this->one_input_ready[output]) {
+                this->one_input_ready[output] = false;
+                this->ready_gate_outputs.push_front(output);
+            } else {
+                this->one_input_ready[output] = true;
             }
         }
     }

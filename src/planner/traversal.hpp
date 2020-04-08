@@ -23,6 +23,7 @@
 #define MAGE_PLANNER_TRAVERSAL_HPP_
 
 #include <cstdint>
+#include <forward_list>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -58,6 +59,7 @@ namespace mage::planner {
     class KahnTraversal {
     protected:
         KahnTraversal(const WireGraph& wg, std::unique_ptr<TraversalWriter>&& out);
+        virtual ~KahnTraversal() = 0;
         virtual bool select_ready_gate(WireID& gate_output) = 0;
         virtual void mark_inputs_ready(WireID input, const WireID* outputs, std::uint64_t num_outputs) = 0;
 
@@ -72,7 +74,7 @@ namespace mage::planner {
 
     class FIFOKahnTraversal : public KahnTraversal {
     public:
-        FIFOKahnTraversal(const WireGraph& wg, std::unique_ptr<TraversalWriter>&& out);
+        FIFOKahnTraversal(const WireGraph& graph, std::unique_ptr<TraversalWriter>&& out);
         bool select_ready_gate(WireID& gate_output) override;
         void mark_inputs_ready(WireID input, const WireID* outputs, std::uint64_t num_outputs) override;
 
@@ -83,7 +85,7 @@ namespace mage::planner {
 
     class WorkingSetTraversal : public KahnTraversal {
     public:
-        WorkingSetTraversal(const WireGraph& wg, std::unique_ptr<TraversalWriter>&& out, const Circuit& c);
+        WorkingSetTraversal(const WireGraph& graph, std::unique_ptr<TraversalWriter>&& out, const Circuit& c);
         bool select_ready_gate(WireID& gate_output) override;
         void mark_inputs_ready(WireID input, const WireID* outputs, std::uint64_t num_outputs) override;
 
@@ -119,6 +121,27 @@ namespace mage::planner {
          */
         std::unordered_map<WireID, WireID> one_input_ready;
 
+        const Circuit& circuit;
+    };
+
+    struct WireInfo {
+        WireInfo(std::uint64_t fanout, std::uint64_t step) : unfired_gate_count(fanout), mru_step(step) {
+        }
+        std::uint64_t unfired_gate_count;
+        std::uint64_t mru_step;
+    };
+
+    class MRUTraversal : public KahnTraversal {
+    public:
+        MRUTraversal(const WireGraph& wg, std::unique_ptr<TraversalWriter>&& out, const Circuit& c);
+        bool select_ready_gate(WireID& gate_output) override;
+        void mark_inputs_ready(WireID input, const WireID* outputs, std::uint64_t num_outputs) override;
+
+    private:
+        std::uint64_t current_step;
+        std::forward_list<WireID> ready_gate_outputs;
+        std::vector<bool> one_input_ready;
+        std::unordered_map<WireID, WireInfo> wire_info;
         const Circuit& circuit;
     };
 }

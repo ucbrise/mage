@@ -62,6 +62,7 @@ int main(int argc, char** argv) {
         //planner::FIFOKahnTraversal traversal(wg, std::move(output));
         //planner::WorkingSetTraversal traversal(wg, std::move(output), *circuit);
         planner::NopTraversal traversal(*circuit, std::move(output));
+        // planner::MRUTraversal traversal(wg, std::move(output), *circuit);
         traversal.traverse();
         std::cout << "done" << std::endl;
     }

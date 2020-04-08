@@ -53,7 +53,7 @@ namespace mage {
         }
 
         GateID output_wire_to_gate(WireID wire) const {
-            assert(wire > this->get_num_input_wires());
+            assert(wire >= this->get_num_input_wires());
             assert(wire < this->get_num_wires());
             return wire - this->get_num_input_wires();
         }
