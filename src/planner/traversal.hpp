@@ -35,6 +35,7 @@
 #include "circuit.hpp"
 #include "stream.hpp"
 #include "planner/graph.hpp"
+#include "util/prioqueue.hpp"
 
 namespace mage::planner {
     using TraversalWriter = StreamWriter<WireID>;
@@ -131,9 +132,9 @@ namespace mage::planner {
         std::uint64_t mru_step;
     };
 
-    class MRUTraversal : public KahnTraversal {
+    class LinearMRUTraversal : public KahnTraversal {
     public:
-        MRUTraversal(const WireGraph& wg, std::unique_ptr<TraversalWriter>&& out, const Circuit& c);
+        LinearMRUTraversal(const WireGraph& wg, std::unique_ptr<TraversalWriter>&& out, const Circuit& c);
         bool select_ready_gate(WireID& gate_output) override;
         void mark_inputs_ready(WireID input, const WireID* outputs, std::uint64_t num_outputs) override;
 
@@ -142,6 +143,24 @@ namespace mage::planner {
         std::forward_list<WireID> ready_gate_outputs;
         std::vector<bool> one_input_ready;
         std::unordered_map<WireID, WireInfo> wire_info;
+        const Circuit& circuit;
+    };
+
+    class MRUTraversal : public KahnTraversal {
+    public:
+        MRUTraversal(const WireGraph& wg, std::unique_ptr<TraversalWriter>&& out, const Circuit& c);
+        bool select_ready_gate(WireID& gate_output) override;
+        void mark_inputs_ready(WireID input, const WireID* outputs, std::uint64_t num_outputs) override;
+
+    private:
+        void updated_wire_mru_step(WireID wire, std::uint64_t new_mru_step);
+        std::uint64_t compute_output_score(WireID gate_output);
+        std::uint64_t current_step;
+
+        /* Priority queue, ordered by negative score */
+        PriorityQueue<std::int64_t, WireID> ready_gate_outputs;
+        std::unordered_map<WireID, WireInfo> wire_info;
+        std::vector<bool> one_input_ready;
         const Circuit& circuit;
     };
 }

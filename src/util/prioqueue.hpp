@@ -1,0 +1,147 @@
+/*
+ * Copyright (C) 2020 Sam Kumar <samkumar@cs.berkeley.edu>
+ * Copyright (C) 2020 University of California, Berkeley
+ * All rights reserved.
+ *
+ * This file is part of MAGE.
+ *
+ * MAGE is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * MAGE is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+#ifndef MAGE_UTIL_PRIOQUEUE_HPP_
+#define MAGE_UTIL_PRIOQUEUE_HPP_
+
+#include <cassert>
+#include <cstdint>
+#include <algorithm>
+#include <unordered_map>
+#include <vector>
+
+/*
+ * Unlike std::priority_queue, this priority queue supports the decreasekey
+ * operation.
+ */
+template <typename K, typename V>
+class PriorityQueue {
+public:
+    PriorityQueue() {
+    }
+
+    bool empty() const {
+        return this->data.empty();
+    }
+
+    std::pair<K, V>& min() {
+        assert(!this->empty());
+        return this->data[0];
+    }
+
+    std::pair<K, V> remove_min() {
+        assert(!this->empty());
+
+        std::pair<K, V> top = this->data[0];
+        this->locator.erase(top.second);
+
+        Index newsize = this->data.size() - 1;
+        if (newsize != 0) {
+            const std::pair<K, V>& last = this->data[newsize];
+            Index i = this->bubbleDown(0, last.first, newsize);
+            this->update(i, last);
+        }
+        this->data.resize(newsize);
+
+        return top;
+    }
+
+    void insert(const K& key, const V& value) {
+        Index prevsize = this->data.size();
+        this->data.resize(prevsize + 1);
+        Index i = this->bubbleUp(prevsize, key);
+        this->set(i, std::make_pair(key, value));
+        if (value == 4288365) {
+            std::cout << "found it" << std::endl;
+        }
+    }
+
+    void decrease_key(const K& newkey, const V& value) {
+        Index i = this->locator.at(value);
+        if (newkey == this->data[i].first) {
+            return;
+        }
+        assert(newkey < this->data[i].first);
+        i = this->bubbleUp(i, newkey);
+        this->update(i, std::make_pair(newkey, value));
+    }
+
+    bool contains(const V& value) {
+        return this->locator.find(value) != this->locator.end();
+    }
+
+private:
+    using Index = std::uint64_t;
+
+    static Index parent(Index child) {
+        assert(child != 0);
+        return ((child + 1) >> 1) - 1;
+    }
+
+    static Index leftChild(Index parent) {
+        return ((parent + 1) << 1) - 1;
+    }
+
+    static Index rightChild(Index parent) {
+        return (parent + 1) << 1;
+    }
+
+    Index bubbleUp(Index i, const K& key) {
+        Index p;
+        while (i != 0 && this->data[p = parent(i)].first > key) {
+            this->update(i, this->data[p]);
+            i = p;
+        }
+        return i;
+    }
+
+    Index bubbleDown(Index i, const K& key, Index size) {
+        Index left;
+        while ((left = leftChild(i)) < size) {
+            if (this->data[left].first < key) {
+                this->update(i, this->data[left]);
+                i = left;
+            } else if (this->data[left + 1].first < key) {
+                this->update(i, this->data[left + 1]);
+                i = left + 1;
+            } else {
+                break;
+            }
+        }
+        return i;
+    }
+
+    void update(Index i, const std::pair<K, V>& item) {
+        this->data[i] = item;
+        this->locator.at(item.second) = i;
+    }
+
+    void set(Index i, const std::pair<K, V>& item) {
+        this->data[i] = item;
+        assert(this->locator.find(item.second) == this->locator.end());
+        this->locator[item.second] = i;
+    }
+
+    std::vector<std::pair<K, V>> data;
+    std::unordered_map<V, Index> locator;
+};
+
+#endif

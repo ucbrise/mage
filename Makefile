@@ -2,7 +2,7 @@ CXX = g++-9
 CXXFLAGS = -std=c++2a -O0 -ggdb3 -pthread -I./src/
 LDFLAGS = -pthread
 
-MAGE_DIRS = src src/planner src/platform src/loader src/schemes/ag2pc
+MAGE_DIRS = src src/planner src/platform src/loader src/schemes/ag2pc src/util
 MAGE_CPP_SOURCES = $(foreach dir,$(MAGE_DIRS),$(wildcard $(dir)/*.cpp))
 MAGE_HEADERS = $(foreach dir,$(MAGE_DIRS),$(wildcard $(dir)/*.hpp))
 

@@ -197,14 +197,14 @@ namespace mage::planner {
         }
     }
 
-    MRUTraversal::MRUTraversal(const WireGraph& graph, std::unique_ptr<TraversalWriter>&& out, const Circuit& c)
+    LinearMRUTraversal::LinearMRUTraversal(const WireGraph& graph, std::unique_ptr<TraversalWriter>&& out, const Circuit& c)
         : KahnTraversal(graph, std::move(out)), current_step(1), one_input_ready(graph.get_num_wires()), circuit(c) {
         for (WireID i = 0; i != graph.get_num_input_wires(); i++) {
             this->ready_gate_outputs.push_front(i);
         }
     }
 
-    bool MRUTraversal::select_ready_gate(WireID& gate_output) {
+    bool LinearMRUTraversal::select_ready_gate(WireID& gate_output) {
         if (this->ready_gate_outputs.empty()) {
             return false;
         }
@@ -276,12 +276,102 @@ namespace mage::planner {
         return true;
     }
 
-    void MRUTraversal::mark_inputs_ready(WireID input, const WireID* outputs, std::uint64_t num_outputs) {
+    void LinearMRUTraversal::mark_inputs_ready(WireID input, const WireID* outputs, std::uint64_t num_outputs) {
         for (std::uint64_t i = 0; i != num_outputs; i++) {
             WireID output = outputs[i];
             if (this->one_input_ready[output]) {
                 this->one_input_ready[output] = false;
                 this->ready_gate_outputs.push_front(output);
+            } else {
+                this->one_input_ready[output] = true;
+            }
+        }
+    }
+
+    MRUTraversal::MRUTraversal(const WireGraph& graph, std::unique_ptr<TraversalWriter>&& out, const Circuit& c)
+        : KahnTraversal(graph, std::move(out)), current_step(1), one_input_ready(graph.get_num_wires()), circuit(c) {
+        for (WireID i = 0; i != graph.get_num_input_wires(); i++) {
+            this->ready_gate_outputs.insert(0, i);
+        }
+    }
+
+    std::uint64_t MRUTraversal::compute_output_score(WireID gate_output) {
+        GateID gate_id = this->circuit.output_wire_to_gate(gate_output);
+        WireID input1 = this->circuit.gates[gate_id].input1_wire;
+        WireID input2 = this->circuit.gates[gate_id].input2_wire;
+        std::uint64_t score1 = this->wire_info.at(input1).mru_step;
+        std::uint64_t score2 = this->wire_info.at(input2).mru_step;
+        return std::max(score1, score2);
+    }
+
+    void MRUTraversal::updated_wire_mru_step(WireID wire, std::uint64_t new_mru_step) {
+        auto pair = this->wg.outputs_of(wire);
+        const WireID* outputs = pair.first;
+        std::uint64_t num_outputs = pair.second;
+        for (std::uint64_t i = 0; i != num_outputs; i++) {
+            WireID output = outputs[i];
+            if (this->ready_gate_outputs.contains(output)) {
+                std::int64_t new_score = this->compute_output_score(output);
+                assert(new_score >= new_mru_step);
+                this->ready_gate_outputs.decrease_key(-new_score, output);
+            }
+        }
+    }
+
+    bool MRUTraversal::select_ready_gate(WireID& gate_output) {
+        if (this->ready_gate_outputs.empty()) {
+            return false;
+        }
+        std::pair<std::int64_t, WireID> result = this->ready_gate_outputs.remove_min();
+        gate_output = result.second;
+
+        if (gate_output >= this->circuit.get_num_input_wires()) {
+            GateID gate_id = this->circuit.output_wire_to_gate(gate_output);
+
+            WireID input1 = this->circuit.gates[gate_id].input1_wire;
+            auto iter1 = this->wire_info.find(input1);
+            assert(iter1 != this->wire_info.end());
+            WireInfo& info1 = iter1->second;
+            info1.unfired_gate_count--;
+            if (info1.unfired_gate_count == 0) {
+                this->wire_info.erase(iter1);
+            } else {
+                info1.mru_step = this->current_step;
+                this->updated_wire_mru_step(input1, info1.mru_step);
+            }
+
+            WireID input2 = this->circuit.gates[gate_id].input2_wire;
+            auto iter2 = this->wire_info.find(input2);
+            assert(iter2 != this->wire_info.end());
+            WireInfo& info2 = iter2->second;
+            info2.unfired_gate_count--;
+            if (info2.unfired_gate_count == 0) {
+                this->wire_info.erase(iter2);
+            } else {
+                info2.mru_step = this->current_step;
+                this->updated_wire_mru_step(input2, info2.mru_step);
+            }
+        }
+
+        std::uint64_t fanout = this->wg.outputs_of(gate_output).second;
+        assert(this->wire_info.find(gate_output) == this->wire_info.end());
+        this->wire_info.insert(std::make_pair(gate_output, WireInfo(fanout, this->current_step)));
+
+        if (this->current_step % 1000 == 0) {
+            std::cout << "Finished " << this->current_step << " / " << this->circuit.get_num_wires() << std::endl;
+        }
+
+        this->current_step++;
+
+        return true;
+    }
+
+    void MRUTraversal::mark_inputs_ready(WireID input, const WireID* outputs, std::uint64_t num_outputs) {
+        for (std::uint64_t i = 0; i != num_outputs; i++) {
+            WireID output = outputs[i];
+            if (this->one_input_ready[output]) {
+                this->one_input_ready[output] = false;
+                this->ready_gate_outputs.insert(-((std::int64_t) this->compute_output_score(output)), output);
             } else {
                 this->one_input_ready[output] = true;
             }
