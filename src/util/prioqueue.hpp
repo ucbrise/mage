@@ -69,9 +69,6 @@ public:
         this->data.resize(prevsize + 1);
         Index i = this->bubbleUp(prevsize, key);
         this->set(i, std::make_pair(key, value));
-        if (value == 4288365) {
-            std::cout << "found it" << std::endl;
-        }
     }
 
     void decrease_key(const K& newkey, const V& value) {
@@ -114,14 +111,17 @@ private:
     }
 
     Index bubbleDown(Index i, const K& key, Index size) {
-        Index left;
-        while ((left = leftChild(i)) < size) {
-            if (this->data[left].first < key) {
-                this->update(i, this->data[left]);
-                i = left;
-            } else if (this->data[left + 1].first < key) {
-                this->update(i, this->data[left + 1]);
-                i = left + 1;
+        Index left, right;
+        while ((left = (right = rightChild(i)) - 1) < size) {
+            Index chosen;
+            if (right == size || this->data[left].first < this->data[right].first) {
+                chosen = left;
+            } else {
+                chosen = right;
+            }
+            if (this->data[chosen].first < key) {
+                this->update(i, this->data[chosen]);
+                i = chosen;
             } else {
                 break;
             }

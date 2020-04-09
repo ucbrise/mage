@@ -50,22 +50,22 @@ int main(int argc, char** argv) {
     std::string lin_file(circuit_path.filename());
     lin_file.append(".lin");
 
-    // {
-    //     std::cout << "Computing wire graph representation... ";
-    //     std::cout.flush();
-    //     planner::WireGraph wg(*circuit);
-    //     std::cout << "done" << std::endl;
-    //
-    //     std::cout << "Computing linearization... ";
-    //     std::cout.flush();
-    //     std::unique_ptr<planner::FileTraversalWriter> output(new planner::FileTraversalWriter(lin_file));
-    //     //planner::FIFOKahnTraversal traversal(wg, std::move(output));
-    //     //planner::WorkingSetTraversal traversal(wg, std::move(output), *circuit);
-    //     planner::NopTraversal traversal(*circuit, std::move(output));
-    //     //planner::MRUTraversal traversal(wg, std::move(output), *circuit);
-    //     traversal.traverse();
-    //     std::cout << "done" << std::endl;
-    // }
+    {
+        std::cout << "Computing wire graph representation... ";
+        std::cout.flush();
+        planner::WireGraph wg(*circuit);
+        std::cout << "done" << std::endl;
+
+        std::cout << "Computing linearization... ";
+        std::cout.flush();
+        std::unique_ptr<planner::FileTraversalWriter> output(new planner::FileTraversalWriter(lin_file));
+        //planner::FIFOKahnTraversal traversal(wg, std::move(output));
+        //planner::WorkingSetTraversal traversal(wg, std::move(output), *circuit);
+        // planner::NopTraversal traversal(*circuit, std::move(output));
+        planner::MRUTraversal traversal(wg, std::move(output), *circuit);
+        traversal.traverse();
+        std::cout << "done" << std::endl;
+    }
 
     std::string ann_file(circuit_path.filename());
     ann_file.append(".ann");
