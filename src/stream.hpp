@@ -22,6 +22,10 @@
 #ifndef MAGE_STREAM_HPP_
 #define MAGE_STREAM_HPP_
 
+#include <fstream>
+#include <iostream>
+#include <vector>
+
 namespace mage {
     template <typename T>
     class StreamReader {
@@ -85,6 +89,20 @@ namespace mage {
 
     protected:
         std::ofstream output;
+    };
+
+    template <typename T>
+    class VectorStreamWriter : public StreamWriter<T> {
+    public:
+        VectorStreamWriter(std::vector<T>* store_into) : stream(store_into) {
+        }
+
+        void append(const T& item) override {
+            this->stream->push_back(item);
+        }
+
+    private:
+        std::vector<T>* stream;
     };
 }
 

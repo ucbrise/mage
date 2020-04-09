@@ -28,120 +28,122 @@
 #include <unordered_map>
 #include <vector>
 
-/*
- * Unlike std::priority_queue, this priority queue supports the decreasekey
- * operation.
- */
-template <typename K, typename V>
-class PriorityQueue {
-public:
-    PriorityQueue() {
-    }
-
-    bool empty() const {
-        return this->data.empty();
-    }
-
-    std::pair<K, V>& min() {
-        assert(!this->empty());
-        return this->data[0];
-    }
-
-    std::pair<K, V> remove_min() {
-        assert(!this->empty());
-
-        std::pair<K, V> top = this->data[0];
-        this->locator.erase(top.second);
-
-        Index newsize = this->data.size() - 1;
-        if (newsize != 0) {
-            const std::pair<K, V>& last = this->data[newsize];
-            Index i = this->bubbleDown(0, last.first, newsize);
-            this->update(i, last);
+namespace mage::util {
+    /*
+     * Unlike std::priority_queue, this priority queue supports the decreasekey
+     * operation.
+     */
+    template <typename K, typename V>
+    class PriorityQueue {
+    public:
+        PriorityQueue() {
         }
-        this->data.resize(newsize);
 
-        return top;
-    }
-
-    void insert(const K& key, const V& value) {
-        Index prevsize = this->data.size();
-        this->data.resize(prevsize + 1);
-        Index i = this->bubbleUp(prevsize, key);
-        this->set(i, std::make_pair(key, value));
-    }
-
-    void decrease_key(const K& newkey, const V& value) {
-        Index i = this->locator.at(value);
-        if (newkey == this->data[i].first) {
-            return;
+        bool empty() const {
+            return this->data.empty();
         }
-        assert(newkey < this->data[i].first);
-        i = this->bubbleUp(i, newkey);
-        this->update(i, std::make_pair(newkey, value));
-    }
 
-    bool contains(const V& value) {
-        return this->locator.find(value) != this->locator.end();
-    }
-
-private:
-    using Index = std::uint64_t;
-
-    static Index parent(Index child) {
-        assert(child != 0);
-        return ((child + 1) >> 1) - 1;
-    }
-
-    static Index leftChild(Index parent) {
-        return ((parent + 1) << 1) - 1;
-    }
-
-    static Index rightChild(Index parent) {
-        return (parent + 1) << 1;
-    }
-
-    Index bubbleUp(Index i, const K& key) {
-        Index p;
-        while (i != 0 && this->data[p = parent(i)].first > key) {
-            this->update(i, this->data[p]);
-            i = p;
+        std::pair<K, V>& min() {
+            assert(!this->empty());
+            return this->data[0];
         }
-        return i;
-    }
 
-    Index bubbleDown(Index i, const K& key, Index size) {
-        Index left, right;
-        while ((left = (right = rightChild(i)) - 1) < size) {
-            Index chosen;
-            if (right == size || this->data[left].first < this->data[right].first) {
-                chosen = left;
-            } else {
-                chosen = right;
+        std::pair<K, V> remove_min() {
+            assert(!this->empty());
+
+            std::pair<K, V> top = this->data[0];
+            this->locator.erase(top.second);
+
+            Index newsize = this->data.size() - 1;
+            if (newsize != 0) {
+                const std::pair<K, V>& last = this->data[newsize];
+                Index i = this->bubbleDown(0, last.first, newsize);
+                this->update(i, last);
             }
-            if (this->data[chosen].first < key) {
-                this->update(i, this->data[chosen]);
-                i = chosen;
-            } else {
-                break;
-            }
+            this->data.resize(newsize);
+
+            return top;
         }
-        return i;
-    }
 
-    void update(Index i, const std::pair<K, V>& item) {
-        this->data[i] = item;
-        this->locator.at(item.second) = i;
-    }
+        void insert(const K& key, const V& value) {
+            Index prevsize = this->data.size();
+            this->data.resize(prevsize + 1);
+            Index i = this->bubbleUp(prevsize, key);
+            this->set(i, std::make_pair(key, value));
+        }
 
-    void set(Index i, const std::pair<K, V>& item) {
-        this->data[i] = item;
-        assert(this->locator.find(item.second) == this->locator.end());
-        this->locator[item.second] = i;
-    }
+        void decrease_key(const K& newkey, const V& value) {
+            Index i = this->locator.at(value);
+            if (newkey == this->data[i].first) {
+                return;
+            }
+            assert(newkey < this->data[i].first);
+            i = this->bubbleUp(i, newkey);
+            this->update(i, std::make_pair(newkey, value));
+        }
 
-    std::vector<std::pair<K, V>> data;
-    std::unordered_map<V, Index> locator;
-};
+        bool contains(const V& value) {
+            return this->locator.find(value) != this->locator.end();
+        }
+
+    private:
+        using Index = std::uint64_t;
+
+        static Index parent(Index child) {
+            assert(child != 0);
+            return ((child + 1) >> 1) - 1;
+        }
+
+        static Index leftChild(Index parent) {
+            return ((parent + 1) << 1) - 1;
+        }
+
+        static Index rightChild(Index parent) {
+            return (parent + 1) << 1;
+        }
+
+        Index bubbleUp(Index i, const K& key) {
+            Index p;
+            while (i != 0 && this->data[p = parent(i)].first > key) {
+                this->update(i, this->data[p]);
+                i = p;
+            }
+            return i;
+        }
+
+        Index bubbleDown(Index i, const K& key, Index size) {
+            Index left, right;
+            while ((left = (right = rightChild(i)) - 1) < size) {
+                Index chosen;
+                if (right == size || this->data[left].first < this->data[right].first) {
+                    chosen = left;
+                } else {
+                    chosen = right;
+                }
+                if (this->data[chosen].first < key) {
+                    this->update(i, this->data[chosen]);
+                    i = chosen;
+                } else {
+                    break;
+                }
+            }
+            return i;
+        }
+
+        void update(Index i, const std::pair<K, V>& item) {
+            this->data[i] = item;
+            this->locator.at(item.second) = i;
+        }
+
+        void set(Index i, const std::pair<K, V>& item) {
+            this->data[i] = item;
+            assert(this->locator.find(item.second) == this->locator.end());
+            this->locator[item.second] = i;
+        }
+
+        std::vector<std::pair<K, V>> data;
+        std::unordered_map<V, Index> locator;
+    };
+}
 
 #endif

@@ -59,10 +59,11 @@ int main(int argc, char** argv) {
         std::cout << "Computing linearization... ";
         std::cout.flush();
         std::unique_ptr<planner::FileTraversalWriter> output(new planner::FileTraversalWriter(lin_file));
-        //planner::FIFOKahnTraversal traversal(wg, std::move(output));
-        //planner::WorkingSetTraversal traversal(wg, std::move(output), *circuit);
+        // planner::FIFOKahnTraversal traversal(wg, std::move(output));
+        // planner::WorkingSetTraversal traversal(wg, std::move(output), *circuit);
         // planner::NopTraversal traversal(*circuit, std::move(output));
         planner::MRUTraversal traversal(wg, std::move(output), *circuit);
+        // planner::SynergyTraversal traversal(wg, std::move(output), *circuit);
         traversal.traverse();
         std::cout << "done" << std::endl;
     }
@@ -81,7 +82,7 @@ int main(int argc, char** argv) {
     plan_file.append(".pln");
 
     {
-        const constexpr std::uint64_t num_wire_slots = 32768;
+        const constexpr std::uint64_t num_wire_slots = 4096;
         std::cout << "Planning evaluation... ";
         std::cout.flush();
         std::unique_ptr<planner::FileAnnotatedTraversalReader> input(new planner::FileAnnotatedTraversalReader(ann_file));

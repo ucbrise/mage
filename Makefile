@@ -10,17 +10,17 @@ MAGE_TEST_SOURCES = $(wildcard tests/*.cpp)
 
 BINDIR = bin
 MAGE_OBJECTS = $(addprefix $(BINDIR)/,$(MAGE_CPP_SOURCES:.cpp=.o))
-TEST_OBJECTS = $(addprefix $(BINDIR)/,$(TEST_CPP_SOURCES:.cpp=.o))
+TEST_OBJECTS = $(addprefix $(BINDIR)/,$(MAGE_TEST_SOURCES:.cpp=.o))
 
 .PHONY: clean
 
 all: mage tests
 
-tests: $(BINDIR)/test_prioqueue
+tests: $(BINDIR)/test
 
 mage: $(BINDIR)/converter $(BINDIR)/allocator
 
-$(BINDIR)/test_prioqueue: $(MAGE_OBJECTS) $(BINDIR)/tests/test_prioqueue.o
+$(BINDIR)/test: $(MAGE_OBJECTS) $(TEST_OBJECTS)
 	$(CXX) $(LDFLAGS) $+ -lboost_unit_test_framework -o $@
 
 $(BINDIR)/tests/%.o: tests/%.cpp $(MAGE_HEADERS)

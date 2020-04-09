@@ -146,22 +146,38 @@ namespace mage::planner {
         const Circuit& circuit;
     };
 
-    class MRUTraversal : public KahnTraversal {
+    class PriorityTraversal : public KahnTraversal {
     public:
-        MRUTraversal(const WireGraph& wg, std::unique_ptr<TraversalWriter>&& out, const Circuit& c);
+        PriorityTraversal(const WireGraph& wg, std::unique_ptr<TraversalWriter>&& out, const Circuit& c);
         bool select_ready_gate(WireID& gate_output) override;
         void mark_inputs_ready(WireID input, const WireID* outputs, std::uint64_t num_outputs) override;
 
-    private:
-        void updated_wire_mru_step(WireID wire, std::uint64_t new_mru_step);
-        std::uint64_t compute_output_score(WireID gate_output);
-        std::uint64_t current_step;
+    protected:
+        void updated_wire_info(WireID wire, std::uint64_t new_mru_step);
+        void decrement_unfired_gate_count(WireID input);
+        virtual std::int64_t compute_score(WireID gate_output) = 0;
 
-        /* Priority queue, ordered by negative score */
-        PriorityQueue<std::int64_t, WireID> ready_gate_outputs;
+        std::uint64_t current_step;
+        util::PriorityQueue<std::int64_t, WireID> ready_gate_outputs;
         std::unordered_map<WireID, WireInfo> wire_info;
         std::vector<bool> one_input_ready;
         const Circuit& circuit;
+    };
+
+    class MRUTraversal : public PriorityTraversal {
+    public:
+        MRUTraversal(const WireGraph& wg, std::unique_ptr<TraversalWriter>&& out, const Circuit& c);
+
+    protected:
+        std::int64_t compute_score(WireID gate_output) override;
+    };
+
+    class SynergyTraversal : public PriorityTraversal {
+    public:
+        SynergyTraversal(const WireGraph& wg, std::unique_ptr<TraversalWriter>&& out, const Circuit& c);
+
+    protected:
+        std::int64_t compute_score(WireID gate_output) override;
     };
 }
 
