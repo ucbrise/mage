@@ -100,26 +100,18 @@ namespace mage::util {
         void erase(const V& value) {
             auto iter = this->locator.find(value);
             assert(iter != this->locator.end());
-            Index i = iter->second;
+            Index j = iter->second;
             this->locator.erase(iter);
 
             Index newsize = this->data.size() - 1;
-            if (newsize == 0) {
-                this->data.resize(0);
-                return;
+            if (j != newsize) {
+                const std::pair<K, V>& last = this->data[newsize];
+                Index i = this->bubbleUp(j, last.first);
+                if (i == j) {
+                    i = this->bubbleDown(j, last.first, newsize);
+                }
+                this->update(i, last);
             }
-
-            /* This while loop is a modified bubbleUp procedure. */
-            while (i != 0) {
-                Index p = parent(i);
-                this->update(i, this->data[p]);
-                i = p;
-            }
-
-            /* Similar to remove_min. */
-            const std::pair<K, V>& last = this->data[newsize];
-            i = this->bubbleDown(0, last.first, newsize);
-            this->update(i, last);
             this->data.resize(newsize);
         }
 
