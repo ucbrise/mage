@@ -43,6 +43,10 @@ namespace mage::util {
             return this->data.empty();
         }
 
+        std::uint64_t size() const {
+            return this->data.size();
+        }
+
         std::pair<K, V>& min() {
             assert(!this->empty());
             return this->data[0];
@@ -65,11 +69,58 @@ namespace mage::util {
             return top;
         }
 
+        std::pair<K, V> remove_second_min() {
+            Index newsize = this->data.size() - 1;
+            assert(newsize != 0);
+
+            if (newsize == 1) {
+                std::pair<K, V> second = this->data[1];
+                this->data.pop_back();
+                this->locator.erase(second.second);
+                return second;
+            }
+
+            Index start = this->data[1].first < this->data[2].first ? 1 : 2;
+            std::pair<K, V> second = this->data[start];
+            this->locator.erase(second.second);
+            const std::pair<K, V>& last = this->data[newsize];
+            Index i = this->bubbleDown(start, last.first, newsize);
+            this->update(i, last);
+            this->data.resize(newsize);
+            return second;
+        }
+
         void insert(const K& key, const V& value) {
             Index prevsize = this->data.size();
             this->data.resize(prevsize + 1);
             Index i = this->bubbleUp(prevsize, key);
             this->set(i, std::make_pair(key, value));
+        }
+
+        void erase(const V& value) {
+            auto iter = this->locator.find(value);
+            assert(iter != this->locator.end());
+            Index i = iter->second;
+            this->locator.erase(iter);
+
+            Index newsize = this->data.size() - 1;
+            if (newsize == 0) {
+                this->data.resize(0);
+                return;
+            }
+
+            /* This while loop is a modified bubbleUp procedure. */
+            while (i != 0) {
+                Index p = parent(i);
+                this->update(i, this->data[p]);
+                i = p;
+            }
+
+            /* Similar to remove_min. */
+            const std::pair<K, V>& last = this->data[newsize];
+            i = this->bubbleDown(0, last.first, newsize);
+            this->update(i, last);
+            this->data.resize(newsize);
         }
 
         void decrease_key(const K& newkey, const V& value) {
@@ -104,7 +155,7 @@ namespace mage::util {
 
         Index bubbleUp(Index i, const K& key) {
             Index p;
-            while (i != 0 && this->data[p = parent(i)].first > key) {
+            while (i != 0 && key < this->data[p = parent(i)].first) {
                 this->update(i, this->data[p]);
                 i = p;
             }

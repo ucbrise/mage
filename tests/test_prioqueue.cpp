@@ -126,6 +126,32 @@ BOOST_DATA_TEST_CASE(test_prioqueue_min, bdata::make(reverse) + RandomIntsDatase
     }
 }
 
+BOOST_DATA_TEST_CASE(test_prioqueue_second_min, bdata::make(reverse) + RandomIntsDataset(99)) {
+    std::vector<int> numbers(sample.data);
+    if (numbers.size() == 0) {
+        return;
+    }
+
+    PriorityQueue<int, int> pq;
+    for (auto i = numbers.begin(); i != numbers.end(); i++) {
+        pq.insert(*i, *i);
+    }
+
+    std::vector<int> popped;
+    while (pq.size() != 1) {
+        auto res = pq.remove_second_min();
+        BOOST_CHECK(res.first == res.second);
+        popped.push_back(res.second);
+    }
+
+    std::vector<int> sorted(numbers);
+    std::sort(sorted.begin(), sorted.end());
+    BOOST_REQUIRE(sorted.size() == popped.size() + 1);
+    for (int i = 0; i != popped.size(); i++) {
+        BOOST_CHECK(sorted[i + 1] == popped[i]);
+    }
+}
+
 BOOST_DATA_TEST_CASE(test_prioqueue_decrease_key, bdata::make(reverse) + RandomIntsDataset(99)) {
     std::vector<int> numbers(sample.data);
 

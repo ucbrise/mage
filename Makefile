@@ -1,5 +1,5 @@
 CXX = g++-9
-CXXFLAGS = -std=c++2a -O0 -ggdb3 -pthread -I./src/
+CXXFLAGS = -std=c++2a -Ofast -DNDEBUG -pthread -I./src/
 LDFLAGS = -pthread
 
 MAGE_DIRS = src src/planner src/platform src/loader src/schemes/ag2pc src/util

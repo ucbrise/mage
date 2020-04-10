@@ -41,7 +41,7 @@ namespace mage::planner {
 
     using TraversalIndex = std::uint64_t;
     const constexpr TraversalIndex never_used_again = 0;
-    const constexpr TraversalIndex output_wire = UINT64_MAX;
+    const constexpr TraversalIndex output_wire = UINT64_MAX - 1;
     struct AnnotatedTraversalNode {
         WireID gate_output;
         TraversalIndex next_input1_use;
@@ -66,7 +66,7 @@ namespace mage::planner {
     class Allocator {
     protected:
         Allocator(std::unique_ptr<AnnotatedTraversalReader>&& annotated, std::unique_ptr<PlanWriter>&& out, const Circuit& c);
-        virtual void allocate_gate(GateExecAction& slots, const RawGate& gate, const AnnotatedTraversalNode& annotation) = 0;
+        virtual std::pair<bool, bool> allocate_gate(GateExecAction& slots, const RawGate& gate, const AnnotatedTraversalNode& annotation) = 0;
         void emit_swapout(WireMemoryLocation primary, WireStorageLocation secondary);
         void emit_swapin(WireStorageLocation secondary, WireMemoryLocation primary);
 
@@ -88,7 +88,7 @@ namespace mage::planner {
     class SimpleAllocator : public Allocator {
     public:
         SimpleAllocator(std::unique_ptr<AnnotatedTraversalReader>&& annotated, std::unique_ptr<PlanWriter>&& out, const Circuit& c, std::uint64_t num_wire_slots);
-        void allocate_gate(GateExecAction& slots, const RawGate& gate, const AnnotatedTraversalNode& annotation) override;
+        std::pair<bool, bool> allocate_gate(GateExecAction& slots, const RawGate& gate, const AnnotatedTraversalNode& annotation) override;
 
     protected:
         WireMemoryLocation allocate_slot();
@@ -109,10 +109,10 @@ namespace mage::planner {
         std::unordered_map<WireID, WireMemoryLocation> resident;
     };
 
-    class BeladyAllocator : public SimpleAllocator {
+    class BeladyMMAllocator : public SimpleAllocator {
     public:
-        BeladyAllocator(std::unique_ptr<AnnotatedTraversalReader>&& annotated, std::unique_ptr<PlanWriter>&& out, const Circuit& c, std::uint64_t num_wire_slots);
-        void allocate_gate(GateExecAction& slots, const RawGate& gate, const AnnotatedTraversalNode& annotation) override;
+        BeladyMMAllocator(std::unique_ptr<AnnotatedTraversalReader>&& annotated, std::unique_ptr<PlanWriter>&& out, const Circuit& c, std::uint64_t num_wire_slots);
+        std::pair<bool, bool> allocate_gate(GateExecAction& slots, const RawGate& gate, const AnnotatedTraversalNode& annotation) override;
         WireMemoryLocation evict_wire() override;
 
     private:
@@ -121,6 +121,37 @@ namespace mage::planner {
 
         std::multimap<TraversalIndex, std::pair<WireMemoryLocation, WireID>> next_use_order;
         std::unordered_map<WireMemoryLocation, TraversalIndex> next_use_by_slot;
+    };
+
+    class BeladyScore {
+    public:
+        BeladyScore() : BeladyScore(0) {
+        }
+
+        BeladyScore(TraversalIndex usage_time) : usage(usage_time) {
+        }
+
+        bool operator<(const BeladyScore& other) const {
+            return this->usage > other.usage;
+        }
+
+        bool operator==(const BeladyScore& other) const {
+            return this->usage == other.usage;
+        }
+
+        TraversalIndex usage;
+    };
+
+    class BeladyAllocator : public SimpleAllocator {
+    public:
+        BeladyAllocator(std::unique_ptr<AnnotatedTraversalReader>&& annotated, std::unique_ptr<PlanWriter>&& out, const Circuit& c, std::uint64_t num_wire_slots);
+        std::pair<bool, bool> allocate_gate(GateExecAction& slots, const RawGate& gate, const AnnotatedTraversalNode& annotation) override;
+        WireMemoryLocation evict_wire() override;
+
+    private:
+        void update_wire_next_use(WireID wire, WireMemoryLocation slot, TraversalIndex next_use, bool just_swapped_in);
+
+        util::PriorityQueue<BeladyScore, WireID> eviction_queue;
     };
 }
 

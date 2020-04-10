@@ -19,6 +19,7 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <chrono>
 #include <iostream>
 #include <filesystem>
 
@@ -61,8 +62,8 @@ int main(int argc, char** argv) {
         std::unique_ptr<planner::FileTraversalWriter> output(new planner::FileTraversalWriter(lin_file));
         // planner::FIFOKahnTraversal traversal(wg, std::move(output));
         // planner::WorkingSetTraversal traversal(wg, std::move(output), *circuit);
-        // planner::NopTraversal traversal(*circuit, std::move(output));
-        planner::MRUTraversal traversal(wg, std::move(output), *circuit);
+        planner::NopTraversal traversal(*circuit, std::move(output));
+        // planner::MRUTraversal traversal(wg, std::move(output), *circuit);
         // planner::SynergyTraversal traversal(wg, std::move(output), *circuit);
         traversal.traverse();
         std::cout << "done" << std::endl;
@@ -82,15 +83,34 @@ int main(int argc, char** argv) {
     plan_file.append(".pln");
 
     {
-        const constexpr std::uint64_t num_wire_slots = 4096;
+        const constexpr std::uint64_t num_wire_slots = 65536;
         std::cout << "Planning evaluation... ";
         std::cout.flush();
         std::unique_ptr<planner::FileAnnotatedTraversalReader> input(new planner::FileAnnotatedTraversalReader(ann_file));
         std::unique_ptr<FilePlanWriter> output(new FilePlanWriter(plan_file, num_wire_slots));
         //planner::SimpleAllocator allocator(std::move(input), std::move(output), *circuit, num_wire_slots);
+
+        auto start = std::chrono::high_resolution_clock::now();
         planner::BeladyAllocator allocator(std::move(input), std::move(output), *circuit, num_wire_slots);
         allocator.allocate();
-        std::cout << allocator.get_num_swapins() << " swapins, " << allocator.get_num_swapouts() << " swapouts" << std::endl;
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        std::cout << allocator.get_num_swapins() << " swapins, " << allocator.get_num_swapouts() << " swapouts (" << ms.count() << " ms)" << std::endl;
+    }
+
+    {
+        const constexpr std::uint64_t num_wire_slots = 65536;
+        std::cout << "Planning evaluation... ";
+        std::cout.flush();
+        std::unique_ptr<planner::FileAnnotatedTraversalReader> input(new planner::FileAnnotatedTraversalReader(ann_file));
+        std::unique_ptr<FilePlanWriter> output(new FilePlanWriter(plan_file, num_wire_slots));
+        //planner::SimpleAllocator allocator(std::move(input), std::move(output), *circuit, num_wire_slots);
+        auto start = std::chrono::high_resolution_clock::now();
+        planner::BeladyMMAllocator allocator(std::move(input), std::move(output), *circuit, num_wire_slots);
+        allocator.allocate();
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        std::cout << allocator.get_num_swapins() << " swapins, " << allocator.get_num_swapouts() << " swapouts (" << ms.count() << " ms)" << std::endl;
     }
 
     return 0;
