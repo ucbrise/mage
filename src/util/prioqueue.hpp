@@ -83,9 +83,11 @@ namespace mage::util {
             Index start = this->data[1].first < this->data[2].first ? 1 : 2;
             std::pair<K, V> second = this->data[start];
             this->locator.erase(second.second);
-            const std::pair<K, V>& last = this->data[newsize];
-            Index i = this->bubbleDown(start, last.first, newsize);
-            this->update(i, last);
+            if (start != newsize) {
+                const std::pair<K, V>& last = this->data[newsize];
+                Index i = this->bubbleDown(start, last.first, newsize);
+                this->update(i, last);
+            }
             this->data.resize(newsize);
             return second;
         }
