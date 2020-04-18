@@ -26,6 +26,9 @@
 namespace mage::dsl {
     Program* Program::current_working_program = nullptr;
 
+    Program::Program() : next_free_address(0) {
+    }
+
     Program::~Program() {
         if (Program::current_working_program == this) {
             Program::current_working_program = nullptr;

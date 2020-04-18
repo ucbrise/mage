@@ -38,30 +38,29 @@ namespace mage::dsl {
         friend class Integer;
 
     public:
-        Integer(Program* program = Program::get_current_working_program()) : v(invalid_instruction), bit_offset(0), p(program) {
-            assert(program != nullptr);
+        Integer(Program& program = *Program::get_current_working_program()) : v(invalid_addr), p(&program) {
+            assert(&program != nullptr);
         }
 
-        Integer(std::uint32_t public_constant, Program* program = Program::get_current_working_program()) : bit_offset(0), p(program) {
-            assert(program != nullptr);
-            this->v = program->new_instruction(OpCode::PublicConstant, bits, public_constant);
+        Integer(std::uint32_t public_constant, Program& program = *Program::get_current_working_program()) : p(&program) {
+            assert(&program != nullptr);
+            this->v = this->p->new_instruction(OpCode::PublicConstant, bits, invalid_addr, invalid_addr, invalid_addr, public_constant);
         }
 
-        Integer(const Integer<bits>& other) : v(other.v), bit_offset(other.bit_offset), p(other.p) {
+        Integer(const Integer<bits>& other) : v(other.v), p(other.p) {
         }
 
         void mark_input() {
-            assert(this->v == invalid_instruction);
+            assert(this->v == invalid_addr);
             this->v = this->p->new_instruction(OpCode::Input, bits);
         }
 
         void mark_output() {
-            this->p->mark_output(this->v);
+            this->p->mark_output(this->v, bits);
         }
 
         Integer<bits>& operator =(const Integer<bits>& other) {
             this->v = other.v;
-            this->bit_offset = other.bit_offset;
             this->p = other.p;
             return *this;
         }
@@ -149,14 +148,12 @@ namespace mage::dsl {
         }
 
         template <BitWidth length>
-        Integer<length> slice(BitOffset start) const {
+        Integer<length> slice(BitWidth start) const {
             assert(start + length <= bits);
-            BitOffset new_offset = this->bit_offset + start;
-            assert(new_offset >= start); // check overflow of BitOffset
-            return Integer<length>(this->v, new_offset, this->p);
+            return Integer<length>(this->v, start, this->p);
         }
 
-        Bit operator [](BitOffset i) const {
+        Bit operator [](BitWidth i) const {
             return this->slice<1>(i);
         }
 
@@ -180,36 +177,33 @@ namespace mage::dsl {
         }
 
         bool valid() const {
-            return this->v != invalid_instruction;
+            return this->v != invalid_addr;
         }
 
     private:
         template <BitWidth arg0_bits>
-        Integer(OpCode operation, const Integer<arg0_bits>& arg0) : bit_offset(0), p(arg0.p) {
-            this->v = this->p->new_instruction(operation, bits, arg0.v, arg0.bit_offset);
+        Integer(OpCode operation, const Integer<arg0_bits>& arg0) : p(arg0.p) {
+            this->v = this->p->new_instruction(operation, bits, arg0.v);
         }
 
         template <BitWidth arg_bits>
-        Integer(OpCode operation, const Integer<arg_bits>& arg0, const Integer<arg_bits>& arg1) : bit_offset(0), p(arg0.p) {
+        Integer(OpCode operation, const Integer<arg_bits>& arg0, const Integer<arg_bits>& arg1) : p(arg0.p) {
             assert(arg0.p == arg1.p);
-            this->v = this->p->new_instruction(operation, bits, arg0.v, arg0.bit_offset, arg1.v, arg1.bit_offset);
+            this->v = this->p->new_instruction(operation, bits, arg0.v, arg1.v);
         }
 
         template <BitWidth arg2_bits>
-        Integer(OpCode operation, const Integer<bits>& arg0, const Integer<bits>& arg1, const Integer<arg2_bits>& arg2) : bit_offset(0), p(arg0.p) {
+        Integer(OpCode operation, const Integer<bits>& arg0, const Integer<bits>& arg1, const Integer<arg2_bits>& arg2) : p(arg0.p) {
             assert(arg0.p == arg1.p);
             assert(arg0.p == arg2.p);
-            this->v = this->p->new_instruction(operation, bits, arg0.v, arg0.bit_offset, arg1.v, arg1.bit_offset, arg2.v);
+            this->v = this->p->new_instruction(operation, bits, arg0.v, arg1.v, arg2.v);
         }
 
-        Integer(InstructionID alias_v, BitOffset offset, Program* program) : v(alias_v), bit_offset(0), p(program) {
+        Integer(Address alias_v, BitWidth offset, Program* program) : v(alias_v + offset), p(program) {
         }
 
-        /* ID of the underlying instruction in the program. */
-        InstructionID v;
-
-        /* Offset in the instruction's output at which to find this value. */
-        BitOffset bit_offset;
+        /* Address of the underlying data. */
+        Address v;
 
         /* Program that this integer is part of. */
         Program* p;

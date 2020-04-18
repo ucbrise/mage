@@ -20,7 +20,7 @@
  */
 
 #include "dsl/integer.hpp"
-#include "dsl/program.hpp"
+#include "dsl/programfile.hpp"
 #include "dsl/sort.hpp"
 #include <iostream>
 #include <string>
@@ -29,7 +29,7 @@ using namespace mage::dsl;
 
 template <BitWidth bits>
 struct Input {
-    Input(Program* p) : patient_id_concat_timestamp(p), diagnosis(p) {
+    Input(Program& p) : patient_id_concat_timestamp(p), diagnosis(p) {
     }
 
     Integer<bits> patient_id_concat_timestamp;
@@ -43,7 +43,7 @@ struct Input {
 };
 
 template <BitWidth patient_id_bits = 32, BitWidth timestamp_bits = 32, BitWidth result_bits = 32>
-void create_aspirin_circuit(Program* p, int input_size_per_party) {
+void create_aspirin_circuit(Program& p, int input_size_per_party) {
     int input_array_length = input_size_per_party * 2;
     std::vector<Input<patient_id_bits + timestamp_bits>> inputs;
     inputs.resize(input_array_length, Input<patient_id_bits + timestamp_bits>(p));
@@ -93,10 +93,10 @@ int main(int argc, char** argv) {
         input_size_per_party = atoi(argv[1]);
     }
 	filename.append(std::to_string(input_size_per_party));
-	filename.append(".txt");
+	filename.append(".prog");
 
-    ProgramMemory program;
-	create_aspirin_circuit(&program, input_size_per_party);
+    ProgramFileWriter program(filename);
+	create_aspirin_circuit(program, input_size_per_party);
 
     std::cout << "Created program with " << program.num_instructions() << " instructions" << std::endl;
     return 0;

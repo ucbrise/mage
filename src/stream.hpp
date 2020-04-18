@@ -39,7 +39,7 @@ namespace mage {
     template <typename T>
     class FileStreamReader : public StreamReader<T> {
     public:
-        FileStreamReader(std::string filename) :total_read(0) {
+        FileStreamReader(std::string filename) : total_read(0) {
             this->input.exceptions(std::ios::eofbit | std::ios::failbit | std::ios::badbit);
             this->input.open(filename, std::ios::in | std::ios::binary);
             this->input.seekg(0, std::ios::end);

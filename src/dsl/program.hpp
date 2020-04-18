@@ -22,14 +22,14 @@
 #ifndef MAGE_DSL_PROGRAM_HPP_
 #define MAGE_DSL_PROGRAM_HPP_
 
+#include "stream.hpp"
 #include <cstdint>
 #include <memory>
 #include <vector>
 
 namespace mage::dsl {
-    using InstructionID = std::uint64_t;
-    using BitWidth = std::uint16_t;
-    using BitOffset = std::uint8_t;
+    using Address = std::uint64_t;
+    using BitWidth = std::uint8_t;
     enum class OpCode : std::uint8_t {
         Undefined = 0,
         Input,
@@ -51,77 +51,71 @@ namespace mage::dsl {
         Swap
     };
 
-    const constexpr InstructionID invalid_instruction = UINT64_MAX;
+    const constexpr int address_bits = 52;
+    const constexpr Address invalid_addr = (UINT64_C(1) << address_bits) - 1;
 
     struct Instruction {
-        InstructionID input1;
-        InstructionID input2;
-        InstructionID input3;
+        Address input1 : address_bits;
+        Address input2 : address_bits;
+        Address input3 : address_bits;
+        Address output : address_bits;
         OpCode operation;
         BitWidth width;
-        union {
-            std::uint32_t constant;
-            struct {
-                BitOffset offset1;
-                BitOffset offset2;
-                BitOffset offset3;
-            };
-        };
-    };
+        std::uint32_t constant;
+    } __attribute__((packed));
 
     class Program {
     public:
+        Program();
         virtual ~Program();
-        virtual InstructionID new_instruction(OpCode op, BitWidth width, std::uint32_t constant = 0) = 0;
-        virtual InstructionID new_instruction(OpCode op, BitWidth width, InstructionID arg0, BitOffset offset0, InstructionID arg1 = invalid_instruction, BitOffset offset1 = 0, InstructionID arg2 = invalid_instruction, BitOffset offset2 = 0) = 0;
-        virtual void mark_output(InstructionID v) = 0;
+
+        Address new_instruction(OpCode op, BitWidth width, Address arg0 = invalid_addr, Address arg1 = invalid_addr, Address arg2 = invalid_addr, std::uint32_t constant = 0) {
+            Instruction v;
+            v.input1 = arg0;
+            v.input2 = arg1;
+            v.input3 = arg2;
+            v.output = this->next_free_address;
+            v.operation = op;
+            v.width = width;
+            v.constant = constant;
+            this->next_free_address += width;
+            this->append_instruction(v);
+            return v.output;
+        }
+
+        virtual void mark_output(Address v, BitWidth length) = 0;
         virtual std::uint64_t num_instructions() = 0;
 
         static Program* set_current_working_program(Program* cwp);
         static Program* get_current_working_program();
 
+    protected:
+        virtual void append_instruction(const Instruction& v) = 0;
+        Address next_free_address;
+
     private:
         static Program* current_working_program;
     };
 
-    class ProgramMemory : public Program {
-    public:
-        InstructionID new_instruction(OpCode op, BitWidth width, std::uint32_t constant = 0) override {
-            Instruction& v = this->instructions.emplace_back();
-            v.input1 = invalid_instruction;
-            v.input2 = invalid_instruction;
-            v.input3 = invalid_instruction;
-            v.operation = op;
-            v.width = width;
-            v.constant = constant;
-            return this->instructions.size();
-        }
-
-        InstructionID new_instruction(OpCode op, BitWidth width, InstructionID arg0, BitOffset offset0, InstructionID arg1 = invalid_instruction, BitOffset offset1 = 0, InstructionID arg2 = invalid_instruction, BitOffset offset2 = 0) override {
-            Instruction& v = this->instructions.emplace_back();
-            v.input1 = arg0;
-            v.input2 = arg1;
-            v.input3 = arg2;
-            v.operation = op;
-            v.width = width;
-            v.offset1 = offset0;
-            v.offset2 = offset1;
-            v.offset3 = offset2;
-            return this->instructions.size();
-        }
-
-        void mark_output(InstructionID v) override {
-            this->outputs.push_back(v);
-        }
-
-        std::uint64_t num_instructions() override {
-            return this->instructions.size();
-        }
-
-    private:
-        std::vector<Instruction> instructions;
-        std::vector<InstructionID> outputs;
-    };
+    // class ProgramMemory : public Program {
+    // public:
+    //     void mark_output(Address v, BitWidth length) override {
+    //         this->outputs.push_back(v);
+    //     }
+    //
+    //     std::uint64_t num_instructions() override {
+    //         return this->instructions.size();
+    //     }
+    //
+    // protected:
+    //     void append_instruction(const Instruction& v) override {
+    //         this->instructions.push_back(v);
+    //     }
+    //
+    // private:
+    //     std::vector<Instruction> instructions;
+    //     std::vector<Address> outputs;
+    // };
 }
 
 #endif
