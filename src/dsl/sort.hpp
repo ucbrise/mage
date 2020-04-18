@@ -22,7 +22,6 @@
 #ifndef MAGE_DSL_SORT_HPP_
 #define MAGE_DSL_SORT_HPP_
 
-#include "dsl/graph.hpp"
 #include <cassert>
 #include <cstdint>
 
@@ -47,8 +46,8 @@ namespace mage::dsl {
             T::comparator(array[i], array[i + half_length]);
         }
 
-        bitonic_sorter(array, half_length);
-        bitonic_sorter(&array[half_length], half_length);
+        bitonic_sorter<T>(array, half_length);
+        bitonic_sorter<T>(&array[half_length], half_length);
     }
 }
 

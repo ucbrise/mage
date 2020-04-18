@@ -22,139 +22,141 @@
 #ifndef MAGE_DSL_INTEGER_HPP_
 #define MAGE_DSL_INTEGER_HPP_
 
-#include "dsl/graph.hpp"
+#include "dsl/program.hpp"
 #include <cassert>
 #include <cstdint>
 
 namespace mage::dsl {
-    template <BitWidth bits, Graph* g>
+    template <BitWidth bits>
     class Integer;
 
-    template <Graph* g>
-    using Bit = Integer<1, g>;
+    using Bit = Integer<1>;
 
-    template <BitWidth bits, Graph* g>
+    template <BitWidth bits>
     class Integer {
-        template <BitWidth other_bits, Graph* other_graph>
+        template <BitWidth other_bits>
         friend class Integer;
 
     public:
-        Integer() : v(invalid_vertex), bit_offset(0) {
+        Integer(Program* program = Program::get_current_working_program()) : v(invalid_instruction), bit_offset(0), p(program) {
+            assert(program != nullptr);
         }
 
-        Integer(std::uint32_t public_constant) : bit_offset(0) {
-            this->v = g->new_vertex(Operation::PublicConstant, bits, public_constant);
+        Integer(std::uint32_t public_constant, Program* program = Program::get_current_working_program()) : bit_offset(0), p(program) {
+            assert(program != nullptr);
+            this->v = program->new_instruction(OpCode::PublicConstant, bits, public_constant);
         }
 
-        Integer(const Integer<bits, g>& other) : v(other.v) {
+        Integer(const Integer<bits>& other) : v(other.v), bit_offset(other.bit_offset), p(other.p) {
         }
 
         void mark_input() {
-            assert(this->v == invalid_vertex);
-            this->v = g->new_vertex(Operation::Input, bits);
+            assert(this->v == invalid_instruction);
+            this->v = this->p->new_instruction(OpCode::Input, bits);
         }
 
         void mark_output() {
-            g->mark_output(this->v);
+            this->p->mark_output(this->v);
         }
 
-        Integer<bits, g>& operator =(const Integer<bits, g>& other) {
+        Integer<bits>& operator =(const Integer<bits>& other) {
             this->v = other.v;
             this->bit_offset = other.bit_offset;
+            this->p = other.p;
             return *this;
         }
 
-        Integer<bits, g> operator +(const Integer<bits, g>& other) const {
-            return Integer<bits, g>(Operation::IntAdd, *this, other);
+        Integer<bits> operator +(const Integer<bits>& other) const {
+            return Integer<bits>(OpCode::IntAdd, *this, other);
         }
 
-        Integer<bits, g> increment() {
-            return Integer<bits, g>(Operation::IntIncrement, *this);
+        Integer<bits> increment() {
+            return Integer<bits>(OpCode::IntIncrement, *this);
         }
 
-        Integer<bits, g>& operator ++() {
+        Integer<bits>& operator ++() {
             *this = this->increment();
             return this;
         }
 
-        Integer<bits, g> operator ++(int) {
-            Integer<bits, g> old = *this;
+        Integer<bits> operator ++(int) {
+            Integer<bits> old = *this;
             *this = this->increment();
             return old;
         }
 
-        Integer<bits, g> operator -(const Integer<bits, g>& other) const {
-            return Integer<bits, g>(Operation::IntSub, *this, other);
+        Integer<bits> operator -(const Integer<bits>& other) const {
+            return Integer<bits>(OpCode::IntSub, *this, other);
         }
 
-        Integer<bits, g> decrement() {
-            return Integer<bits, g>(Operation::IntDecrement, *this);
+        Integer<bits> decrement() {
+            return Integer<bits>(OpCode::IntDecrement, *this);
         }
 
-        Integer<bits, g>& operator --() {
+        Integer<bits>& operator --() {
             *this = this->decrement();
             return this;
         }
 
-        Integer<bits, g> operator --(int) {
-            Integer<bits, g> old = *this;
+        Integer<bits> operator --(int) {
+            Integer<bits> old = *this;
             *this = this->decrement();
             return old;
         }
 
-        Bit<g> operator <(const Integer<bits, g>& other) const {
-            return Bit<g>(Operation::IntLess, *this, other);
+        Bit operator <(const Integer<bits>& other) const {
+            return Bit(OpCode::IntLess, *this, other);
         }
 
-        Bit<g> operator >(const Integer<bits, g>& other) const {
+        Bit operator >(const Integer<bits>& other) const {
             return other < *this;
         }
 
-        Bit<g> operator <=(const Integer<bits, g>& other) const {
+        Bit operator <=(const Integer<bits>& other) const {
             return ~(other < *this);
         }
 
-        Bit<g> operator >=(const Integer<bits, g>& other) const {
+        Bit operator >=(const Integer<bits>& other) const {
             return ~((*this) < other);
         }
 
-        Bit<g> operator ==(const Integer<bits, g>& other) const {
-            return Bit<g>(Operation::Equal, *this, other);
+        Bit operator ==(const Integer<bits>& other) const {
+            return Bit(OpCode::Equal, *this, other);
         }
 
-        Bit<g> operator !() const {
-            return Bit<g>(Operation::IsZero, *this);
+        Bit operator !() const {
+            return Bit(OpCode::IsZero, *this);
         }
 
-        Bit<g> nonzero() const {
-            return Bit<g>(Operation::NonZero, *this);
+        Bit nonzero() const {
+            return Bit(OpCode::NonZero, *this);
         }
 
-        Integer<bits, g> operator ~() const {
-            return Integer<bits, g>(Operation::BitNOT, *this);
+        Integer<bits> operator ~() const {
+            return Integer<bits>(OpCode::BitNOT, *this);
         }
 
-        Integer<bits, g> operator &(const Integer<bits, g>& other) const {
-            return Integer<bits, g>(Operation::BitAND, *this, other);
+        Integer<bits> operator &(const Integer<bits>& other) const {
+            return Integer<bits>(OpCode::BitAND, *this, other);
         }
 
-        Integer<bits, g> operator |(const Integer<bits, g>& other) const {
-            return Integer<bits, g>(Operation::BitOR, *this, other);
+        Integer<bits> operator |(const Integer<bits>& other) const {
+            return Integer<bits>(OpCode::BitOR, *this, other);
         }
 
-        Integer<bits, g> operator ^(const Integer<bits, g>& other) const {
-            return Integer<bits, g>(Operation::BitXOR, *this, other);
+        Integer<bits> operator ^(const Integer<bits>& other) const {
+            return Integer<bits>(OpCode::BitXOR, *this, other);
         }
 
         template <BitWidth length>
-        Integer<length, g> slice(BitOffset start) const {
+        Integer<length> slice(BitOffset start) const {
             assert(start + length <= bits);
             BitOffset new_offset = this->bit_offset + start;
             assert(new_offset >= start); // check overflow of BitOffset
-            return Integer<length, g>(this->v, new_offset);
+            return Integer<length>(this->v, new_offset, this->p);
         }
 
-        Bit<g> operator [](BitOffset i) const {
+        Bit operator [](BitOffset i) const {
             return this->slice<1>(i);
         }
 
@@ -162,47 +164,55 @@ namespace mage::dsl {
             return bits;
         }
 
-        static Integer<bits, g> select(const Bit<g>& selector, const Integer<bits, g>& arg0, const Integer<bits, g>& arg1) {
-            return Integer<bits, g>(Operation::ValueSelect, arg0, arg1, selector);
+        static Integer<bits> select(const Bit& selector, const Integer<bits>& arg0, const Integer<bits>& arg1) {
+            return Integer<bits>(OpCode::ValueSelect, arg0, arg1, selector);
         }
 
-        static void swap_if(const Bit<g>& predicate, Integer<bits, g>& arg0, Integer<bits, g>& arg1) {
+        static void swap_if(const Bit& predicate, Integer<bits>& arg0, Integer<bits>& arg1) {
             assert(arg0.valid() && arg1.valid());
-            Integer<bits, g> mask = Integer<bits, g>::select(predicate, arg0, arg1) ^ arg1;
+            Integer<bits> mask = Integer<bits>::select(predicate, arg0, arg1) ^ arg1;
             arg0 = arg0 ^ mask;
             arg1 = arg1 ^ mask;
         }
 
-        static void comparator(Integer<bits, g>& arg0, Integer<bits, g>& arg1) {
-            Integer<bits, g>::swap_if(arg0 > arg1, arg0, arg1);
+        static void comparator(Integer<bits>& arg0, Integer<bits>& arg1) {
+            Integer<bits>::swap_if(arg0 > arg1, arg0, arg1);
         }
 
         bool valid() const {
-            return this->v != invalid_vertex;
+            return this->v != invalid_instruction;
         }
 
     private:
         template <BitWidth arg0_bits>
-        Integer(Operation operation, const Integer<arg0_bits, g>& arg0) : bit_offset(0) {
-            this->v = g->new_vertex(operation, bits, arg0.v, arg0.bit_offset);
+        Integer(OpCode operation, const Integer<arg0_bits>& arg0) : bit_offset(0), p(arg0.p) {
+            this->v = this->p->new_instruction(operation, bits, arg0.v, arg0.bit_offset);
         }
 
         template <BitWidth arg_bits>
-        Integer(Operation operation, const Integer<arg_bits, g>& arg0, const Integer<arg_bits, g>& arg1) : bit_offset(0) {
-            this->v = g->new_vertex(operation, bits, arg0.v, arg0.bit_offset, arg1.v, arg1.bit_offset);
+        Integer(OpCode operation, const Integer<arg_bits>& arg0, const Integer<arg_bits>& arg1) : bit_offset(0), p(arg0.p) {
+            assert(arg0.p == arg1.p);
+            this->v = this->p->new_instruction(operation, bits, arg0.v, arg0.bit_offset, arg1.v, arg1.bit_offset);
         }
 
         template <BitWidth arg2_bits>
-        Integer(Operation operation, const Integer<bits, g>& arg0, const Integer<bits, g>& arg1, const Integer<arg2_bits, g>& arg2) : bit_offset(0) {
-            this->v = g->new_vertex(operation, bits, arg0.v, arg0.bit_offset, arg1.v, arg1.bit_offset, arg2.v);
+        Integer(OpCode operation, const Integer<bits>& arg0, const Integer<bits>& arg1, const Integer<arg2_bits>& arg2) : bit_offset(0), p(arg0.p) {
+            assert(arg0.p == arg1.p);
+            assert(arg0.p == arg2.p);
+            this->v = this->p->new_instruction(operation, bits, arg0.v, arg0.bit_offset, arg1.v, arg1.bit_offset, arg2.v);
         }
 
-        Integer(VertexID alias_v, BitWidth offset) : v(alias_v), bit_offset(0) {
+        Integer(InstructionID alias_v, BitOffset offset, Program* program) : v(alias_v), bit_offset(0), p(program) {
         }
 
-        /* ID of the underlying vertex in the computation graph */
-        VertexID v;
+        /* ID of the underlying instruction in the program. */
+        InstructionID v;
+
+        /* Offset in the instruction's output at which to find this value. */
         BitOffset bit_offset;
+
+        /* Program that this integer is part of. */
+        Program* p;
     };
 }
 

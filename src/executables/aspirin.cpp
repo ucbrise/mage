@@ -20,29 +20,33 @@
  */
 
 #include "dsl/integer.hpp"
-#include "dsl/graph.hpp"
+#include "dsl/program.hpp"
 #include "dsl/sort.hpp"
 #include <iostream>
 #include <string>
 
 using namespace mage::dsl;
 
-template <BitWidth bits, Graph* g>
+template <BitWidth bits>
 struct Input {
-    Integer<bits, g> patient_id_concat_timestamp;
-    Bit<g> diagnosis; // or aspirin prescription
+    Input(Program* p) : patient_id_concat_timestamp(p), diagnosis(p) {
+    }
 
-    static void comparator(Input<bits, g>& arg0, Input<bits, g>& arg1) {
-        Bit<g> predicate = arg0.patient_id_concat_timestamp > arg1.patient_id_concat_timestamp;
-        Integer<bits, g>::swap_if(predicate, arg0.patient_id_concat_timestamp, arg1.patient_id_concat_timestamp);
-        Bit<g>::swap_if(predicate, arg0.diagnosis, arg1.diagnosis);
+    Integer<bits> patient_id_concat_timestamp;
+    Bit diagnosis; // or aspirin prescription
+
+    static void comparator(Input<bits>& arg0, Input<bits>& arg1) {
+        Bit predicate = arg0.patient_id_concat_timestamp > arg1.patient_id_concat_timestamp;
+        Integer<bits>::swap_if(predicate, arg0.patient_id_concat_timestamp, arg1.patient_id_concat_timestamp);
+        Bit::swap_if(predicate, arg0.diagnosis, arg1.diagnosis);
     }
 };
 
-template <Graph* g, BitWidth patient_id_bits = 32, BitWidth timestamp_bits = 32, BitWidth result_bits = 32>
-void create_aspirin_circuit(int input_size_per_party) {
+template <BitWidth patient_id_bits = 32, BitWidth timestamp_bits = 32, BitWidth result_bits = 32>
+void create_aspirin_circuit(Program* p, int input_size_per_party) {
     int input_array_length = input_size_per_party * 2;
-    auto* inputs = new Input<patient_id_bits + timestamp_bits, g>[input_array_length];
+    std::vector<Input<patient_id_bits + timestamp_bits>> inputs;
+    inputs.resize(input_array_length, Input<patient_id_bits + timestamp_bits>(p));
 
     for (int i = 0; i != input_array_length; i++) {
         inputs[i].patient_id_concat_timestamp.mark_input();
@@ -50,37 +54,33 @@ void create_aspirin_circuit(int input_size_per_party) {
     }
 
     // Verify the input first.
-    Bit<g> order(1);
+    Bit order(1, p);
     for (int i = 0; i < input_size_per_party - 1; i++) {
-        Bit<g> lte = inputs[i].patient_id_concat_timestamp <= inputs[i+1].patient_id_concat_timestamp;
+        Bit lte = inputs[i].patient_id_concat_timestamp <= inputs[i+1].patient_id_concat_timestamp;
         order = order & lte;
     }
     for (int i = input_size_per_party; i < 2 * input_size_per_party - 1; i++) {
-        Bit<g> gte = inputs[i].patient_id_concat_timestamp >= inputs[i+1].patient_id_concat_timestamp;
+        Bit gte = inputs[i].patient_id_concat_timestamp >= inputs[i+1].patient_id_concat_timestamp;
         order = order & gte;
     }
 	order.mark_output();
 
     // Merge the two arrays, sorted ascending by patient_id_concat_timestamp
-    bitonic_sorter(inputs, input_array_length);
+    bitonic_sorter(inputs.data(), input_array_length);
 
     // Now, for each input, check if it and the next input have the same patient, but the first is a diagnosis and the second isn't.
-    Integer<result_bits, g> total(0);
-    for (int i = 0; i < input_array_length; i++) {
-        Bit<g> add = inputs[i].diagnosis & ~inputs[i+1].diagnosis;
-        Integer<patient_id_bits, g> patient_id_i = inputs[i].patient_id_concat_timestamp.template slice<patient_id_bits>(timestamp_bits);
-        Integer<patient_id_bits, g> patient_id_ip1 = inputs[i+1].patient_id_concat_timestamp.template slice<patient_id_bits>(timestamp_bits);
+    Integer<result_bits> total(0, p);
+    for (int i = 0; i < input_array_length - 1; i++) {
+        Bit add = inputs[i].diagnosis & ~inputs[i+1].diagnosis;
+        Integer<patient_id_bits> patient_id_i = inputs[i].patient_id_concat_timestamp.template slice<patient_id_bits>(timestamp_bits);
+        Integer<patient_id_bits> patient_id_ip1 = inputs[i+1].patient_id_concat_timestamp.template slice<patient_id_bits>(timestamp_bits);
         add = add & (patient_id_i == patient_id_ip1);
         Integer next = total.increment();
-        total = Integer<result_bits, g>::select(add, total, next);
+        total = Integer<result_bits>::select(add, total, next);
     }
 
     total.mark_output();
-
-    delete[] inputs;
 }
-
-Graph graph;
 
 int main(int argc, char** argv) {
     int input_size_per_party = 128;
@@ -95,8 +95,9 @@ int main(int argc, char** argv) {
 	filename.append(std::to_string(input_size_per_party));
 	filename.append(".txt");
 
-	create_aspirin_circuit<&graph>(input_size_per_party);
+    ProgramMemory program;
+	create_aspirin_circuit(&program, input_size_per_party);
 
-    std::cout << "Created graph with " << graph.num_vertices() << " vertices" << std::endl;
+    std::cout << "Created program with " << program.num_instructions() << " instructions" << std::endl;
     return 0;
 }

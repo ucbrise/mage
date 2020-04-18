@@ -19,29 +19,26 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "dsl/graph.hpp"
+#include "dsl/program.hpp"
 #include <cassert>
 #include <memory>
 
 namespace mage::dsl {
-    Graph* Graph::current_working_graph = nullptr;
+    Program* Program::current_working_program = nullptr;
 
-    Graph::Graph() {
-    }
-
-    Graph::~Graph() {
-        if (Graph::current_working_graph == this) {
-            Graph::current_working_graph = nullptr;
+    Program::~Program() {
+        if (Program::current_working_program == this) {
+            Program::current_working_program = nullptr;
         }
     }
 
-    Graph* Graph::set_current_working_graph(Graph* cwg) {
-        Graph* old_cwg = Graph::current_working_graph;
-        Graph::current_working_graph = cwg;
-        return old_cwg;
+    Program* Program::set_current_working_program(Program* cwp) {
+        Program* old_cwp = Program::current_working_program;
+        Program::current_working_program = cwp;
+        return old_cwp;
     }
 
-    Graph* Graph::get_current_working_graph() {
-        return Graph::current_working_graph;
+    Program* Program::get_current_working_program() {
+        return Program::current_working_program;
     }
 }
