@@ -19,6 +19,7 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "dsl/annotator.hpp"
 #include "dsl/integer.hpp"
 #include "dsl/programfile.hpp"
 #include "dsl/sort.hpp"
@@ -82,6 +83,8 @@ void create_aspirin_circuit(Program& p, int input_size_per_party) {
     total.mark_output();
 }
 
+std::uint8_t page_shift = 10;
+
 int main(int argc, char** argv) {
     int input_size_per_party = 128;
 	std::string filename = "aspirin_";
@@ -93,11 +96,25 @@ int main(int argc, char** argv) {
         input_size_per_party = atoi(argv[1]);
     }
 	filename.append(std::to_string(input_size_per_party));
-	filename.append(".prog");
 
-    ProgramFileWriter program(filename);
-	create_aspirin_circuit(program, input_size_per_party);
+    std::string program_filename = filename;
+	program_filename.append(".prog");
 
-    std::cout << "Created program with " << program.num_instructions() << " instructions" << std::endl;
+    {
+        ProgramFileWriter program(program_filename);
+    	create_aspirin_circuit(program, input_size_per_party);
+        std::cout << "Created program with " << program.num_instructions() << " instructions" << std::endl;
+    }
+
+    std::string revann_filename = filename;
+    revann_filename.append(".revann");
+    std::uint64_t working_set = reverse_annotate_program(revann_filename, program_filename, page_shift);
+    std::cout << "Reverse-annotated program (working set size is " << working_set << " pages)" << std::endl;
+
+    std::string ann_filename = filename;
+    ann_filename.append(".ann");
+    unreverse_annotations(ann_filename, revann_filename);
+    std::cout << "Computed actual annotations" << std::endl;
+
     return 0;
 }

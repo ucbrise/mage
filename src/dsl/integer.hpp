@@ -38,20 +38,20 @@ namespace mage::dsl {
         friend class Integer;
 
     public:
-        Integer(Program& program = *Program::get_current_working_program()) : v(invalid_addr), p(&program) {
+        Integer(Program& program = *Program::get_current_working_program()) : v(invalid_vaddr), p(&program) {
             assert(&program != nullptr);
         }
 
         Integer(std::uint32_t public_constant, Program& program = *Program::get_current_working_program()) : p(&program) {
             assert(&program != nullptr);
-            this->v = this->p->new_instruction(OpCode::PublicConstant, bits, invalid_addr, invalid_addr, invalid_addr, public_constant);
+            this->v = this->p->new_instruction(OpCode::PublicConstant, bits, invalid_vaddr, invalid_vaddr, invalid_vaddr, public_constant);
         }
 
         Integer(const Integer<bits>& other) : v(other.v), p(other.p) {
         }
 
         void mark_input() {
-            assert(this->v == invalid_addr);
+            assert(this->v == invalid_vaddr);
             this->v = this->p->new_instruction(OpCode::Input, bits);
         }
 
@@ -177,7 +177,7 @@ namespace mage::dsl {
         }
 
         bool valid() const {
-            return this->v != invalid_addr;
+            return this->v != invalid_vaddr;
         }
 
     private:
@@ -199,11 +199,11 @@ namespace mage::dsl {
             this->v = this->p->new_instruction(operation, bits, arg0.v, arg1.v, arg2.v);
         }
 
-        Integer(Address alias_v, BitWidth offset, Program* program) : v(alias_v + offset), p(program) {
+        Integer(VirtAddr alias_v, BitWidth offset, Program* program) : v(alias_v + offset), p(program) {
         }
 
         /* Address of the underlying data. */
-        Address v;
+        VirtAddr v;
 
         /* Program that this integer is part of. */
         Program* p;

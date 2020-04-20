@@ -44,7 +44,7 @@ namespace mage::dsl {
         this->output.write(reinterpret_cast<const char*>(&header), sizeof(header));
     }
 
-    void ProgramFileWriter::mark_output(Address v, BitWidth length) {
+    void ProgramFileWriter::mark_output(VirtAddr v, BitWidth length) {
         if (this->outputs.size() != 0 && this->outputs.back().end == v) {
             this->outputs.back().end = v + length;
         } else {
@@ -58,7 +58,7 @@ namespace mage::dsl {
         return this->count;
     }
 
-    void ProgramFileWriter::append_instruction(const Instruction& v) {
+    void ProgramFileWriter::append_instruction(const VirtualInstruction& v) {
         this->output.write(reinterpret_cast<const char*>(&v), sizeof(v));
         this->count++;
     }
@@ -67,15 +67,15 @@ namespace mage::dsl {
         this->input.exceptions(std::ios::eofbit | std::ios::failbit | std::ios::badbit);
         this->input.open(filename, std::ios::in | std::ios::binary);
         this->input.read(reinterpret_cast<char*>(&this->header), sizeof(this->header));
-        this->input.seekg(this->header.num_instructions * sizeof(Instruction), std::ios::cur);
+        this->input.seekg(this->header.num_instructions * sizeof(VirtualInstruction), std::ios::cur);
         this->outputs.resize(this->header.num_output_ranges);
         this->input.read(reinterpret_cast<char*>(this->outputs.data()), this->header.num_output_ranges * sizeof(OutputRange));
         this->input.seekg(sizeof(this->header), std::ios::beg);
     }
 
-    std::uint64_t ProgramFileReader::read_next_instruction(Instruction& instruction) {
+    std::uint64_t ProgramFileReader::read_next_instruction(VirtualInstruction& instruction) {
         if (this->next_instruction == this->header.num_instructions) {
-            return invalid_addr;
+            return invalid_instr;
         }
         this->input.read(reinterpret_cast<char*>(&instruction), sizeof(instruction));
         return this->next_instruction++;

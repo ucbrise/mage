@@ -31,14 +31,19 @@
 #include <string>
 
 namespace mage::dsl {
-    struct ProgramFileHeader {
-        std::uint64_t num_instructions;
-        std::uint64_t num_output_ranges;
-    };
-
     struct OutputRange {
-        Address start;
-        Address end;
+        VirtAddr start;
+        VirtAddr end;
+    };
+    
+    struct ProgramFileHeader {
+        InstructionNumber num_instructions;
+        std::uint64_t num_output_ranges;
+        VirtualInstruction instructions[0];
+
+        OutputRange* get_output_ranges() {
+            return reinterpret_cast<OutputRange*>(&this->instructions[this->num_instructions]);
+        }
     };
 
     class ProgramFileWriter : public Program {
@@ -46,11 +51,11 @@ namespace mage::dsl {
         ProgramFileWriter(std::string filename);
         ~ProgramFileWriter();
 
-        void mark_output(Address v, BitWidth length) override;
-        Address num_instructions() override;
+        void mark_output(VirtAddr v, BitWidth length) override;
+        VirtAddr num_instructions() override;
 
     protected:
-        void append_instruction(const Instruction& v) override;
+        void append_instruction(const VirtualInstruction& v) override;
 
     private:
         std::uint64_t count;
@@ -62,7 +67,7 @@ namespace mage::dsl {
     public:
         ProgramFileReader(std::string filename);
 
-        std::uint64_t read_next_instruction(Instruction& instruction);
+        std::uint64_t read_next_instruction(VirtualInstruction& instruction);
         const std::vector<OutputRange>& get_outputs() const;
 
     private:

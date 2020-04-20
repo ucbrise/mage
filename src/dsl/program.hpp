@@ -28,10 +28,20 @@
 #include <vector>
 
 namespace mage::dsl {
-    using Address = std::uint64_t;
+    using InstructionNumber = std::uint64_t;
+    const constexpr int instruction_number_bits = 48;
+    const constexpr std::uint64_t invalid_instr = (UINT64_C(1) << instruction_number_bits) - 1;
+
+    using VirtAddr = std::uint64_t;
+    const constexpr int virtual_address_bits = 52;
+    const constexpr VirtAddr invalid_vaddr = (UINT64_C(1) << virtual_address_bits) - 1;
+
     using BitWidth = std::uint8_t;
+
     enum class OpCode : std::uint8_t {
         Undefined = 0,
+        SwapIn,
+        SwapOut,
         Input,
         PublicConstant,
         IntAdd,
@@ -51,14 +61,11 @@ namespace mage::dsl {
         Swap
     };
 
-    const constexpr int address_bits = 52;
-    const constexpr Address invalid_addr = (UINT64_C(1) << address_bits) - 1;
-
-    struct Instruction {
-        Address input1 : address_bits;
-        Address input2 : address_bits;
-        Address input3 : address_bits;
-        Address output : address_bits;
+    struct VirtualInstruction {
+        VirtAddr input1 : virtual_address_bits;
+        VirtAddr input2 : virtual_address_bits;
+        VirtAddr input3 : virtual_address_bits;
+        VirtAddr output : virtual_address_bits;
         OpCode operation;
         BitWidth width;
         std::uint32_t constant;
@@ -69,8 +76,8 @@ namespace mage::dsl {
         Program();
         virtual ~Program();
 
-        Address new_instruction(OpCode op, BitWidth width, Address arg0 = invalid_addr, Address arg1 = invalid_addr, Address arg2 = invalid_addr, std::uint32_t constant = 0) {
-            Instruction v;
+        VirtAddr new_instruction(OpCode op, BitWidth width, VirtAddr arg0 = invalid_vaddr, VirtAddr arg1 = invalid_vaddr, VirtAddr arg2 = invalid_vaddr, std::uint32_t constant = 0) {
+            VirtualInstruction v;
             v.input1 = arg0;
             v.input2 = arg1;
             v.input3 = arg2;
@@ -83,15 +90,15 @@ namespace mage::dsl {
             return v.output;
         }
 
-        virtual void mark_output(Address v, BitWidth length) = 0;
+        virtual void mark_output(VirtAddr v, BitWidth length) = 0;
         virtual std::uint64_t num_instructions() = 0;
 
         static Program* set_current_working_program(Program* cwp);
         static Program* get_current_working_program();
 
     protected:
-        virtual void append_instruction(const Instruction& v) = 0;
-        Address next_free_address;
+        virtual void append_instruction(const VirtualInstruction& v) = 0;
+        VirtAddr next_free_address;
 
     private:
         static Program* current_working_program;
@@ -99,7 +106,7 @@ namespace mage::dsl {
 
     // class ProgramMemory : public Program {
     // public:
-    //     void mark_output(Address v, BitWidth length) override {
+    //     void mark_output(VirtAddr v, BitWidth length) override {
     //         this->outputs.push_back(v);
     //     }
     //
@@ -108,13 +115,13 @@ namespace mage::dsl {
     //     }
     //
     // protected:
-    //     void append_instruction(const Instruction& v) override {
+    //     void append_instruction(const VirtualInstruction& v) override {
     //         this->instructions.push_back(v);
     //     }
     //
     // private:
-    //     std::vector<Instruction> instructions;
-    //     std::vector<Address> outputs;
+    //     std::vector<VirtualInstruction> instructions;
+    //     std::vector<VirtAddr> outputs;
     // };
 }
 
