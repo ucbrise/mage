@@ -95,46 +95,53 @@ namespace mage::memprog {
         } __attribute__((packed)) header;
         union {
             struct {
-                PackedInstruction<addr_bits> next[0];
+                std::uint8_t next[0];
             } __attribute__((packed)) no_args;
             struct {
                 std::uint64_t constant;
-                PackedInstruction<addr_bits> next[0];
+                std::uint8_t next[0];
             } __attribute__((packed)) constant;
             struct {
                 std::uint64_t input1 : addr_bits;
-                PackedInstruction<addr_bits> next[0];
+                std::uint8_t next[0];
             } __attribute__((packed)) one_arg;
             struct {
                 std::uint64_t input1 : addr_bits;
                 std::uint64_t input2 : addr_bits;
-                PackedInstruction<addr_bits> next[0];
+                std::uint8_t next[0];
             } __attribute__((packed)) two_args;
             struct {
                 std::uint64_t input1 : addr_bits;
                 std::uint64_t input2 : addr_bits;
                 std::uint64_t input3 : addr_bits;
-                PackedInstruction<addr_bits> next[0];
+                std::uint8_t next[0];
             } __attribute__((packed)) three_args;
         };
 
         /* Useful if we memory-map a program. */
         PackedInstruction<addr_bits>* next() const {
             OpInfo info(this->op);
+            std::uint8_t* rv;
             switch (info.format()) {
             case InstructionFormat::NoArgs:
-                return &this->no_args.next[0];
+                rv = &this->no_args.next[0];
+                break;
             case InstructionFormat::OneArg:
-                return &this->one_arg.next[0];
+                rv = &this->one_arg.next[0];
+                break;
             case InstructionFormat::TwoArgs:
-                return &this->two_args.next[0];
+                rv = &this->two_args.next[0];
+                break;
             case InstructionFormat::ThreeArgs:
-                return &this->three_args.next[0];
+                rv = &this->three_args.next[0];
+                break;
             case InstructionFormat::Constant:
-                return &this->constant.next[0];
+                rv = &this->constant.next[0];
+                break;
             default:
                 std::abort();
             }
+            return reinterpret_cast<PackedInstruction<addr_bits>*>(rv);
         }
     } __attribute__((packed));
 
@@ -173,33 +180,71 @@ namespace mage::memprog {
 
         void write_to_output(std::ostream& out) const {
             OpInfo info(this->header.operation);
-            util::write_lower_bytes(out, static_cast<std::uint8_t>(this->header.operation), sizeof(this->header.operation));
-            util::write_lower_bytes(out, this->header.width, sizeof(this->header.width));
-            util::write_lower_bytes(out, this->header.constant_mask, sizeof(this->header.constant_mask));
-            util::write_lower_bytes(out, this->header.output, addr_bytes);
+
+            /* TODO: handle endianness when populating PACKED */
+            PackedInstruction<addr_bits> packed;
+            packed.header.operation = this->header.operation;
+            packed.header.width = this->header.width;
+            packed.header.constant_mask = this->header.constant_mask;
+            packed.header.output = this->header.output;
 
             switch (info.format()) {
             case InstructionFormat::NoArgs:
+                out.write(reinterpret_cast<const char*>(&packed), sizeof(packed.header));
                 break;
             case InstructionFormat::OneArg:
-                util::write_lower_bytes(out, this->one_arg.input1, addr_bytes);
+                packed.one_arg.input1 = this->one_arg.input1;
+                out.write(reinterpret_cast<const char*>(&packed), sizeof(packed.header) + sizeof(packed.one_arg));
                 break;
             case InstructionFormat::TwoArgs:
-                util::write_lower_bytes(out, this->two_args.input1, addr_bytes);
-                util::write_lower_bytes(out, this->two_args.input2, addr_bytes);
+                packed.two_args.input1 = this->two_args.input1;
+                packed.two_args.input2 = this->two_args.input2;
+                out.write(reinterpret_cast<const char*>(&packed), sizeof(packed.header) + sizeof(packed.two_args));
                 break;
             case InstructionFormat::ThreeArgs:
-                util::write_lower_bytes(out, this->three_args.input1, addr_bytes);
-                util::write_lower_bytes(out, this->three_args.input2, addr_bytes);
-                util::write_lower_bytes(out, this->three_args.input3, addr_bytes);
+                packed.three_args.input1 = this->three_args.input1;
+                packed.three_args.input2 = this->three_args.input2;
+                packed.three_args.input3 = this->three_args.input3;
+                out.write(reinterpret_cast<const char*>(&packed), sizeof(packed.header) + sizeof(packed.three_args));
                 break;
             case InstructionFormat::Constant:
-                util::write_lower_bytes(out, this->constant.constant, sizeof(this->constant.constant));
+                packed.constant.constant = this->constant.constant;
+                out.write(reinterpret_cast<const char*>(&packed), sizeof(packed.header) + sizeof(packed.constant));
                 break;
             default:
                 std::abort();
             }
         }
+
+        // void write_to_output(std::ostream& out) const {
+        //     OpInfo info(this->header.operation);
+        //     util::write_lower_bytes(out, static_cast<std::uint8_t>(this->header.operation), sizeof(this->header.operation));
+        //     util::write_lower_bytes(out, this->header.width, sizeof(this->header.width));
+        //     util::write_lower_bytes(out, this->header.constant_mask, sizeof(this->header.constant_mask));
+        //     util::write_lower_bytes(out, this->header.output, addr_bytes);
+        //
+        //     switch (info.format()) {
+        //     case InstructionFormat::NoArgs:
+        //         break;
+        //     case InstructionFormat::OneArg:
+        //         util::write_lower_bytes(out, this->one_arg.input1, addr_bytes);
+        //         break;
+        //     case InstructionFormat::TwoArgs:
+        //         util::write_lower_bytes(out, this->two_args.input1, addr_bytes);
+        //         util::write_lower_bytes(out, this->two_args.input2, addr_bytes);
+        //         break;
+        //     case InstructionFormat::ThreeArgs:
+        //         util::write_lower_bytes(out, this->three_args.input1, addr_bytes);
+        //         util::write_lower_bytes(out, this->three_args.input2, addr_bytes);
+        //         util::write_lower_bytes(out, this->three_args.input3, addr_bytes);
+        //         break;
+        //     case InstructionFormat::Constant:
+        //         util::write_lower_bytes(out, this->constant.constant, sizeof(this->constant.constant));
+        //         break;
+        //     default:
+        //         std::abort();
+        //     }
+        // }
 
         bool read_from_input(std::istream& in) {
             util::read_lower_bytes(in, *reinterpret_cast<std::uint8_t*>(&this->header.operation), sizeof(this->header.operation));
