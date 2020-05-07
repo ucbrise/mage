@@ -19,20 +19,14 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef MAGE_DSL_ANNOTATOR_HPP_
-#define MAGE_DSL_ANNOTATOR_HPP_
+#ifndef MAGE_MEMPROG_ANNOTATOR_HPP_
+#define MAGE_MEMPROG_ANNOTATOR_HPP_
 
 #include <cstdint>
 #include <string>
-#include "dsl/program.hpp"
+#include "memprog/program.hpp"
 
-namespace mage::dsl {
-    using PhysAddr = std::uint64_t;
-
-    /* Allows for up to 1 TiB of RAM, assuming 16 bytes per wire. */
-    const constexpr int physical_address_bits = 36;
-    const constexpr PhysAddr invalid_paddr = (UINT64_C(1) << physical_address_bits) - 1;
-
+namespace mage::memprog {
     struct PhysicalInstruction {
         union {
             struct {
@@ -50,11 +44,9 @@ namespace mage::dsl {
         BitWidth width;
     } __attribute__((packed));
 
-    using VirtualPageNumber = std::uint64_t;
-
-    struct VirtualPageRange {
-        VirtualPageNumber start;
-        VirtualPageNumber end; // inclusive;
+    struct VirtPageRange {
+        VirtPageNumber start;
+        VirtPageNumber end; // inclusive;
     };
 
     const constexpr std::uint32_t annotation_header_magic = UINT32_C(0x54ac3429);
@@ -64,8 +56,6 @@ namespace mage::dsl {
         std::uint16_t num_output_pages;
         std::uint32_t magic;
     } __attribute((packed));
-
-    using VirtualPageNumber = std::uint64_t;
 
     std::uint64_t reverse_annotate_program(std::string reverse_annotated_program, std::string original_program, std::uint8_t page_shift);
     void unreverse_annotations(std::string annotated_program, std::string reverse_annotated_program);

@@ -19,14 +19,14 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "dsl/program.hpp"
+#include "memprog/program.hpp"
 #include <cassert>
 #include <memory>
 
-namespace mage::dsl {
+namespace mage::memprog {
     Program* Program::current_working_program = nullptr;
 
-    Program::Program() : next_free_address(0) {
+    Program::Program(PageShift shift) : next_free_address(0), page_shift(shift) {
     }
 
     Program::~Program() {

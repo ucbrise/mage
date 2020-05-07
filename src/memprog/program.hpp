@@ -19,75 +19,60 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef MAGE_DSL_PROGRAM_HPP_
-#define MAGE_DSL_PROGRAM_HPP_
+#ifndef MAGE_MEMPROG_PROGRAM_HPP_
+#define MAGE_MEMPROG_PROGRAM_HPP_
 
 #include "stream.hpp"
 #include <cstdint>
+#include <cstdlib>
 #include <memory>
 #include <vector>
+#include "memprog/addr.hpp"
+#include "memprog/instruction.hpp"
 
-namespace mage::dsl {
+namespace mage::memprog {
     using InstructionNumber = std::uint64_t;
     const constexpr int instruction_number_bits = 48;
     const constexpr std::uint64_t invalid_instr = (UINT64_C(1) << instruction_number_bits) - 1;
 
-    using VirtAddr = std::uint64_t;
-    const constexpr int virtual_address_bits = 52;
-    const constexpr VirtAddr invalid_vaddr = (UINT64_C(1) << virtual_address_bits) - 1;
-
-    using BitWidth = std::uint8_t;
-
-    enum class OpCode : std::uint8_t {
-        Undefined = 0,
-        SwapIn,
-        SwapOut,
-        Input,
-        PublicConstant,
-        IntAdd,
-        IntIncrement,
-        IntSub,
-        IntDecrement,
-        IntLess,
-        Equal,
-        IsZero,
-        NonZero,
-        BitNOT,
-        BitAND,
-        BitOR,
-        BitXOR,
-        BitSelect,
-        ValueSelect,
-        Swap
-    };
-
-    struct VirtualInstruction {
-        VirtAddr input1 : virtual_address_bits;
-        VirtAddr input2 : virtual_address_bits;
-        VirtAddr input3 : virtual_address_bits;
-        VirtAddr output : virtual_address_bits;
-        OpCode operation;
-        BitWidth width;
-        std::uint32_t constant;
-    } __attribute__((packed));
-
     class Program {
     public:
-        Program();
+        Program(PageShift shift);
         virtual ~Program();
 
         VirtAddr new_instruction(OpCode op, BitWidth width, VirtAddr arg0 = invalid_vaddr, VirtAddr arg1 = invalid_vaddr, VirtAddr arg2 = invalid_vaddr, std::uint32_t constant = 0) {
-            VirtualInstruction v;
-            v.input1 = arg0;
-            v.input2 = arg1;
-            v.input3 = arg2;
-            v.output = this->next_free_address;
-            v.operation = op;
-            v.width = width;
-            v.constant = constant;
-            this->next_free_address += width;
+            OpInfo info(op);
+            VirtInstruction v;
+            v.header.operation = op;
+            v.header.width = width;
+            v.header.constant_mask = 0;
+            v.header.output = this->allocate_virtual(info.single_bit_output() ? 1 : width);
+
+            switch (info.format()) {
+            case InstructionFormat::NoArgs:
+                break;
+            case InstructionFormat::OneArg:
+                v.one_arg.input1 = arg0;
+                break;
+            case InstructionFormat::TwoArgs:
+                v.two_args.input1 = arg0;
+                v.two_args.input2 = arg1;
+                break;
+            case InstructionFormat::ThreeArgs:
+                v.three_args.input1 = arg0;
+                v.three_args.input2 = arg1;
+                v.three_args.input3 = arg2;
+                break;
+            case InstructionFormat::Constant:
+                v.constant.constant = constant;
+                break;
+            default:
+                std::abort();
+            }
+
             this->append_instruction(v);
-            return v.output;
+
+            return v.header.output;
         }
 
         virtual void mark_output(VirtAddr v, BitWidth length) = 0;
@@ -97,10 +82,21 @@ namespace mage::dsl {
         static Program* get_current_working_program();
 
     protected:
-        virtual void append_instruction(const VirtualInstruction& v) = 0;
+        virtual void append_instruction(const VirtInstruction& v) = 0;
         VirtAddr next_free_address;
+        PageShift page_shift;
 
     private:
+        VirtAddr allocate_virtual(BitWidth width) {
+            VirtAddr addr;
+            if (pgnum(this->next_free_address, this->page_shift) == pgnum(this->next_free_address + width, this->page_shift)) {
+                addr = this->next_free_address;
+            } else {
+                addr = pg_round_up(this->next_free_address, this->page_shift);
+            }
+            this->next_free_address = addr + width;
+            return addr;
+        }
         static Program* current_working_program;
     };
 

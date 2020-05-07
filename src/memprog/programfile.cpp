@@ -19,14 +19,14 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "dsl/programfile.hpp"
+#include "memprog/programfile.hpp"
 
 #include <iostream>
 #include <fstream>
 #include <string>
 
-namespace mage::dsl {
-    ProgramFileWriter::ProgramFileWriter(std::string filename) : count(0) {
+namespace mage::memprog {
+    ProgramFileWriter::ProgramFileWriter(std::string filename, PageShift pgshift) : Program(pgshift), count(0) {
         this->output.exceptions(std::ios::failbit | std::ios::badbit);
         this->output.open(filename, std::ios::out | std::ios::binary | std::ios::trunc);
 
@@ -35,12 +35,14 @@ namespace mage::dsl {
     }
 
     ProgramFileWriter::~ProgramFileWriter() {
+        std::streampos ranges_offset = this->output.tellp();
         this->output.write(reinterpret_cast<const char*>(outputs.data()), outputs.size() * sizeof(OutputRange));
         this->output.seekp(0, std::ios::beg);
 
         ProgramFileHeader header;
         header.num_instructions = this->count;
         header.num_output_ranges = this->outputs.size();
+        header.ranges_offset = ranges_offset;
         this->output.write(reinterpret_cast<const char*>(&header), sizeof(header));
     }
 
@@ -58,8 +60,8 @@ namespace mage::dsl {
         return this->count;
     }
 
-    void ProgramFileWriter::append_instruction(const VirtualInstruction& v) {
-        this->output.write(reinterpret_cast<const char*>(&v), sizeof(v));
+    void ProgramFileWriter::append_instruction(const VirtInstruction& v) {
+        v.write_to_output(this->output);
         this->count++;
     }
 
@@ -67,17 +69,17 @@ namespace mage::dsl {
         this->input.exceptions(std::ios::eofbit | std::ios::failbit | std::ios::badbit);
         this->input.open(filename, std::ios::in | std::ios::binary);
         this->input.read(reinterpret_cast<char*>(&this->header), sizeof(this->header));
-        this->input.seekg(this->header.num_instructions * sizeof(VirtualInstruction), std::ios::cur);
+        this->input.seekg(this->header.num_instructions * sizeof(VirtInstruction), std::ios::cur);
         this->outputs.resize(this->header.num_output_ranges);
         this->input.read(reinterpret_cast<char*>(this->outputs.data()), this->header.num_output_ranges * sizeof(OutputRange));
         this->input.seekg(sizeof(this->header), std::ios::beg);
     }
 
-    std::uint64_t ProgramFileReader::read_next_instruction(VirtualInstruction& instruction) {
+    std::uint64_t ProgramFileReader::read_next_instruction(VirtInstruction& instruction) {
         if (this->next_instruction == this->header.num_instructions) {
             return invalid_instr;
         }
-        this->input.read(reinterpret_cast<char*>(&instruction), sizeof(instruction));
+        instruction.read_from_input(this->input);
         return this->next_instruction++;
     }
 

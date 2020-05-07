@@ -22,11 +22,18 @@
 #ifndef MAGE_DSL_INTEGER_HPP_
 #define MAGE_DSL_INTEGER_HPP_
 
-#include "dsl/program.hpp"
+#include "memprog/instruction.hpp"
+#include "memprog/program.hpp"
 #include <cassert>
 #include <cstdint>
 
 namespace mage::dsl {
+    using memprog::BitWidth;
+    using memprog::VirtAddr;
+    using memprog::Program;
+    using memprog::OpCode;
+    using memprog::invalid_vaddr;
+
     template <BitWidth bits>
     class Integer;
 

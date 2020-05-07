@@ -19,10 +19,10 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef MAGE_DSL_PROGRAMFILE_HPP_
-#define MAGE_DSL_PROGRAMFILE_HPP_
+#ifndef MAGE_MEMPROG_PROGRAMFILE_HPP_
+#define MAGE_MEMPROG_PROGRAMFILE_HPP_
 
-#include "dsl/program.hpp"
+#include "memprog/program.hpp"
 
 #include <cstdint>
 
@@ -30,32 +30,35 @@
 #include <fstream>
 #include <string>
 
-namespace mage::dsl {
+#include "memprog/addr.hpp"
+#include "memprog/instruction.hpp"
+
+namespace mage::memprog {
     struct OutputRange {
         VirtAddr start;
         VirtAddr end;
     };
-    
+
     struct ProgramFileHeader {
         InstructionNumber num_instructions;
         std::uint64_t num_output_ranges;
-        VirtualInstruction instructions[0];
+        std::uint64_t ranges_offset;
 
         OutputRange* get_output_ranges() {
-            return reinterpret_cast<OutputRange*>(&this->instructions[this->num_instructions]);
+            return reinterpret_cast<OutputRange*>(reinterpret_cast<char*>(this) + this->ranges_offset);
         }
     };
 
     class ProgramFileWriter : public Program {
     public:
-        ProgramFileWriter(std::string filename);
+        ProgramFileWriter(std::string filename, PageShift pgshift = 16);
         ~ProgramFileWriter();
 
         void mark_output(VirtAddr v, BitWidth length) override;
         VirtAddr num_instructions() override;
 
     protected:
-        void append_instruction(const VirtualInstruction& v) override;
+        void append_instruction(const VirtInstruction& v) override;
 
     private:
         std::uint64_t count;
@@ -67,7 +70,7 @@ namespace mage::dsl {
     public:
         ProgramFileReader(std::string filename);
 
-        std::uint64_t read_next_instruction(VirtualInstruction& instruction);
+        std::uint64_t read_next_instruction(VirtInstruction& instruction);
         const std::vector<OutputRange>& get_outputs() const;
 
     private:
