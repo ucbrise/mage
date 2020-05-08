@@ -58,12 +58,14 @@ namespace mage::memprog {
 
             ann.header.num_pages = current->get_requisite_page_numbers(vpns.data(), page_shift);
             for (std::uint16_t i = 0; i != ann.header.num_pages; i++) {
-                auto pair = next_access.insert(std::make_pair(vpns[i], inum));
-                if (pair.second) {
+                /* Re-profile the code if you modify this inner loop. */
+                auto iter = next_access.find(vpns[i]);
+                if (iter == next_access.end()) {
+                    next_access.insert(std::make_pair(vpns[i], inum));
                     ann.slots[i].next_use = invalid_instr;
                 } else {
-                    ann.slots[i].next_use = pair.first->second;
-                    pair.first->second = inum;
+                    ann.slots[i].next_use = iter->second;
+                    iter->second = inum;
                 }
             }
             output.write(reinterpret_cast<const char*>(&ann), ann.size());
