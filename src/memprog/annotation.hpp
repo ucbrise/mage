@@ -19,38 +19,14 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef MAGE_MEMPROG_ANNOTATOR_HPP_
-#define MAGE_MEMPROG_ANNOTATOR_HPP_
+#ifndef MAGE_MEMPROG_ANNOTATION_HPP_
+#define MAGE_MEMPROG_ANNOTATION_HPP_
 
 #include <cstdint>
 #include <string>
 #include "memprog/program.hpp"
 
 namespace mage::memprog {
-    struct PhysicalInstruction {
-        union {
-            struct {
-                PhysAddr primary : physical_address_bits;
-                VirtAddr secondary : virtual_address_bits;
-            };
-            struct {
-                PhysAddr input1 : physical_address_bits;
-                PhysAddr input2 : physical_address_bits;
-                PhysAddr input3 : physical_address_bits;
-                PhysAddr output : physical_address_bits;
-            };
-        };
-        OpCode operation;
-        BitWidth width;
-    } __attribute__((packed));
-
-    struct VirtPageRange {
-        VirtPageNumber start;
-        VirtPageNumber end; // inclusive;
-    };
-
-    const constexpr std::uint32_t annotation_header_magic = UINT32_C(0x54ac3429);
-
     struct Annotation {
         struct {
             std::uint16_t num_pages;

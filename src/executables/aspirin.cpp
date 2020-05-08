@@ -21,7 +21,7 @@
 
 #include "dsl/integer.hpp"
 #include "dsl/sort.hpp"
-#include "memprog/annotator.hpp"
+#include "memprog/annotation.hpp"
 #include "memprog/programfile.hpp"
 #include <iostream>
 #include <string>
