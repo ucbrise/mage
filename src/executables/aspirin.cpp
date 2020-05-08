@@ -19,9 +19,9 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// #include "dsl/annotator.hpp"
 #include "dsl/integer.hpp"
 #include "dsl/sort.hpp"
+#include "memprog/annotator.hpp"
 #include "memprog/programfile.hpp"
 #include <iostream>
 #include <string>
@@ -101,20 +101,20 @@ int main(int argc, char** argv) {
     program_filename.append(".prog");
 
     {
-        mage::memprog::ProgramFileWriter program(program_filename);
+        mage::memprog::Program program(program_filename);
         create_aspirin_circuit(program, input_size_per_party);
         std::cout << "Created program with " << program.num_instructions() << " instructions" << std::endl;
     }
 
-    // std::string revann_filename = filename;
-    // revann_filename.append(".revann");
-    // std::uint64_t working_set = reverse_annotate_program(revann_filename, program_filename, page_shift);
-    // std::cout << "Reverse-annotated program (working set size is " << working_set << " pages)" << std::endl;
-    //
-    // std::string ann_filename = filename;
-    // ann_filename.append(".ann");
-    // unreverse_annotations(ann_filename, revann_filename);
-    // std::cout << "Computed actual annotations" << std::endl;
+    std::string revann_filename = filename;
+    revann_filename.append(".revann");
+    std::uint64_t working_set = mage::memprog::reverse_annotate_program(revann_filename, program_filename, page_shift);
+    std::cout << "Reverse-annotated program (working set size is " << working_set << " pages)" << std::endl;
+
+    std::string ann_filename = filename;
+    ann_filename.append(".ann");
+    mage::memprog::unreverse_annotations(ann_filename, revann_filename);
+    std::cout << "Computed actual annotations" << std::endl;
 
     return 0;
 }

@@ -22,31 +22,33 @@
 #ifndef MAGE_MEMPROG_PROGRAM_HPP_
 #define MAGE_MEMPROG_PROGRAM_HPP_
 
-#include "stream.hpp"
+#include <cassert>
 #include <cstdint>
 #include <cstdlib>
 #include <memory>
 #include <vector>
 #include "memprog/addr.hpp"
 #include "memprog/instruction.hpp"
+#include "memprog/programfile.hpp"
+#include "stream.hpp"
 
 namespace mage::memprog {
-    using InstructionNumber = std::uint64_t;
-    const constexpr int instruction_number_bits = 48;
-    const constexpr std::uint64_t invalid_instr = (UINT64_C(1) << instruction_number_bits) - 1;
-
-    class Program {
+    class Program : public VirtProgramFileWriter {
     public:
-        Program(PageShift shift);
-        virtual ~Program();
+        Program(std::string filename, PageShift shift = 16);
+        ~Program();
 
         VirtAddr new_instruction(OpCode op, BitWidth width, VirtAddr arg0 = invalid_vaddr, VirtAddr arg1 = invalid_vaddr, VirtAddr arg2 = invalid_vaddr, std::uint32_t constant = 0) {
             OpInfo info(op);
+
             VirtInstruction v;
             v.header.operation = op;
             v.header.width = width;
-            v.header.constant_mask = 0;
-            v.header.output = this->allocate_virtual(info.single_bit_output() ? 1 : width);
+
+            bool fresh_page;
+            v.header.output = this->allocate_virtual(info.single_bit_output() ? 1 : width, fresh_page);
+
+            v.header.flags = fresh_page ? FlagOutputPageFirstUse : 0;
 
             switch (info.format()) {
             case InstructionFormat::NoArgs:
@@ -75,50 +77,26 @@ namespace mage::memprog {
             return v.header.output;
         }
 
-        virtual void mark_output(VirtAddr v, BitWidth length) = 0;
-        virtual std::uint64_t num_instructions() = 0;
-
         static Program* set_current_working_program(Program* cwp);
         static Program* get_current_working_program();
 
-    protected:
-        virtual void append_instruction(const VirtInstruction& v) = 0;
-        VirtAddr next_free_address;
-        PageShift page_shift;
-
     private:
-        VirtAddr allocate_virtual(BitWidth width) {
+        VirtAddr allocate_virtual(BitWidth width, bool& fresh_page) {
             VirtAddr addr;
-            if (pgnum(this->next_free_address, this->page_shift) == pgnum(this->next_free_address + width, this->page_shift)) {
+            assert(width != 0);
+            if (pg_num(this->next_free_address, this->page_shift) == pg_num(this->next_free_address + width - 1, this->page_shift)) {
                 addr = this->next_free_address;
             } else {
-                addr = pg_round_up(this->next_free_address, this->page_shift);
+                addr = pg_next(this->next_free_address, this->page_shift);
             }
             this->next_free_address = addr + width;
+            fresh_page = (pg_offset(addr, this->page_shift) == 0);
             return addr;
         }
+        VirtAddr next_free_address;
+        PageShift page_shift;
         static Program* current_working_program;
     };
-
-    // class ProgramMemory : public Program {
-    // public:
-    //     void mark_output(VirtAddr v, BitWidth length) override {
-    //         this->outputs.push_back(v);
-    //     }
-    //
-    //     std::uint64_t num_instructions() override {
-    //         return this->instructions.size();
-    //     }
-    //
-    // protected:
-    //     void append_instruction(const VirtualInstruction& v) override {
-    //         this->instructions.push_back(v);
-    //     }
-    //
-    // private:
-    //     std::vector<VirtualInstruction> instructions;
-    //     std::vector<VirtAddr> outputs;
-    // };
 }
 
 #endif

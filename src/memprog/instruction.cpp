@@ -66,8 +66,8 @@ namespace mage::memprog {
         }
     }
 
-    int OpInfo::num_args() const {
-        switch (this->layout) {
+    int instruction_format_num_args(InstructionFormat format) {
+        switch (format) {
         case InstructionFormat::NoArgs:
             return 0;
         case InstructionFormat::OneArg:
@@ -83,8 +83,12 @@ namespace mage::memprog {
         }
     }
 
-    bool OpInfo::uses_constant() const {
-        switch (this->layout) {
+    int OpInfo::num_args() const {
+        return instruction_format_num_args(this->layout);
+    }
+
+    bool instruction_format_uses_constant(InstructionFormat format) {
+        switch (format) {
         case InstructionFormat::NoArgs:
         case InstructionFormat::OneArg:
         case InstructionFormat::TwoArgs:
@@ -95,6 +99,10 @@ namespace mage::memprog {
         default:
             std::abort();
         }
+    }
+
+    bool OpInfo::uses_constant() const {
+        return instruction_format_uses_constant(this->layout);
     }
 
     bool OpInfo::single_bit_output() const {

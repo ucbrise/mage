@@ -26,7 +26,7 @@
 namespace mage::memprog {
     Program* Program::current_working_program = nullptr;
 
-    Program::Program(PageShift shift) : next_free_address(0), page_shift(shift) {
+    Program::Program(std::string filename, PageShift shift) : VirtProgramFileWriter(filename), next_free_address(0), page_shift(shift) {
     }
 
     Program::~Program() {

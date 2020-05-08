@@ -51,14 +51,26 @@ namespace mage::memprog {
 
     const constexpr std::uint32_t annotation_header_magic = UINT32_C(0x54ac3429);
 
-    struct InstructionAnnotationHeader {
-        std::uint16_t num_input_pages;
-        std::uint16_t num_output_pages;
-        std::uint32_t magic;
-    } __attribute((packed));
+    struct Annotation {
+        struct {
+            std::uint16_t num_pages;
+        } __attribute__((packed)) header;
+        struct {
+            InstructionNumber next_use : instruction_number_bits;
+        } __attribute__((packed)) slots[5];
 
-    std::uint64_t reverse_annotate_program(std::string reverse_annotated_program, std::string original_program, std::uint8_t page_shift);
-    void unreverse_annotations(std::string annotated_program, std::string reverse_annotated_program);
+        std::uint16_t size() const {
+            return sizeof(Annotation::header) + this->header.num_pages * sizeof(Annotation::slots[0]);
+        }
+
+        Annotation* next() {
+            std::uint8_t* self = reinterpret_cast<std::uint8_t*>(this);
+            return reinterpret_cast<Annotation*>(self + this->size());
+        }
+    } __attribute__((packed));
+
+    std::uint64_t reverse_annotate_program(std::string reverse_annotations, std::string program, PageShift page_shift);
+    void unreverse_annotations(std::string annotations, std::string reverse_annotations);
 }
 
 #endif

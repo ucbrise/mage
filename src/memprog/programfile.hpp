@@ -22,21 +22,20 @@
 #ifndef MAGE_MEMPROG_PROGRAMFILE_HPP_
 #define MAGE_MEMPROG_PROGRAMFILE_HPP_
 
-#include "memprog/program.hpp"
-
 #include <cstdint>
 
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <vector>
 
 #include "memprog/addr.hpp"
 #include "memprog/instruction.hpp"
 
 namespace mage::memprog {
     struct OutputRange {
-        VirtAddr start;
-        VirtAddr end;
+        std::uint64_t start;
+        std::uint64_t end;
     };
 
     struct ProgramFileHeader {
@@ -49,16 +48,47 @@ namespace mage::memprog {
         }
     };
 
-    class ProgramFileWriter : public Program {
+    template <std::uint8_t addr_bits>
+    class ProgramFileWriter {
     public:
-        ProgramFileWriter(std::string filename, PageShift pgshift = 16);
-        ~ProgramFileWriter();
+        ProgramFileWriter(std::string filename) : count(0) {
+            this->output.exceptions(std::ios::failbit | std::ios::badbit);
+            this->output.open(filename, std::ios::out | std::ios::binary | std::ios::trunc);
 
-        void mark_output(VirtAddr v, BitWidth length) override;
-        VirtAddr num_instructions() override;
+            ProgramFileHeader header = { 0 };
+            this->output.write(reinterpret_cast<const char*>(&header), sizeof(header));
+        }
 
-    protected:
-        void append_instruction(const VirtInstruction& v) override;
+        virtual ~ProgramFileWriter() {
+            std::streampos ranges_offset = this->output.tellp();
+            this->output.write(reinterpret_cast<const char*>(outputs.data()), outputs.size() * sizeof(OutputRange));
+            this->output.seekp(0, std::ios::beg);
+
+            ProgramFileHeader header;
+            header.num_instructions = this->count;
+            header.num_output_ranges = this->outputs.size();
+            header.ranges_offset = ranges_offset;
+            this->output.write(reinterpret_cast<const char*>(&header), sizeof(header));
+        }
+
+        void mark_output(std::uint8_t v, BitWidth length) {
+            if (this->outputs.size() != 0 && this->outputs.back().end == v) {
+                this->outputs.back().end = v + length;
+            } else {
+                OutputRange& r = this->outputs.emplace_back();
+                r.start = v;
+                r.end = v + length;
+            }
+        }
+
+        std::uint64_t num_instructions() const {
+            return this->count;
+        }
+
+        void append_instruction(const Instruction<addr_bits>& v) {
+            v.write_to_output(this->output);
+            this->count++;
+        }
 
     private:
         std::uint64_t count;
@@ -79,6 +109,8 @@ namespace mage::memprog {
         std::ifstream input;
         std::vector<OutputRange> outputs;
     };
+
+    using VirtProgramFileWriter = ProgramFileWriter<virtual_address_bits>;
 }
 
 #endif

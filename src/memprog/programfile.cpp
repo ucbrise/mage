@@ -26,45 +26,6 @@
 #include <string>
 
 namespace mage::memprog {
-    ProgramFileWriter::ProgramFileWriter(std::string filename, PageShift pgshift) : Program(pgshift), count(0) {
-        this->output.exceptions(std::ios::failbit | std::ios::badbit);
-        this->output.open(filename, std::ios::out | std::ios::binary | std::ios::trunc);
-
-        ProgramFileHeader header = { 0 };
-        this->output.write(reinterpret_cast<const char*>(&header), sizeof(header));
-    }
-
-    ProgramFileWriter::~ProgramFileWriter() {
-        std::streampos ranges_offset = this->output.tellp();
-        this->output.write(reinterpret_cast<const char*>(outputs.data()), outputs.size() * sizeof(OutputRange));
-        this->output.seekp(0, std::ios::beg);
-
-        ProgramFileHeader header;
-        header.num_instructions = this->count;
-        header.num_output_ranges = this->outputs.size();
-        header.ranges_offset = ranges_offset;
-        this->output.write(reinterpret_cast<const char*>(&header), sizeof(header));
-    }
-
-    void ProgramFileWriter::mark_output(VirtAddr v, BitWidth length) {
-        if (this->outputs.size() != 0 && this->outputs.back().end == v) {
-            this->outputs.back().end = v + length;
-        } else {
-            OutputRange& r = this->outputs.emplace_back();
-            r.start = v;
-            r.end = v + length;
-        }
-    }
-
-    std::uint64_t ProgramFileWriter::num_instructions() {
-        return this->count;
-    }
-
-    void ProgramFileWriter::append_instruction(const VirtInstruction& v) {
-        v.write_to_output(this->output);
-        this->count++;
-    }
-
     ProgramFileReader::ProgramFileReader(std::string filename) {
         this->input.exceptions(std::ios::eofbit | std::ios::failbit | std::ios::badbit);
         this->input.open(filename, std::ios::in | std::ios::binary);
