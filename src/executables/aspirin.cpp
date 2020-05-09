@@ -23,6 +23,7 @@
 #include "dsl/sort.hpp"
 #include "memprog/annotation.hpp"
 #include "memprog/programfile.hpp"
+#include "memprog/replacement.hpp"
 #include <iostream>
 #include <string>
 
@@ -83,7 +84,8 @@ void create_aspirin_circuit(Program& p, int input_size_per_party) {
     total.mark_output();
 }
 
-std::uint8_t page_shift = 10;
+std::uint8_t page_shift = 16;
+std::uint64_t num_pages = 1 << 14;
 
 int main(int argc, char** argv) {
     int input_size_per_party = 128;
@@ -101,7 +103,7 @@ int main(int argc, char** argv) {
     program_filename.append(".prog");
 
     {
-        mage::memprog::Program program(program_filename);
+        mage::memprog::Program program(program_filename, page_shift);
         create_aspirin_circuit(program, input_size_per_party);
         std::cout << "Created program with " << program.num_instructions() << " instructions" << std::endl;
     }
@@ -115,6 +117,14 @@ int main(int argc, char** argv) {
     ann_filename.append(".ann");
     mage::memprog::unreverse_annotations(ann_filename, revann_filename);
     std::cout << "Computed actual annotations" << std::endl;
+
+    {
+        std::string memprog_filename = filename;
+        memprog_filename.append(".memprog");
+        mage::memprog::BeladyAllocator allocator(memprog_filename, program_filename, ann_filename, num_pages, page_shift);
+        allocator.allocate();
+        std::cout << "Finished replacement stage: " << allocator.get_num_swapouts() << " swapouts, " << allocator.get_num_swapins() << " swapins" << std::endl;
+    }
 
     return 0;
 }

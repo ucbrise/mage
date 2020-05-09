@@ -22,6 +22,7 @@
 #ifndef MAGE_MEMPROG_OPCODE_HPP_
 #define MAGE_MEMPROG_OPCODE_HPP_
 
+#include <cstddef>
 #include <cstdint>
 #include "memprog/addr.hpp"
 #include "util/binary.hpp"
@@ -57,27 +58,106 @@ namespace mage::memprog {
         Constant = 4
     };
 
-    int instruction_format_num_args(InstructionFormat format);
-    bool instruction_format_uses_constant(InstructionFormat format);
+    constexpr int instruction_format_num_args(InstructionFormat format) {
+        switch (format) {
+        case InstructionFormat::NoArgs:
+            return 0;
+        case InstructionFormat::OneArg:
+            return 1;
+        case InstructionFormat::TwoArgs:
+            return 2;
+        case InstructionFormat::ThreeArgs:
+            return 3;
+        case InstructionFormat::Constant:
+            return 0;
+        default:
+            std::abort();
+        }
+    }
+
+    constexpr bool instruction_format_uses_constant(InstructionFormat format) {
+        switch (format) {
+        case InstructionFormat::NoArgs:
+        case InstructionFormat::OneArg:
+        case InstructionFormat::TwoArgs:
+        case InstructionFormat::ThreeArgs:
+            return false;
+        case InstructionFormat::Constant:
+            return true;
+        default:
+            std::abort();
+        }
+    }
 
     class OpInfo {
     public:
-        OpInfo(OpCode op) {
+        constexpr OpInfo(OpCode op) : layout(InstructionFormat::NoArgs), single_bit(false) {
             this->set(op);
         }
 
-        OpInfo& operator=(OpCode op) {
+        constexpr OpInfo& operator=(OpCode op) {
             this->set(op);
             return *this;
         }
 
-        void set(OpCode op);
+        constexpr void set(OpCode op)  {
+            switch (op) {
+            case OpCode::Input:
+                this->layout = InstructionFormat::NoArgs;
+                this->single_bit = false;
+                break;
+            case OpCode::SwapIn:
+            case OpCode::SwapOut:
+            case OpCode::PublicConstant:
+                this->layout = InstructionFormat::Constant;
+                this->single_bit = false;
+                break;
+            case OpCode::IntAdd:
+            case OpCode::IntSub:
+            case OpCode::BitAND:
+            case OpCode::BitOR:
+            case OpCode::BitXOR:
+                this->layout = InstructionFormat::TwoArgs;
+                this->single_bit = false;
+                break;
+            case OpCode::IntIncrement:
+            case OpCode::IntDecrement:
+            case OpCode::BitNOT:
+                this->layout = InstructionFormat::OneArg;
+                this->single_bit = false;
+                break;
+            case OpCode::IntLess:
+            case OpCode::Equal:
+                this->layout = InstructionFormat::TwoArgs;
+                this->single_bit = true;
+                break;
+            case OpCode::IsZero:
+            case OpCode::NonZero:
+                this->layout = InstructionFormat::OneArg;
+                this->single_bit = true;
+                break;
+            case OpCode::ValueSelect:
+                this->layout = InstructionFormat::ThreeArgs;
+                this->single_bit = false;
+                break;
+            default:
+                std::abort();
+            }
+        }
 
-        int num_args() const;
-        bool uses_constant() const;
-        bool single_bit_output() const;
+        constexpr int num_args() const {
+            return instruction_format_num_args(this->layout);
+        }
 
-        InstructionFormat format() const {
+        constexpr bool uses_constant() const {
+            return instruction_format_uses_constant(this->layout);
+        }
+
+        constexpr bool single_bit_output() const {
+            return this->single_bit;
+        }
+
+        constexpr InstructionFormat format() const {
             return this->layout;
         }
 
@@ -115,11 +195,6 @@ namespace mage::memprog {
                 std::uint8_t next[0];
             } __attribute__((packed)) no_args;
             struct {
-                std::uint64_t constant;
-                InstructionFormat format;
-                std::uint8_t next[0];
-            } __attribute__((packed)) constant;
-            struct {
                 std::uint64_t input1 : addr_bits;
                 InstructionFormat format;
                 std::uint8_t next[0];
@@ -137,11 +212,42 @@ namespace mage::memprog {
                 InstructionFormat format;
                 std::uint8_t next[0];
             } __attribute__((packed)) three_args;
+            struct {
+                std::uint64_t constant;
+                InstructionFormat format;
+                std::uint8_t next[0];
+            } __attribute__((packed)) constant;
         };
+
+        static constexpr std::size_t size(InstructionFormat format) {
+            switch (format) {
+            case InstructionFormat::NoArgs:
+                return sizeof(PackedInstruction<addr_bits>::header) + sizeof(PackedInstruction<addr_bits>::no_args);
+            case InstructionFormat::OneArg:
+                return sizeof(PackedInstruction<addr_bits>::header) + sizeof(PackedInstruction<addr_bits>::one_arg);
+            case InstructionFormat::TwoArgs:
+                return sizeof(PackedInstruction<addr_bits>::header) + sizeof(PackedInstruction<addr_bits>::two_args);
+            case InstructionFormat::ThreeArgs:
+                return sizeof(PackedInstruction<addr_bits>::header) + sizeof(PackedInstruction<addr_bits>::three_args);
+            case InstructionFormat::Constant:
+                return sizeof(PackedInstruction<addr_bits>::header) + sizeof(PackedInstruction<addr_bits>::constant);
+            default:
+                std::abort();
+            }
+        }
+
+        static constexpr std::size_t size(OpCode operation) {
+            OpInfo info(operation);
+            return PackedInstruction<addr_bits>::size(info.format());
+        }
+
+        std::size_t size() const {
+            return PackedInstruction<addr_bits>::size(this->header.operation);
+        }
 
         /* Useful if we memory-map a program. */
         PackedInstruction<addr_bits>* next(InstructionFormat& format) {
-            OpInfo info(this->op);
+            OpInfo info(this->header.operation);
             std::uint8_t* rv;
             format = info.format();
             switch (format) {
@@ -168,32 +274,13 @@ namespace mage::memprog {
 
         /* Useful if we memory-map a program or read a program backwards. */
         PackedInstruction<addr_bits>* prev(InstructionFormat& format) {
-            std::uint8_t* rv;
             std::uint8_t* self = reinterpret_cast<std::uint8_t*>(this);
             format = static_cast<InstructionFormat>(*(self - sizeof(InstructionFormat)));
-            switch (format) {
-            case InstructionFormat::NoArgs:
-                rv = self - sizeof(this->no_args) - sizeof(this->header);
-                break;
-            case InstructionFormat::OneArg:
-                rv = self - sizeof(this->one_arg) - sizeof(this->header);
-                break;
-            case InstructionFormat::TwoArgs:
-                rv = self - sizeof(this->two_args) - sizeof(this->header);
-                break;
-            case InstructionFormat::ThreeArgs:
-                rv = self - sizeof(this->three_args) - sizeof(this->header);
-                break;
-            case InstructionFormat::Constant:
-                rv = self - sizeof(this->constant) - sizeof(this->header);
-                break;
-            default:
-                std::abort();
-            }
+            std::uint8_t* rv = self - PackedInstruction<addr_bits>::size(format);
             return reinterpret_cast<PackedInstruction<addr_bits>*>(rv);
         }
 
-        std::uint8_t get_requisite_page_numbers(std::uint64_t* into, PageShift page_shift) {
+        std::uint8_t store_page_numbers(std::uint64_t* into, PageShift page_shift) {
             OpInfo info(this->header.operation);
             int num_args = info.num_args();
 
@@ -219,7 +306,48 @@ namespace mage::memprog {
                     }
                 }
             }
+            return num_pages;
+        }
 
+        template <std::uint8_t other_addr_bits>
+        std::uint8_t restore_page_numbers(const PackedInstruction<other_addr_bits>& original, const std::uint64_t* from, PageShift page_shift) {
+            OpInfo info(this->header.operation);
+            int num_args = info.num_args();
+
+            std::uint8_t num_pages = 0;
+
+            std::uint64_t output_vpn = pg_num(original.header.output, page_shift);
+            this->header.output = pg_set_num(original.header.output, from[num_pages++], page_shift);
+            if (num_args > 0) {
+                std::uint64_t input1_vpn = pg_num(original.three_args.input1, page_shift);
+                if (input1_vpn == output_vpn) {
+                    this->three_args.input1 = pg_copy_num(original.three_args.input1, this->header.output, page_shift);
+                } else {
+                    this->three_args.input1 = pg_set_num(original.three_args.input1, from[num_pages++], page_shift);
+                }
+                if (num_args > 1) {
+                    std::uint64_t input2_vpn = pg_num(original.three_args.input2, page_shift);
+                    if (input2_vpn == output_vpn) {
+                        this->three_args.input2 = pg_copy_num(original.three_args.input2, this->header.output, page_shift);
+                    } else if (input2_vpn == input1_vpn) {
+                        this->three_args.input2 = pg_copy_num(original.three_args.input2, this->three_args.input1, page_shift);
+                    } else {
+                        this->three_args.input2 = pg_set_num(original.three_args.input2, from[num_pages++], page_shift);
+                    }
+                    if (num_args > 2) {
+                        std::uint64_t input3_vpn = pg_num(original.three_args.input3, page_shift);
+                        if (input3_vpn == output_vpn) {
+                            this->three_args.input3 = pg_copy_num(original.three_args.input3, this->header.output, page_shift);
+                        } else if (input3_vpn == input1_vpn) {
+                            this->three_args.input3 = pg_copy_num(original.three_args.input3, this->three_args.input1, page_shift);
+                        } else if (input3_vpn == input2_vpn) {
+                            this->three_args.input3 = pg_copy_num(original.three_args.input3, this->three_args.input2, page_shift);
+                        } else {
+                            this->three_args.input3 = pg_set_num(original.three_args.input3, from[num_pages++], page_shift);
+                        }
+                    }
+                }
+            }
             return num_pages;
         }
     } __attribute__((packed));
@@ -241,9 +369,6 @@ namespace mage::memprog {
                 // Input
             } no_args;
             struct {
-                std::uint64_t constant;
-            } constant;
-            struct {
                 std::uint64_t input1;
             } one_arg;
             struct {
@@ -255,7 +380,49 @@ namespace mage::memprog {
                 std::uint64_t input2;
                 std::uint64_t input3;
             } three_args;
+            struct {
+                std::uint64_t constant;
+            } constant;
         };
+
+        std::size_t pack(PackedInstruction<addr_bits>& packed, InstructionFormat format) {
+            packed.header.operation = this->header.operation;
+            packed.header.width = this->header.width;
+            packed.header.flags = this->header.flags;
+            packed.header.output = this->header.output;
+
+            switch (format) {
+            case InstructionFormat::NoArgs:
+                packed.no_args.format = format;
+                return sizeof(packed.header) + sizeof(packed.no_args);
+            case InstructionFormat::OneArg:
+                packed.one_arg.input1 = this->one_arg.input1;
+                packed.one_arg.format = format;
+                return sizeof(packed.header) + sizeof(packed.one_arg);
+            case InstructionFormat::TwoArgs:
+                packed.two_args.input1 = this->two_args.input1;
+                packed.two_args.input2 = this->two_args.input2;
+                packed.two_args.format = format;
+                return sizeof(packed.header) + sizeof(packed.two_args);
+            case InstructionFormat::ThreeArgs:
+                packed.three_args.input1 = this->three_args.input1;
+                packed.three_args.input2 = this->three_args.input2;
+                packed.three_args.input3 = this->three_args.input3;
+                packed.three_args.format = format;
+                return sizeof(packed.header) + sizeof(packed.three_args);
+            case InstructionFormat::Constant:
+                packed.constant.constant = this->constant.constant;
+                packed.constant.format = format;
+                return sizeof(packed.header) + sizeof(packed.constant);
+            default:
+                std::abort();
+            }
+        }
+
+        std::size_t pack(PackedInstruction<addr_bits>& packed) {
+            OpInfo info(this->header.operation);
+            return this->pack(packed, info.format());
+        }
 
         void write_to_output(std::ostream& out) const {
             OpInfo info(this->header.operation);

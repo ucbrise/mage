@@ -47,16 +47,22 @@ namespace mage::memprog {
         return addr & pg_mask(shift);
     }
     inline std::uint64_t pg_next(std::uint64_t addr, PageShift shift) {
-        return ((addr >> shift) + 1) << shift;
+        return (pg_num(addr, shift) + 1) << shift;
     }
     inline std::uint64_t pg_base(std::uint64_t addr, PageShift shift) {
-        return addr & ~pg_mask(shift);
+        return pg_num(addr, shift) << shift;
     }
     inline std::uint64_t pg_round_up(std::uint64_t addr, PageShift shift) {
         return pg_next(addr - 1, shift);
     }
     inline std::uint64_t pg_round_down(std::uint64_t addr, PageShift shift) {
         return pg_base(addr, shift);
+    }
+    inline std::uint64_t pg_set_num(std::uint64_t addr, std::uint64_t num, PageShift shift) {
+        return (num << shift) | pg_offset(addr, shift);
+    }
+    inline std::uint64_t pg_copy_num(std::uint64_t addr, std::uint64_t from, PageShift shift) {
+        return pg_base(from, shift) | pg_offset(addr, shift);
     }
 
     /* PHYSICAL ADDRESSES */

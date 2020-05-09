@@ -85,6 +85,15 @@ namespace mage::memprog {
             return this->count;
         }
 
+        void append_instruction(const PackedInstruction<addr_bits>& v, std::size_t len) {
+            this->output.write(reinterpret_cast<const char*>(&v), len);
+            this->count++;
+        }
+
+        void append_instruction(const PackedInstruction<addr_bits>& v) {
+            this->append_instruction(v, v.size());
+        }
+
         void append_instruction(const Instruction<addr_bits>& v) {
             v.write_to_output(this->output);
             this->count++;
@@ -111,6 +120,7 @@ namespace mage::memprog {
     };
 
     using VirtProgramFileWriter = ProgramFileWriter<virtual_address_bits>;
+    using PhysProgramFileWriter = ProgramFileWriter<physical_address_bits>;
 }
 
 #endif

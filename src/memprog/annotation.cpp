@@ -56,7 +56,7 @@ namespace mage::memprog {
             current = current->prev(format);
             inum--;
 
-            ann.header.num_pages = current->get_requisite_page_numbers(vpns.data(), page_shift);
+            ann.header.num_pages = current->store_page_numbers(vpns.data(), page_shift);
             for (std::uint16_t i = 0; i != ann.header.num_pages; i++) {
                 /* Re-profile the code if you modify this inner loop. */
                 auto iter = next_access.find(vpns[i]);
