@@ -29,6 +29,7 @@
 #include <vector>
 #include "memprog/addr.hpp"
 #include "memprog/instruction.hpp"
+#include "memprog/opcode.hpp"
 #include "memprog/programfile.hpp"
 #include "stream.hpp"
 

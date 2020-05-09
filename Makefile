@@ -1,4 +1,4 @@
-CXX = g++-9
+CXX = clang++
 CXXFLAGS = -std=c++2a -Ofast -DNDEBUG -ggdb3 -pthread -I./src/
 LDFLAGS = -pthread
 

@@ -26,6 +26,7 @@
 #include "memprog/addr.hpp"
 #include "memprog/annotation.hpp"
 #include "memprog/instruction.hpp"
+#include "memprog/opcode.hpp"
 #include "memprog/programfile.hpp"
 #include "platform/memory.hpp"
 #include "util/prioqueue.hpp"

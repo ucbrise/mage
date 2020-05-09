@@ -26,6 +26,7 @@
 #include "memprog/addr.hpp"
 #include "memprog/annotation.hpp"
 #include "memprog/instruction.hpp"
+#include "memprog/opcode.hpp"
 
 namespace mage::memprog {
     Allocator::Allocator(std::string output_file) : num_swapouts(0), num_swapins(0), phys_prog(output_file) {
