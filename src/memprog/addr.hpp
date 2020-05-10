@@ -78,6 +78,10 @@ namespace mage::memprog {
     using InstructionNumber = std::uint64_t;
     const constexpr int instruction_number_bits = 48;
     const constexpr std::uint64_t invalid_instr = (UINT64_C(1) << instruction_number_bits) - 1;
+
+    /* STORAGE ADDRESSES */
+    using StorageAddr = std::uint64_t;
+    const constexpr int storage_address_bits = 48;
 }
 
 #endif

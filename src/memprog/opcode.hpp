@@ -54,7 +54,8 @@ namespace mage::memprog {
         OneArg = 1,
         TwoArgs = 2,
         ThreeArgs = 3,
-        Constant = 4
+        Constant = 4,
+        Swap = 5
     };
 
     constexpr int instruction_format_num_args(InstructionFormat format) {
@@ -68,6 +69,7 @@ namespace mage::memprog {
         case InstructionFormat::ThreeArgs:
             return 3;
         case InstructionFormat::Constant:
+        case InstructionFormat::Swap:
             return 0;
         default:
             std::abort();
@@ -83,6 +85,8 @@ namespace mage::memprog {
             return false;
         case InstructionFormat::Constant:
             return true;
+        case InstructionFormat::Swap:
+            return false;
         default:
             std::abort();
         }
@@ -107,6 +111,9 @@ namespace mage::memprog {
                 break;
             case OpCode::SwapIn:
             case OpCode::SwapOut:
+                this->layout = InstructionFormat::Swap;
+                this->single_bit = false;
+                break;
             case OpCode::PublicConstant:
                 this->layout = InstructionFormat::Constant;
                 this->single_bit = false;

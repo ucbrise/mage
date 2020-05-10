@@ -46,24 +46,20 @@ namespace mage::memprog {
     void Allocator::emit_swapout(PhysPageNumber primary, VirtPageNumber secondary) {
         PackedPhysInstruction phys;
         phys.header.operation = OpCode::SwapOut;
-        phys.header.width = 1;
         phys.header.flags = 0;
         phys.header.output = primary;
-        phys.constant.constant = secondary;
-        phys.constant.format = InstructionFormat::Constant;
-        this->emit_instruction(phys, PackedPhysInstruction::size(InstructionFormat::Constant));
+        phys.swap.storage = secondary;
+        this->emit_instruction(phys, PackedPhysInstruction::size(InstructionFormat::Swap));
         this->num_swapouts++;
     }
 
     void Allocator::emit_swapin(PhysPageNumber primary, VirtPageNumber secondary) {
         PackedPhysInstruction phys;
         phys.header.operation = OpCode::SwapIn;
-        phys.header.width = 1;
         phys.header.flags = 0;
         phys.header.output = primary;
-        phys.constant.constant = secondary;
-        phys.constant.format = InstructionFormat::Constant;
-        this->emit_instruction(phys, PackedPhysInstruction::size(InstructionFormat::Constant));
+        phys.swap.storage = secondary;
+        this->emit_instruction(phys, PackedPhysInstruction::size(InstructionFormat::Swap));
         this->num_swapins++;
     }
 
@@ -87,7 +83,7 @@ namespace mage::memprog {
         PackedPhysInstruction phys;
         for (InstructionNumber i = 0; i != header->num_instructions; i++) {
             phys.header.operation = current->header.operation;
-            phys.header.width = current->header.width;
+            phys.no_args.width = current->no_args.width;
             phys.header.flags = current->header.flags;
             std::uint8_t num_pages = current->store_page_numbers(vpns.data(), this->page_shift);
             assert(num_pages == ann->header.num_pages);
@@ -148,8 +144,7 @@ namespace mage::memprog {
             phys.restore_page_numbers(*current, ppns.data(), this->page_shift);
             this->emit_instruction(phys);
 
-            InstructionFormat format;
-            current = current->next(format);
+            current = current->next();
             ann = ann->next();
         }
     }

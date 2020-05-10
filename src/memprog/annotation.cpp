@@ -21,9 +21,11 @@
 
 #include "memprog/annotation.hpp"
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
 #include <algorithm>
 #include <array>
+#include <filesystem>
 #include <fstream>
 #include <ostream>
 #include <string>
@@ -31,29 +33,35 @@
 #include "memprog/addr.hpp"
 #include "memprog/instruction.hpp"
 #include "platform/memory.hpp"
+#include "util/mapping.hpp"
 
 namespace mage::memprog {
-    std::uint64_t reverse_annotate_program(std::string reverse_annotations, std::string program, PageShift page_shift) {
+    platform::MappedFile<PackedVirtInstruction> reverse_instructions(const std::string& program, InstructionNumber& inum) {
         platform::MappedFile<ProgramFileHeader> mapping(program.c_str());
         ProgramFileHeader* header = mapping.mapping();
-        OutputRange* outputs = header->get_output_ranges();
 
-        std::ofstream output;
-        output.exceptions(std::ios::failbit | std::ios::badbit);
-        output.open(reverse_annotations, std::ios::out | std::ios::binary | std::ios::trunc);
+        PackedVirtInstruction* first = reinterpret_cast<PackedVirtInstruction*>(header + 1);
+        OutputRange* outputs = header->get_output_ranges();
+        std::ptrdiff_t num_instruction_bytes = reinterpret_cast<std::uint8_t*>(outputs) - reinterpret_cast<std::uint8_t*>(first);
+        inum = header->num_instructions;
+
+        platform::MappedFile<PackedVirtInstruction> reversed(num_instruction_bytes, true);
+        util::reverse_list_into(first, reversed.mapping(), num_instruction_bytes);
+        return reversed;
+    }
+
+    std::uint64_t reverse_annotate_program(std::ofstream& output, std::string program, PageShift page_shift) {
+        InstructionNumber inum;
+        platform::MappedFile<PackedVirtInstruction> reversed = reverse_instructions(program, inum);
+        PackedVirtInstruction* current = reversed.mapping();
 
         std::unordered_map<VirtPageNumber, InstructionNumber> next_access;
         std::uint64_t max_working_set_size = 0;
-
-        InstructionNumber inum = header->num_instructions;
-        PackedVirtInstruction* current = reinterpret_cast<PackedVirtInstruction*>(outputs);
 
         Annotation ann;
         std::array<VirtPageNumber, 5> vpns;
 
         do {
-            InstructionFormat format;
-            current = current->prev(format);
             inum--;
 
             ann.header.num_pages = current->store_page_numbers(vpns.data(), page_shift);
@@ -74,25 +82,34 @@ namespace mage::memprog {
             if ((current->header.flags & FlagOutputPageFirstUse) != 0) {
                 next_access.erase(pg_num(current->header.output, page_shift));
             }
+
+            current = current->next();
         } while (inum != 0);
 
-        assert(current == reinterpret_cast<PackedVirtInstruction*>(header + 1));
+        assert(reinterpret_cast<std::uint8_t*>(current) == reinterpret_cast<std::uint8_t*>(reversed.mapping()) + reversed.size());
 
         return max_working_set_size;
     }
 
-    void unreverse_annotations(std::string annotations, std::string reverse_annotations) {
-        platform::MappedFile<Annotation> rev(reverse_annotations.c_str(), false);
-        platform::MappedFile<std::uint8_t> ann(annotations.c_str(), rev.size());
+    std::uint64_t reverse_annotate_program(std::string reverse_annotations, std::string program, PageShift page_shift) {
+        std::ofstream output;
+        output.exceptions(std::ios::failbit | std::ios::badbit);
+        output.open(reverse_annotations, std::ios::out | std::ios::binary | std::ios::trunc);
+        return reverse_annotate_program(output, program, page_shift);
+    }
 
-        const Annotation* source_end = reinterpret_cast<Annotation*>(reinterpret_cast<std::uint8_t*>(rev.mapping()) + rev.size());
-        std::uint8_t* target = ann.mapping() + ann.size();
-        for (Annotation* source = rev.mapping(); source != source_end; source = source->next()) {
-            std::uint16_t size = source->size();
-            const std::uint8_t* ptr = reinterpret_cast<const std::uint8_t*>(source);
-            target -= size;
-            std::copy(ptr, ptr + size, target);
-        }
-        assert(target == ann.mapping());
+    std::uint64_t annotate_program(std::string annotations, std::string program, PageShift page_shift) {
+        std::ofstream output;
+        output.exceptions(std::ios::failbit | std::ios::badbit);
+        output.open(annotations, std::ios::out | std::ios::binary | std::ios::trunc);
+
+        std::uint64_t max_ws = reverse_annotate_program(output, program, page_shift);
+        output.close();
+
+        platform::MappedFile<Annotation> reversed(annotations.c_str(), false);
+        std::filesystem::remove(annotations); // file doesn't die until reversed() goes out of scope
+        util::reverse_list_into(reversed.mapping(), annotations.c_str(), reversed.size());
+
+        return max_ws;
     }
 }

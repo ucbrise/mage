@@ -54,11 +54,16 @@ namespace mage::platform {
             close_file(fd);
         }
 
-        MappedFile(const char* filename, std::size_t length) {
-            int fd = create_file(filename, length);
-            this->data = map_file<T>(fd, length);
+        MappedFile(const char* filename, std::size_t num_bytes) {
+            int fd = create_file(filename, num_bytes);
+            this->data = map_file<T>(fd, num_bytes);
             close_file(fd);
-            this->length = length;
+            this->length = num_bytes;
+        }
+
+        MappedFile(std::size_t num_bytes, bool swappable) {
+            this->data = allocate_resident_memory<T>(num_bytes, swappable);
+            this->length = num_bytes;
         }
 
         MappedFile(MappedFile<T>&& other) {

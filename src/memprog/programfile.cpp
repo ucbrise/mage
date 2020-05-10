@@ -30,17 +30,17 @@ namespace mage::memprog {
         this->input.exceptions(std::ios::eofbit | std::ios::failbit | std::ios::badbit);
         this->input.open(filename, std::ios::in | std::ios::binary);
         this->input.read(reinterpret_cast<char*>(&this->header), sizeof(this->header));
-        this->input.seekg(this->header.num_instructions * sizeof(VirtInstruction), std::ios::cur);
+        this->input.seekg(this->header.num_instructions * sizeof(Instruction), std::ios::cur);
         this->outputs.resize(this->header.num_output_ranges);
         this->input.read(reinterpret_cast<char*>(this->outputs.data()), this->header.num_output_ranges * sizeof(OutputRange));
         this->input.seekg(sizeof(this->header), std::ios::beg);
     }
 
-    std::uint64_t ProgramFileReader::read_next_instruction(VirtInstruction& instruction) {
+    std::uint64_t ProgramFileReader::read_next_instruction(Instruction& instruction) {
         if (this->next_instruction == this->header.num_instructions) {
             return invalid_instr;
         }
-        instruction.read_from_input(this->input);
+        instruction.read_from_input<physical_address_bits, storage_address_bits>(this->input);
         return this->next_instruction++;
     }
 

@@ -25,6 +25,7 @@
 #include <cstdint>
 #include <string>
 #include "memprog/program.hpp"
+#include "util/mapping.hpp"
 
 namespace mage::memprog {
     struct Annotation {
@@ -43,10 +44,19 @@ namespace mage::memprog {
             std::uint8_t* self = reinterpret_cast<std::uint8_t*>(this);
             return reinterpret_cast<Annotation*>(self + this->size());
         }
+        
+        const Annotation* next() const {
+            const std::uint8_t* self = reinterpret_cast<const std::uint8_t*>(this);
+            return reinterpret_cast<const Annotation*>(self + this->size());
+        }
     } __attribute__((packed));
 
+    std::uint64_t reverse_annotate_program(std::ofstream& output, std::string program, PageShift page_shift);
     std::uint64_t reverse_annotate_program(std::string reverse_annotations, std::string program, PageShift page_shift);
-    void unreverse_annotations(std::string annotations, std::string reverse_annotations);
+    inline void unreverse_annotations(std::string annotations, std::string reverse_annotations) {
+        util::reverse_file_into<Annotation>(reverse_annotations.c_str(), annotations.c_str());
+    }
+    std::uint64_t annotate_program(std::string annotations, std::string program, PageShift page_shift);
 }
 
 #endif

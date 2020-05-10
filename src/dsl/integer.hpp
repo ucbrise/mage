@@ -23,6 +23,7 @@
 #define MAGE_DSL_INTEGER_HPP_
 
 #include "memprog/instruction.hpp"
+#include "memprog/opcode.hpp"
 #include "memprog/program.hpp"
 #include <cassert>
 #include <cstdint>
@@ -46,12 +47,15 @@ namespace mage::dsl {
 
     public:
         Integer(Program& program = *Program::get_current_working_program()) : v(invalid_vaddr), p(&program) {
-            assert(&program != nullptr);
         }
 
         Integer(std::uint32_t public_constant, Program& program = *Program::get_current_working_program()) : p(&program) {
-            assert(&program != nullptr);
-            this->v = this->p->new_instruction(OpCode::PublicConstant, bits, invalid_vaddr, invalid_vaddr, invalid_vaddr, public_constant);
+            memprog::Instruction& instr = this->p->instruction();
+            instr.header.operation = OpCode::PublicConstant;
+            instr.header.width = bits;
+            instr.header.flags = 0;
+            instr.constant.constant = public_constant;
+            this->v = this->p->commit_instruction(bits);
         }
 
         Integer(const Integer<bits>& other) : v(other.v), p(other.p) {
@@ -59,7 +63,12 @@ namespace mage::dsl {
 
         void mark_input() {
             assert(this->v == invalid_vaddr);
-            this->v = this->p->new_instruction(OpCode::Input, bits);
+
+            memprog::Instruction& instr = this->p->instruction();
+            instr.header.operation = OpCode::Input;
+            instr.header.width = bits;
+            instr.header.flags = 0;
+            this->v = this->p->commit_instruction(bits);
         }
 
         void mark_output() {
@@ -190,20 +199,40 @@ namespace mage::dsl {
     private:
         template <BitWidth arg0_bits>
         Integer(OpCode operation, const Integer<arg0_bits>& arg0) : p(arg0.p) {
-            this->v = this->p->new_instruction(operation, bits, arg0.v);
+            memprog::Instruction& instr = this->p->instruction();
+            instr.header.operation = operation;
+            instr.header.width = arg0_bits;
+            instr.header.flags = 0;
+            instr.one_arg.input1 = arg0.v;
+            this->v = this->p->commit_instruction(bits);
         }
 
         template <BitWidth arg_bits>
         Integer(OpCode operation, const Integer<arg_bits>& arg0, const Integer<arg_bits>& arg1) : p(arg0.p) {
             assert(arg0.p == arg1.p);
-            this->v = this->p->new_instruction(operation, bits, arg0.v, arg1.v);
+
+            memprog::Instruction& instr = this->p->instruction();
+            instr.header.operation = operation;
+            instr.header.width = arg_bits;
+            instr.header.flags = 0;
+            instr.two_args.input1 = arg0.v;
+            instr.two_args.input2 = arg1.v;
+            this->v = this->p->commit_instruction(bits);
         }
 
         template <BitWidth arg2_bits>
         Integer(OpCode operation, const Integer<bits>& arg0, const Integer<bits>& arg1, const Integer<arg2_bits>& arg2) : p(arg0.p) {
             assert(arg0.p == arg1.p);
             assert(arg0.p == arg2.p);
-            this->v = this->p->new_instruction(operation, bits, arg0.v, arg1.v, arg2.v);
+
+            memprog::Instruction& instr = this->p->instruction();
+            instr.header.operation = operation;
+            instr.header.width = bits;
+            instr.header.flags = 0;
+            instr.three_args.input1 = arg0.v;
+            instr.three_args.input2 = arg1.v;
+            instr.three_args.input3 = arg2.v;
+            this->v = this->p->commit_instruction(bits);
         }
 
         Integer(VirtAddr alias_v, BitWidth offset, Program* program) : v(alias_v + offset), p(program) {

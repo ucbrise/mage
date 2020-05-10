@@ -39,43 +39,18 @@ namespace mage::memprog {
         Program(std::string filename, PageShift shift = 16);
         ~Program();
 
-        VirtAddr new_instruction(OpCode op, BitWidth width, VirtAddr arg0 = invalid_vaddr, VirtAddr arg1 = invalid_vaddr, VirtAddr arg2 = invalid_vaddr, std::uint32_t constant = 0) {
-            OpInfo info(op);
+        Instruction& instruction() {
+            return this->current;
+        }
 
-            VirtInstruction v;
-            v.header.operation = op;
-            v.header.width = width;
-
+        VirtAddr commit_instruction(BitWidth output_width) {
             bool fresh_page;
-            v.header.output = this->allocate_virtual(info.single_bit_output() ? 1 : width, fresh_page);
-
-            v.header.flags = fresh_page ? FlagOutputPageFirstUse : 0;
-
-            switch (info.format()) {
-            case InstructionFormat::NoArgs:
-                break;
-            case InstructionFormat::OneArg:
-                v.one_arg.input1 = arg0;
-                break;
-            case InstructionFormat::TwoArgs:
-                v.two_args.input1 = arg0;
-                v.two_args.input2 = arg1;
-                break;
-            case InstructionFormat::ThreeArgs:
-                v.three_args.input1 = arg0;
-                v.three_args.input2 = arg1;
-                v.three_args.input3 = arg2;
-                break;
-            case InstructionFormat::Constant:
-                v.constant.constant = constant;
-                break;
-            default:
-                std::abort();
+            this->current.header.output = this->allocate_virtual(output_width, fresh_page);
+            if (fresh_page) {
+                this->current.header.flags |= FlagOutputPageFirstUse;
             }
-
-            this->append_instruction(v);
-
-            return v.header.output;
+            this->append_instruction(this->current);
+            return this->current.header.output;
         }
 
         static Program* set_current_working_program(Program* cwp);
@@ -94,6 +69,8 @@ namespace mage::memprog {
             fresh_page = (pg_offset(addr, this->page_shift) == 0);
             return addr;
         }
+
+        Instruction current;
         VirtAddr next_free_address;
         PageShift page_shift;
         static Program* current_working_program;

@@ -48,7 +48,7 @@ namespace mage::memprog {
         }
     };
 
-    template <std::uint8_t addr_bits>
+    template <std::uint8_t addr_bits, std::uint8_t storage_bits>
     class ProgramFileWriter {
     public:
         ProgramFileWriter(std::string filename) : count(0) {
@@ -85,18 +85,19 @@ namespace mage::memprog {
             return this->count;
         }
 
-        void append_instruction(const PackedInstruction<addr_bits>& v, std::size_t len) {
+        void append_instruction(const PackedInstruction<addr_bits, storage_bits>& v, std::size_t len) {
             this->output.write(reinterpret_cast<const char*>(&v), len);
             this->count++;
         }
 
-        void append_instruction(const PackedInstruction<addr_bits>& v) {
+        void append_instruction(const PackedInstruction<addr_bits, storage_bits>& v) {
             this->append_instruction(v, v.size());
         }
 
-        void append_instruction(const Instruction<addr_bits>& v) {
-            v.write_to_output(this->output);
-            this->count++;
+        void append_instruction(const Instruction& v) {
+            PackedInstruction<addr_bits, storage_bits> packed;
+            std::size_t size = v.pack(packed);
+            this->append_instruction(packed, size);
         }
 
     private:
@@ -109,7 +110,7 @@ namespace mage::memprog {
     public:
         ProgramFileReader(std::string filename);
 
-        std::uint64_t read_next_instruction(VirtInstruction& instruction);
+        std::uint64_t read_next_instruction(Instruction& instruction);
         const std::vector<OutputRange>& get_outputs() const;
 
     private:
@@ -119,8 +120,8 @@ namespace mage::memprog {
         std::vector<OutputRange> outputs;
     };
 
-    using VirtProgramFileWriter = ProgramFileWriter<virtual_address_bits>;
-    using PhysProgramFileWriter = ProgramFileWriter<physical_address_bits>;
+    using VirtProgramFileWriter = ProgramFileWriter<virtual_address_bits, virtual_address_bits>;
+    using PhysProgramFileWriter = ProgramFileWriter<physical_address_bits, storage_address_bits>;
 }
 
 #endif
