@@ -26,13 +26,12 @@
 #include <algorithm>
 #include <array>
 #include <filesystem>
-#include <fstream>
-#include <ostream>
 #include <string>
 #include <unordered_map>
 #include "memprog/addr.hpp"
 #include "memprog/instruction.hpp"
 #include "platform/memory.hpp"
+#include "util/filebuffer.hpp"
 #include "util/mapping.hpp"
 
 namespace mage::memprog {
@@ -50,7 +49,7 @@ namespace mage::memprog {
         return reversed;
     }
 
-    std::uint64_t reverse_annotate_program(std::ofstream& output, std::string program, PageShift page_shift) {
+    std::uint64_t reverse_annotate_program(util::BufferedFileWriter& output, std::string program, PageShift page_shift) {
         InstructionNumber inum;
         platform::MappedFile<PackedVirtInstruction> reversed = reverse_instructions(program, inum);
         PackedVirtInstruction* current = reversed.mapping();
@@ -58,12 +57,12 @@ namespace mage::memprog {
         std::unordered_map<VirtPageNumber, InstructionNumber> next_access;
         std::uint64_t max_working_set_size = 0;
 
-        Annotation ann;
         std::array<VirtPageNumber, 5> vpns;
 
         do {
             inum--;
 
+            Annotation& ann = output.start_write<Annotation>();
             ann.header.num_pages = current->store_page_numbers(vpns.data(), page_shift);
             for (std::uint16_t i = 0; i != ann.header.num_pages; i++) {
                 /* Re-profile the code if you modify this inner loop. */
@@ -76,7 +75,7 @@ namespace mage::memprog {
                     iter->second = inum;
                 }
             }
-            output.write(reinterpret_cast<const char*>(&ann), ann.size());
+            output.finish_write(ann.size());
             max_working_set_size = std::max(max_working_set_size, next_access.size());
 
             if ((current->header.flags & FlagOutputPageFirstUse) != 0) {
@@ -92,19 +91,16 @@ namespace mage::memprog {
     }
 
     std::uint64_t reverse_annotate_program(std::string reverse_annotations, std::string program, PageShift page_shift) {
-        std::ofstream output;
-        output.exceptions(std::ios::failbit | std::ios::badbit);
-        output.open(reverse_annotations, std::ios::out | std::ios::binary | std::ios::trunc);
+        util::BufferedFileWriter output(reverse_annotations.c_str());
         return reverse_annotate_program(output, program, page_shift);
     }
 
     std::uint64_t annotate_program(std::string annotations, std::string program, PageShift page_shift) {
-        std::ofstream output;
-        output.exceptions(std::ios::failbit | std::ios::badbit);
-        output.open(annotations, std::ios::out | std::ios::binary | std::ios::trunc);
-
-        std::uint64_t max_ws = reverse_annotate_program(output, program, page_shift);
-        output.close();
+        std::uint64_t max_ws;
+        {
+            util::BufferedFileWriter output(annotations.c_str());
+            max_ws = reverse_annotate_program(output, program, page_shift);
+        }
 
         platform::MappedFile<Annotation> reversed(annotations.c_str(), false);
         std::filesystem::remove(annotations); // file doesn't die until reversed() goes out of scope

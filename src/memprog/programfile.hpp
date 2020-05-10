@@ -31,6 +31,8 @@
 
 #include "memprog/addr.hpp"
 #include "memprog/instruction.hpp"
+#include "util/filebuffer.hpp"
+#include "platform/filesystem.hpp"
 
 namespace mage::memprog {
     struct OutputRange {
@@ -49,26 +51,25 @@ namespace mage::memprog {
     };
 
     template <std::uint8_t addr_bits, std::uint8_t storage_bits>
-    class ProgramFileWriter {
+    class ProgramFileWriter : private util::BufferedFileWriter {
     public:
-        ProgramFileWriter(std::string filename) : count(0) {
-            this->output.exceptions(std::ios::failbit | std::ios::badbit);
-            this->output.open(filename, std::ios::out | std::ios::binary | std::ios::trunc);
-
+        ProgramFileWriter(std::string filename) : util::BufferedFileWriter(filename.c_str()), count(0) {
             ProgramFileHeader header = { 0 };
-            this->output.write(reinterpret_cast<const char*>(&header), sizeof(header));
+            platform::write_to_file(this->fd, &header, sizeof(header));
         }
 
         virtual ~ProgramFileWriter() {
-            std::streampos ranges_offset = this->output.tellp();
-            this->output.write(reinterpret_cast<const char*>(outputs.data()), outputs.size() * sizeof(OutputRange));
-            this->output.seekp(0, std::ios::beg);
+            this->flush();
+            
+            std::size_t ranges_offset = platform::tell_file(this->fd);
+            platform::write_to_file(this->fd, outputs.data(), outputs.size() * sizeof(OutputRange));
+            platform::seek_file(this->fd, 0);
 
             ProgramFileHeader header;
             header.num_instructions = this->count;
             header.num_output_ranges = this->outputs.size();
             header.ranges_offset = ranges_offset;
-            this->output.write(reinterpret_cast<const char*>(&header), sizeof(header));
+            platform::write_to_file(this->fd, &header, sizeof(header));
         }
 
         void mark_output(std::uint8_t v, BitWidth length) {
@@ -86,7 +87,8 @@ namespace mage::memprog {
         }
 
         void append_instruction(const PackedInstruction<addr_bits, storage_bits>& v, std::size_t len) {
-            this->output.write(reinterpret_cast<const char*>(&v), len);
+            this->start_write<PackedInstruction<addr_bits, storage_bits>>() = v;
+            this->finish_write(len);
             this->count++;
         }
 
@@ -103,7 +105,6 @@ namespace mage::memprog {
     private:
         std::uint64_t count;
         std::vector<OutputRange> outputs;
-        std::ofstream output;
     };
 
     class ProgramFileReader {

@@ -21,6 +21,7 @@
 
 #include <cstdio>
 #include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -56,6 +57,54 @@ namespace mage::platform {
             *length = (std::size_t) end;
         }
         return fd;
+    }
+
+    void write_to_file(int fd, const void* buffer, std::size_t length) {
+        const std::uint8_t* data = reinterpret_cast<const std::uint8_t*>(buffer);
+        std::size_t processed = 0;
+        while (processed != length) {
+            ssize_t rv = write(fd, &data[processed], length);
+            if (rv <= 0) {
+                if (rv < 0) {
+                    std::perror("write_to_file -> write");
+                }
+                std::abort();
+            }
+            processed += rv;
+        }
+    }
+
+    std::size_t read_from_file(int fd, void* buffer, std::size_t length) {
+        std::uint8_t* data = reinterpret_cast<std::uint8_t*>(buffer);
+        std::size_t processed = 0;
+        while (processed != length) {
+            ssize_t rv = read(fd, &data[processed], length);
+            if (rv <= 0) {
+                if (rv < 0) {
+                    std::perror("read_from_file -> read");
+                    std::abort();
+                }
+                break;
+            }
+            processed += rv;
+        }
+        return processed;
+    }
+
+    void seek_file(int fd, std::size_t position) {
+        if (lseek(fd, (off_t) position, SEEK_SET) == -1) {
+            std::perror("seek_in_file -> lseek");
+            std::abort();
+        }
+    }
+
+    std::size_t tell_file(int fd) {
+        off_t rv = lseek(fd, 0, SEEK_CUR);
+        if (rv == -1) {
+            std::perror("tell_file -> lseek");
+            std::abort();
+        }
+        return rv;
     }
 
     void close_file(int fd) {
