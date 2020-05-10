@@ -34,21 +34,40 @@
 namespace mage::memprog {
     class Allocator {
     public:
-        Allocator(std::string output_file);
+        Allocator(std::string output_file, PhysPageNumber num_page_frames);
         virtual ~Allocator();
 
         virtual void allocate() = 0;
 
         std::uint64_t get_num_swapouts() const;
         std::uint64_t get_num_swapins() const;
+        StoragePageNumber get_num_storage_frames() const;
 
     protected:
-        void emit_swapout(PhysPageNumber primary, VirtPageNumber secondary);
-        void emit_swapin(VirtPageNumber secondary, PhysPageNumber primary);
+        StoragePageNumber emit_swapout(PhysPageNumber primary);
+        void emit_swapin(StoragePageNumber secondary, PhysPageNumber primary);
+
+        bool page_frame_available() const {
+            return !this->free_page_frames.empty();
+        }
+
+        PhysPageNumber alloc_page_frame() {
+            PhysPageNumber ppn = this->free_page_frames.back();
+            this->free_page_frames.pop_back();
+            return ppn;
+        }
+
+        void free_page_frame(PhysPageNumber ppn) {
+            this->free_page_frames.push_back(ppn);
+        }
 
         PhysProgramFileWriter phys_prog;
 
     private:
+        std::vector<PhysPageNumber> free_page_frames;
+        std::vector<StoragePageNumber> free_storage_frames;
+        StoragePageNumber next_storage_frame;
+
         /* Keeps track of the number of swaps performed in the allocation. */
         std::uint64_t num_swapouts;
         std::uint64_t num_swapins;
@@ -78,15 +97,23 @@ namespace mage::memprog {
         InstructionNumber usage;
     };
 
+    struct PageTableEntry {
+        union {
+            PhysPageNumber ppn : physical_address_bits;
+            StoragePageNumber spn : storage_address_bits;
+            std::uint64_t pad : 56;
+        } __attribute__((packed));
+        bool resident;
+    };
+
     class BeladyAllocator : public Allocator {
     public:
-        BeladyAllocator(std::string output_file, std::string virtual_program_file, std::string annotations_file, PhysPageNumber num_physical_pages, PageShift shift);
+        BeladyAllocator(std::string output_file, std::string virtual_program_file, std::string annotations_file, PhysPageNumber num_page_frames, PageShift shift);
 
         void allocate() override;
 
     private:
-        std::vector<PhysPageNumber> free_list;
-        std::unordered_map<VirtPageNumber, PhysPageNumber> page_table;
+        std::unordered_map<VirtPageNumber, PageTableEntry> page_table;
         util::PriorityQueue<BeladyScore, VirtPageNumber> next_use_heap;
         platform::MappedFile<ProgramFileHeader> virt_prog;
         platform::MappedFile<Annotation> annotations;

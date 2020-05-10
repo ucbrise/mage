@@ -29,7 +29,13 @@
 #include "memprog/opcode.hpp"
 
 namespace mage::memprog {
-    Allocator::Allocator(std::string output_file) : num_swapouts(0), num_swapins(0), phys_prog(output_file) {
+    Allocator::Allocator(std::string output_file, PhysPageNumber num_page_frames) : num_swapouts(0), num_swapins(0), phys_prog(output_file) {
+        this->free_page_frames.reserve(num_page_frames);
+        PhysPageNumber curr = num_page_frames;
+        do {
+            curr--;
+            this->free_page_frames.push_back(curr);
+        } while (curr != 0);
     }
 
     Allocator::~Allocator() {
@@ -43,7 +49,19 @@ namespace mage::memprog {
         return this->num_swapins;
     }
 
-    void Allocator::emit_swapout(PhysPageNumber primary, VirtPageNumber secondary) {
+    StoragePageNumber Allocator::get_num_storage_frames() const {
+        return this->next_storage_frame;
+    }
+
+    StoragePageNumber Allocator::emit_swapout(PhysPageNumber primary) {
+        StoragePageNumber secondary;
+        if (this->free_storage_frames.empty()) {
+            secondary = this->next_storage_frame++;
+        } else {
+            secondary = this->free_storage_frames.back();
+            this->free_storage_frames.pop_back();
+        }
+
         constexpr std::size_t length = PackedPhysInstruction::size(InstructionFormat::Swap);
         PackedPhysInstruction& phys = this->phys_prog.start_instruction(length);
         phys.header.operation = OpCode::SwapOut;
@@ -52,9 +70,11 @@ namespace mage::memprog {
         phys.swap.storage = secondary;
         this->phys_prog.finish_instruction(length);
         this->num_swapouts++;
+
+        return secondary;
     }
 
-    void Allocator::emit_swapin(PhysPageNumber primary, VirtPageNumber secondary) {
+    void Allocator::emit_swapin(StoragePageNumber secondary, PhysPageNumber primary) {
         constexpr std::size_t length = PackedPhysInstruction::size(InstructionFormat::Swap);
         PackedPhysInstruction& phys = this->phys_prog.start_instruction(length);
         phys.header.operation = OpCode::SwapIn;
@@ -63,16 +83,12 @@ namespace mage::memprog {
         phys.swap.storage = secondary;
         this->phys_prog.finish_instruction(length);
         this->num_swapins++;
+
+        this->free_storage_frames.push_back(secondary);
     }
 
-    BeladyAllocator::BeladyAllocator(std::string output_file, std::string virtual_program_file, std::string annotations_file, PhysPageNumber num_physical_pages, PageShift shift)
-        : Allocator(output_file), virt_prog(virtual_program_file.c_str(), false), annotations(annotations_file.c_str(), false), page_shift(shift) {
-        this->free_list.reserve(num_physical_pages);
-        PhysPageNumber curr = num_physical_pages;
-        do {
-            curr--;
-            this->free_list.push_back(curr);
-        } while (curr != 0);
+    BeladyAllocator::BeladyAllocator(std::string output_file, std::string virtual_program_file, std::string annotations_file, PhysPageNumber num_page_frames, PageShift shift)
+        : Allocator(output_file, num_page_frames), virt_prog(virtual_program_file.c_str(), false), annotations(annotations_file.c_str(), false), page_shift(shift) {
     }
 
     void BeladyAllocator::allocate() {
@@ -89,10 +105,19 @@ namespace mage::memprog {
                 VirtPageNumber vpn = vpns[j];
 
                 auto iter = this->page_table.find(vpn);
-                if (iter == this->page_table.end()) {
+                if (iter != this->page_table.end() && iter->second.resident) {
+                    /* Page is already resident; just use its current frame. */
+                    just_swapped_in[j] = false;
+                    ppns[j] = iter->second.ppn;
+                } else {
                     /* Page is not resident. */
+                    PhysPageNumber ppn;
                     just_swapped_in[j] = true;
-                    if (this->free_list.empty()) {
+
+                    if (this->page_frame_available()) {
+                        /* Grab page frame from free list. */
+                        ppn = this->alloc_page_frame();
+                    } else {
                         /* No page frames free; we must swap something out. */
                         /*
                          * We know that this won't evict one of the VPNs we
@@ -104,38 +129,42 @@ namespace mage::memprog {
                         VirtPageNumber evict_vpn = pair.second;
                         auto k = this->page_table.find(evict_vpn);
                         assert(k != this->page_table.end());
-                        PhysPageNumber ppn = k->second;
-                        if (pair.first.get_usage_time() != invalid_instr) {
-                            this->emit_swapout(ppn, evict_vpn);
-                        }
-                        this->page_table.erase(k);
-
-                        /* Now, swap the desired vpn into the page frame. */
-                        if (j != 0 || (current->header.flags & FlagOutputPageFirstUse) == 0) {
-                            this->emit_swapin(vpn, ppn);
-                        }
-                        this->page_table.insert(std::make_pair(vpn, ppn));
-                    } else {
-                        /* Grab page frame from free list. */
-                        PhysPageNumber ppn = this->free_list.back();
-                        this->free_list.pop_back();
-                        this->page_table.insert(std::make_pair(vpn, ppn));
-                        ppns[j] = ppn;
-                        if (j != 0 || (current->header.flags & FlagOutputPageFirstUse) == 0) {
-                            this->emit_swapin(vpn, ppn);
+                        PageTableEntry& evict_pte = k->second;
+                        assert(evict_pte.resident);
+                        ppn = evict_pte.ppn;
+                        if (pair.first.get_usage_time() == invalid_instr) {
+                            this->page_table.erase(k);
+                        } else {
+                            evict_pte.resident = false;
+                            evict_pte.spn = this->emit_swapout(ppn);
                         }
                     }
-                } else {
-                    /* Page is already resident; just use its current frame. */
-                    just_swapped_in[j] = false;
-                    ppns[j] = iter->second;
+
+                    /* Now, swap the desired vpn into the page frame. */
+                    if (iter == this->page_table.end()) {
+                        /* First use of this VPN, so no need to swap it in. */
+                        assert(j == 0 && (current->header.flags & FlagOutputPageFirstUse) != 0);
+                        PageTableEntry& pte = this->page_table[vpn];
+                        pte.resident = true;
+                        pte.ppn = ppn;
+                    } else {
+                        /* Swap the desired VPN into the page frame. */
+                        PageTableEntry& pte = iter->second;
+                        assert(!pte.resident);
+                        this->emit_swapin(pte.spn, ppn);
+                        pte.resident = true;
+                        pte.ppn = ppn;
+                    }
+                    ppns[j] = ppn;
                 }
             }
             for (std::uint8_t j = 0; j != num_pages; j++) {
+                InstructionNumber next_use = ann->slots[j].next_use;
+                // Optimization: if it's never used again, just mark the page free
                 if (just_swapped_in[j]) {
-                    this->next_use_heap.insert(ann->slots[j].next_use, vpns[j]);
+                    this->next_use_heap.insert(next_use, vpns[j]);
                 } else {
-                    this->next_use_heap.decrease_key(ann->slots[j].next_use, vpns[j]);
+                    this->next_use_heap.decrease_key(next_use, vpns[j]);
                 }
             }
 

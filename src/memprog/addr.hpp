@@ -82,6 +82,8 @@ namespace mage::memprog {
     /* STORAGE ADDRESSES */
     using StorageAddr = std::uint64_t;
     const constexpr int storage_address_bits = 48;
+    const constexpr StorageAddr invalid_saddr = (UINT64_C(1) << storage_address_bits) - 1;
+    using StoragePageNumber = std::uint64_t;
 }
 
 #endif
