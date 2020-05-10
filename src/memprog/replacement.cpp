@@ -44,22 +44,24 @@ namespace mage::memprog {
     }
 
     void Allocator::emit_swapout(PhysPageNumber primary, VirtPageNumber secondary) {
-        PackedPhysInstruction phys;
+        constexpr std::size_t length = PackedPhysInstruction::size(InstructionFormat::Swap);
+        PackedPhysInstruction& phys = this->phys_prog.start_instruction(length);
         phys.header.operation = OpCode::SwapOut;
         phys.header.flags = 0;
         phys.header.output = primary;
         phys.swap.storage = secondary;
-        this->emit_instruction(phys, PackedPhysInstruction::size(InstructionFormat::Swap));
+        this->phys_prog.finish_instruction(length);
         this->num_swapouts++;
     }
 
     void Allocator::emit_swapin(PhysPageNumber primary, VirtPageNumber secondary) {
-        PackedPhysInstruction phys;
+        constexpr std::size_t length = PackedPhysInstruction::size(InstructionFormat::Swap);
+        PackedPhysInstruction& phys = this->phys_prog.start_instruction(length);
         phys.header.operation = OpCode::SwapIn;
         phys.header.flags = 0;
         phys.header.output = primary;
         phys.swap.storage = secondary;
-        this->emit_instruction(phys, PackedPhysInstruction::size(InstructionFormat::Swap));
+        this->phys_prog.finish_instruction(length);
         this->num_swapins++;
     }
 
@@ -80,11 +82,7 @@ namespace mage::memprog {
         std::array<bool, 5> just_swapped_in;
         std::array<PhysPageNumber, 5> ppns;
         std::array<VirtPageNumber, 5> vpns;
-        PackedPhysInstruction phys;
         for (InstructionNumber i = 0; i != header->num_instructions; i++) {
-            phys.header.operation = current->header.operation;
-            phys.no_args.width = current->no_args.width;
-            phys.header.flags = current->header.flags;
             std::uint8_t num_pages = current->store_page_numbers(vpns.data(), this->page_shift);
             assert(num_pages == ann->header.num_pages);
             for (std::uint8_t j = 0; j != num_pages; j++) {
@@ -141,8 +139,12 @@ namespace mage::memprog {
                 }
             }
 
+            PackedPhysInstruction& phys = this->phys_prog.start_instruction();
+            phys.header.operation = current->header.operation;
+            phys.no_args.width = current->no_args.width;
+            phys.header.flags = current->header.flags;
             phys.restore_page_numbers(*current, ppns.data(), this->page_shift);
-            this->emit_instruction(phys);
+            this->phys_prog.finish_instruction(phys.size());
 
             current = current->next();
             ann = ann->next();

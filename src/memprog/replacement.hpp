@@ -43,20 +43,15 @@ namespace mage::memprog {
         std::uint64_t get_num_swapins() const;
 
     protected:
-        void emit_instruction(const PackedPhysInstruction& phys, std::size_t len) {
-            this->phys_prog.append_instruction(phys, len);
-        }
-        void emit_instruction(const PackedPhysInstruction& phys) {
-            this->emit_instruction(phys, phys.size());
-        }
         void emit_swapout(PhysPageNumber primary, VirtPageNumber secondary);
         void emit_swapin(VirtPageNumber secondary, PhysPageNumber primary);
+
+        PhysProgramFileWriter phys_prog;
 
     private:
         /* Keeps track of the number of swaps performed in the allocation. */
         std::uint64_t num_swapouts;
         std::uint64_t num_swapins;
-        PhysProgramFileWriter phys_prog;
     };
 
     class BeladyScore {

@@ -85,7 +85,7 @@ void create_aspirin_circuit(Program& p, int input_size_per_party) {
 }
 
 std::uint8_t page_shift = 10;
-std::uint64_t num_pages = 1 << 20;
+std::uint64_t num_pages = 1 << 15;
 
 int main(int argc, char** argv) {
     int input_size_per_party = 128;

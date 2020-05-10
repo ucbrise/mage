@@ -60,7 +60,7 @@ namespace mage::memprog {
 
         virtual ~ProgramFileWriter() {
             this->flush();
-            
+
             std::size_t ranges_offset = platform::tell_file(this->fd);
             platform::write_to_file(this->fd, outputs.data(), outputs.size() * sizeof(OutputRange));
             platform::seek_file(this->fd, 0);
@@ -86,20 +86,19 @@ namespace mage::memprog {
             return this->count;
         }
 
-        void append_instruction(const PackedInstruction<addr_bits, storage_bits>& v, std::size_t len) {
-            this->start_write<PackedInstruction<addr_bits, storage_bits>>() = v;
-            this->finish_write(len);
+        PackedInstruction<addr_bits, storage_bits>& start_instruction(std::size_t maximum_size = sizeof(PackedInstruction<addr_bits, storage_bits>)) {
+            return this->start_write<PackedInstruction<addr_bits, storage_bits>>(maximum_size);
+        }
+
+        void finish_instruction(std::size_t actual_size) {
+            this->finish_write(actual_size);
             this->count++;
         }
 
-        void append_instruction(const PackedInstruction<addr_bits, storage_bits>& v) {
-            this->append_instruction(v, v.size());
-        }
-
         void append_instruction(const Instruction& v) {
-            PackedInstruction<addr_bits, storage_bits> packed;
+            auto& packed = this->start_instruction();
             std::size_t size = v.pack(packed);
-            this->append_instruction(packed, size);
+            this->finish_instruction(size);
         }
 
     private:
