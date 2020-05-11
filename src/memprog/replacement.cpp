@@ -109,6 +109,20 @@ namespace mage::memprog {
                     /* Page is already resident; just use its current frame. */
                     just_swapped_in[j] = false;
                     ppns[j] = iter->second.ppn;
+
+                    /*
+                     * If page is never used again, remove it from page table.
+                     * Doing this later would require another hash table lookup
+                     * and it's safe to do it now because vpns does not contain
+                     * any repeat VPNs. We mark the PPN as free after
+                     * processing all VPNs for this instruction, so that we
+                     * don't accidentally swap two different virtual pages into
+                     * the same physical page frame.
+                     */
+                    if (ann->slots[j].next_use == invalid_instr) {
+                        this->page_table.erase(iter);
+                        this->next_use_heap.erase(vpn);
+                    }
                 } else {
                     /* Page is not resident. */
                     PhysPageNumber ppn;
@@ -132,39 +146,45 @@ namespace mage::memprog {
                         PageTableEntry& evict_pte = k->second;
                         assert(evict_pte.resident);
                         ppn = evict_pte.ppn;
-                        if (pair.first.get_usage_time() == invalid_instr) {
-                            this->page_table.erase(k);
-                        } else {
-                            evict_pte.resident = false;
-                            evict_pte.spn = this->emit_swapout(ppn);
-                        }
+                        assert(pair.first.get_usage_time() != invalid_instr);
+                        evict_pte.resident = false;
+                        evict_pte.spn = this->emit_swapout(ppn);
                     }
 
                     /* Now, swap the desired vpn into the page frame. */
                     if (iter == this->page_table.end()) {
-                        /* First use of this VPN, so no need to swap it in. */
+                        /*
+                         * First use of this VPN, so no need to swap it in.
+                         * Just update the page table. If the page is never
+                         * used again, skip updating the page table (see the
+                         * comment above: "If page is never used again...").
+                         */
                         assert(j == 0 && (current->header.flags & FlagOutputPageFirstUse) != 0);
-                        PageTableEntry& pte = this->page_table[vpn];
-                        pte.resident = true;
-                        pte.ppn = ppn;
+                        if (ann->slots[j].next_use != invalid_instr) {
+                            PageTableEntry pte;
+                            pte.resident = true;
+                            pte.ppn = ppn;
+                            auto rv = this->page_table.insert(std::make_pair(vpn, pte));
+                            assert(rv.second);
+                            iter = rv.first;
+                        }
                     } else {
-                        /* Swap the desired VPN into the page frame. */
+                        /* Swap the desired VPN into the page frame and update
+                         * the page table. If the page is never used again,
+                         * remove the page table entry (see the comment above:
+                         * "If page is never used again...").
+                         */
                         PageTableEntry& pte = iter->second;
                         assert(!pte.resident);
                         this->emit_swapin(pte.spn, ppn);
-                        pte.resident = true;
-                        pte.ppn = ppn;
+                        if (ann->slots[j].next_use == invalid_instr) {
+                            this->page_table.erase(iter);
+                        } else {
+                            pte.resident = true;
+                            pte.ppn = ppn;
+                        }
                     }
                     ppns[j] = ppn;
-                }
-            }
-            for (std::uint8_t j = 0; j != num_pages; j++) {
-                InstructionNumber next_use = ann->slots[j].next_use;
-                // Optimization: if it's never used again, just mark the page free
-                if (just_swapped_in[j]) {
-                    this->next_use_heap.insert(next_use, vpns[j]);
-                } else {
-                    this->next_use_heap.decrease_key(next_use, vpns[j]);
                 }
             }
 
@@ -174,6 +194,25 @@ namespace mage::memprog {
             phys.header.flags = current->header.flags;
             phys.restore_page_numbers(*current, ppns.data(), this->page_shift);
             this->phys_prog.finish_instruction(phys.size());
+
+            for (std::uint8_t j = 0; j != num_pages; j++) {
+                InstructionNumber next_use = ann->slots[j].next_use;
+                /*
+                 * If the page is never used again, then the above code has
+                 * already removed its page table entry. Here, we just mark its
+                 * PPN as free so that on future instructions the PPN can be
+                 * reclaimed. (We could also put the code to remove the PTE
+                 * here, but that would require an additional lookup in the
+                 * page table).
+                 */
+                if (next_use == invalid_instr) {
+                    this->free_page_frame(ppns[j]);
+                } else if (just_swapped_in[j]) {
+                    this->next_use_heap.insert(next_use, vpns[j]);
+                } else {
+                    this->next_use_heap.decrease_key(next_use, vpns[j]);
+                }
+            }
 
             current = current->next();
             ann = ann->next();
