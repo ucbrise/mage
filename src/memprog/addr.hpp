@@ -61,9 +61,6 @@ namespace mage::memprog {
     inline std::uint64_t pg_set_num(std::uint64_t addr, std::uint64_t num, PageShift shift) {
         return (num << shift) | pg_offset(addr, shift);
     }
-    inline std::uint64_t pg_copy_num(std::uint64_t addr, std::uint64_t from, PageShift shift) {
-        return pg_base(from, shift) | pg_offset(addr, shift);
-    }
 
     /* PHYSICAL ADDRESSES */
 

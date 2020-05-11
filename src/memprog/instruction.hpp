@@ -168,34 +168,25 @@ namespace mage::memprog {
             std::uint8_t num_pages = 0;
 
             std::uint64_t output_vpn = pg_num(original.header.output, page_shift);
-            this->header.output = pg_set_num(original.header.output, from[num_pages++], page_shift);
+            std::uint64_t output_ppn = from[num_pages++];
+            this->header.output = pg_set_num(original.header.output, output_ppn, page_shift);
             if (num_args > 0) {
                 std::uint64_t input1_vpn = pg_num(original.three_args.input1, page_shift);
-                if (input1_vpn == output_vpn) {
-                    this->three_args.input1 = pg_copy_num(original.three_args.input1, this->header.output, page_shift);
-                } else {
-                    this->three_args.input1 = pg_set_num(original.three_args.input1, from[num_pages++], page_shift);
-                }
+                std::uint64_t input1_ppn = input1_vpn == output_vpn ? output_ppn : from[num_pages++];
+                this->three_args.input1 = pg_set_num(original.three_args.input1, input1_ppn, page_shift);
                 if (num_args > 1) {
                     std::uint64_t input2_vpn = pg_num(original.three_args.input2, page_shift);
-                    if (input2_vpn == output_vpn) {
-                        this->three_args.input2 = pg_copy_num(original.three_args.input2, this->header.output, page_shift);
-                    } else if (input2_vpn == input1_vpn) {
-                        this->three_args.input2 = pg_copy_num(original.three_args.input2, this->three_args.input1, page_shift);
-                    } else {
-                        this->three_args.input2 = pg_set_num(original.three_args.input2, from[num_pages++], page_shift);
-                    }
+                    std::uint64_t input2_ppn = input2_vpn == output_vpn ? output_ppn
+                        : input2_vpn == input1_vpn ? input1_ppn
+                        : from[num_pages++];
+                    this->three_args.input2 = pg_set_num(original.three_args.input2, input2_ppn, page_shift);
                     if (num_args > 2) {
                         std::uint64_t input3_vpn = pg_num(original.three_args.input3, page_shift);
-                        if (input3_vpn == output_vpn) {
-                            this->three_args.input3 = pg_copy_num(original.three_args.input3, this->header.output, page_shift);
-                        } else if (input3_vpn == input1_vpn) {
-                            this->three_args.input3 = pg_copy_num(original.three_args.input3, this->three_args.input1, page_shift);
-                        } else if (input3_vpn == input2_vpn) {
-                            this->three_args.input3 = pg_copy_num(original.three_args.input3, this->three_args.input2, page_shift);
-                        } else {
-                            this->three_args.input3 = pg_set_num(original.three_args.input3, from[num_pages++], page_shift);
-                        }
+                        std::uint64_t input3_ppn = input3_vpn == output_vpn ? output_ppn
+                            : input3_vpn == input1_vpn ? input1_ppn
+                            : input3_vpn == input2_vpn ? input2_ppn
+                            : from[num_pages++];
+                        this->three_args.input3 = pg_set_num(original.three_args.input3, input3_ppn, page_shift);
                     }
                 }
             }
