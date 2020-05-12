@@ -288,50 +288,62 @@ namespace mage::engine {
     }
 
     template <typename Protocol>
-    void Engine<Protocol>::execute(const PackedPhysInstruction& phys) {
+    std::size_t Engine<Protocol>::execute_instruction(const PackedPhysInstruction& phys) {
         switch (phys.header.operation) {
+        case OpCode::SwapIn:
+            // TODO
+            return PackedPhysInstruction::size(OpCode::SwapIn);
+        case OpCode::SwapOut:
+            // TODO
+            return PackedPhysInstruction::size(OpCode::SwapOut);
+        case OpCode::Input:
+            // For now
+            for (BitWidth i = 0; i != phys.no_args.width; i++) {
+                this->protocol.zero(this->memory[phys.header.output + i]);
+            }
+            return PackedPhysInstruction::size(OpCode::Input);
         case OpCode::PublicConstant:
             this->execute_public_constant(phys);
-            break;
+            return PackedPhysInstruction::size(OpCode::PublicConstant);
         case OpCode::IntAdd:
             this->execute_int_add(phys);
-            break;
+            return PackedPhysInstruction::size(OpCode::IntAdd);
         case OpCode::IntIncrement:
             this->execute_int_increment(phys);
-            break;
+            return PackedPhysInstruction::size(OpCode::IntIncrement);
         case OpCode::IntSub:
             this->execute_int_sub(phys);
-            break;
+            return PackedPhysInstruction::size(OpCode::IntSub);
         case OpCode::IntDecrement:
             this->execute_int_decrement(phys);
-            break;
+            return PackedPhysInstruction::size(OpCode::IntDecrement);
         case OpCode::IntLess:
             this->execute_int_less(phys);
-            break;
+            return PackedPhysInstruction::size(OpCode::IntLess);
         case OpCode::Equal:
             this->execute_equal(phys);
-            break;
+            return PackedPhysInstruction::size(OpCode::Equal);
         case OpCode::IsZero:
             this->execute_is_zero(phys);
-            break;
+            return PackedPhysInstruction::size(OpCode::IsZero);
         case OpCode::NonZero:
             this->execute_non_zero(phys);
-            break;
+            return PackedPhysInstruction::size(OpCode::NonZero);
         case OpCode::BitNOT:
             this->execute_bit_not(phys);
-            break;
+            return PackedPhysInstruction::size(OpCode::BitNOT);
         case OpCode::BitAND:
             this->execute_bit_and(phys);
-            break;
+            return PackedPhysInstruction::size(OpCode::BitAND);
         case OpCode::BitOR:
             this->execute_bit_or(phys);
-            break;
+            return PackedPhysInstruction::size(OpCode::BitOR);
         case OpCode::BitXOR:
             this->execute_bit_xor(phys);
-            break;
+            return PackedPhysInstruction::size(OpCode::BitXOR);
         case OpCode::ValueSelect:
             this->execute_value_select(phys);
-            break;
+            return PackedPhysInstruction::size(OpCode::ValueSelect);
         default:
             std::abort();
         }

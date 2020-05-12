@@ -19,13 +19,11 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef MAGE_MEMPROG_PROGRAMFILE_HPP_
-#define MAGE_MEMPROG_PROGRAMFILE_HPP_
+#ifndef MAGE_PROGRAMFILE_HPP_
+#define MAGE_PROGRAMFILE_HPP_
 
 #include <cstdint>
 
-#include <iostream>
-#include <fstream>
 #include <string>
 #include <vector>
 
@@ -34,7 +32,7 @@
 #include "util/filebuffer.hpp"
 #include "platform/filesystem.hpp"
 
-namespace mage::memprog {
+namespace mage {
     struct OutputRange {
         std::uint64_t start;
         std::uint64_t end;
@@ -44,6 +42,8 @@ namespace mage::memprog {
         InstructionNumber num_instructions;
         std::uint64_t num_output_ranges;
         std::uint64_t ranges_offset;
+        std::uint64_t num_pages;
+        PageShift page_shift;
 
         OutputRange* get_output_ranges() {
             return reinterpret_cast<OutputRange*>(reinterpret_cast<char*>(this) + this->ranges_offset);
@@ -53,7 +53,8 @@ namespace mage::memprog {
     template <std::uint8_t addr_bits, std::uint8_t storage_bits>
     class ProgramFileWriter : private util::BufferedFileWriter {
     public:
-        ProgramFileWriter(std::string filename) : util::BufferedFileWriter(filename.c_str()), count(0) {
+        ProgramFileWriter(std::string filename, PageShift shift = 0, std::uint64_t num_pages = 0)
+            : util::BufferedFileWriter(filename.c_str()), instruction_count(0), page_shift(shift), page_count(num_pages) {
             ProgramFileHeader header = { 0 };
             platform::write_to_file(this->fd, &header, sizeof(header));
         }
@@ -66,9 +67,11 @@ namespace mage::memprog {
             platform::seek_file(this->fd, 0);
 
             ProgramFileHeader header;
-            header.num_instructions = this->count;
+            header.num_instructions = this->instruction_count;
             header.num_output_ranges = this->outputs.size();
             header.ranges_offset = ranges_offset;
+            header.num_pages = this->page_count;
+            header.page_shift = this->page_shift;
             platform::write_to_file(this->fd, &header, sizeof(header));
         }
 
@@ -83,7 +86,15 @@ namespace mage::memprog {
         }
 
         std::uint64_t num_instructions() const {
-            return this->count;
+            return this->instruction_count;
+        }
+
+        void set_page_shift(PageShift shift) {
+            this->page_shift = shift;
+        }
+
+        void set_page_count(std::uint64_t num_pages) {
+            this->page_count = num_pages;
         }
 
         PackedInstruction<addr_bits, storage_bits>& start_instruction(std::size_t maximum_size = sizeof(PackedInstruction<addr_bits, storage_bits>)) {
@@ -92,7 +103,7 @@ namespace mage::memprog {
 
         void finish_instruction(std::size_t actual_size) {
             this->finish_write(actual_size);
-            this->count++;
+            this->instruction_count++;
         }
 
         void append_instruction(const Instruction& v) {
@@ -102,26 +113,43 @@ namespace mage::memprog {
         }
 
     private:
-        std::uint64_t count;
+        std::uint64_t instruction_count;
+        std::uint64_t page_count;
+        PageShift page_shift;
         std::vector<OutputRange> outputs;
     };
 
-    class ProgramFileReader {
+    template <std::uint8_t addr_bits, std::uint8_t storage_bits>
+    class ProgramFileReader : private util::BufferedFileReader {
     public:
-        ProgramFileReader(std::string filename);
+        ProgramFileReader(std::string filename) : util::BufferedFileReader(filename.c_str()) {
+            platform::read_from_file(this->fd, &this->header, sizeof(this->header));
+        }
 
-        std::uint64_t read_next_instruction(Instruction& instruction);
-        const std::vector<OutputRange>& get_outputs() const;
+        PackedInstruction<addr_bits, storage_bits>& start_instruction(std::size_t maximum_size = sizeof(PackedInstruction<addr_bits, storage_bits>)) {
+            return this->start_read<PackedInstruction<addr_bits, storage_bits>>(maximum_size);
+        }
+
+        void finish_instruction(std::size_t actual_size) {
+            this->finish_read(actual_size);
+        }
+
+        bool at_eof() const {
+            return this->util::BufferedFileReader::at_eof();
+        }
+
+        const ProgramFileHeader& get_header() const {
+            return this->header;
+        }
 
     private:
         ProgramFileHeader header;
-        std::uint64_t next_instruction;
-        std::ifstream input;
-        std::vector<OutputRange> outputs;
     };
 
     using VirtProgramFileWriter = ProgramFileWriter<virtual_address_bits, virtual_address_bits>;
+    using VirtProgramFileReader = ProgramFileReader<virtual_address_bits, virtual_address_bits>;
     using PhysProgramFileWriter = ProgramFileWriter<physical_address_bits, storage_address_bits>;
+    using PhysProgramFileReader = ProgramFileReader<physical_address_bits, storage_address_bits>;
 }
 
 #endif

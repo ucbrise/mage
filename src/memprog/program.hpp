@@ -29,8 +29,8 @@
 #include <vector>
 #include "addr.hpp"
 #include "instruction.hpp"
-#include "memprog/programfile.hpp"
 #include "opcode.hpp"
+#include "programfile.hpp"
 #include "stream.hpp"
 
 namespace mage::memprog {

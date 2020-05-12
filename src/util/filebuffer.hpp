@@ -54,7 +54,7 @@ namespace mage::util {
 
         template <typename T>
         T& start_write(std::size_t maximum_size = sizeof(T)) {
-            void* rv = this->start_write(sizeof(T));
+            void* rv = this->start_write(maximum_size);
             return *reinterpret_cast<T*>(rv);
         }
 
@@ -86,12 +86,12 @@ namespace mage::util {
     class BufferedFileReader {
     public:
         BufferedFileReader(const char* filename, std::size_t buffer_size = 1 << 18)
-            : position(0), buffer(buffer_size, true), eof(buffer_size) {
+            : position(buffer_size), buffer(buffer_size, true), eof(buffer_size) {
             this->fd = platform::open_file(filename, nullptr);
         }
 
         BufferedFileReader(int file_descriptor, std::size_t buffer_size = 1 << 18)
-            : fd(file_descriptor), position(0), buffer(buffer_size, true), eof(buffer_size) {
+            : fd(file_descriptor), position(buffer_size), buffer(buffer_size, true), eof(buffer_size) {
         }
 
         virtual ~BufferedFileReader() {
@@ -99,20 +99,20 @@ namespace mage::util {
         }
 
         template <typename T>
-        T* prepare_read() {
-            void* rv = this->start_read(sizeof(T));
-            return reinterpret_cast<T*>(rv);
+        T& start_read(std::size_t maximum_size = sizeof(T)) {
+            void* rv = this->start_read(maximum_size);
+            return *reinterpret_cast<T*>(rv);
         }
 
         void* start_read(std::size_t maximum_size) {
             if (maximum_size > this->buffer.size() - this->position) {
                 this->rebuffer();
             }
-            assert(maximum_size > this->buffer.size() - this->position);
+            assert(maximum_size <= this->buffer.size() - this->position);
             return &this->buffer.mapping()[this->position];
         }
 
-        void commit_read(std::size_t actual_size) {
+        void finish_read(std::size_t actual_size) {
             this->position += actual_size;
             if (this->position == this->buffer.size()) {
                 this->rebuffer();

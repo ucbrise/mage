@@ -18,7 +18,7 @@ all: mage tests
 
 tests: $(BINDIR)/test
 
-mage: $(BINDIR)/converter $(BINDIR)/allocator $(BINDIR)/circgen $(BINDIR)/aspirin
+mage: $(BINDIR)/mage $(BINDIR)/converter $(BINDIR)/allocator $(BINDIR)/circgen $(BINDIR)/aspirin
 
 $(BINDIR)/test: $(MAGE_OBJECTS) $(TEST_OBJECTS)
 	$(CXX) $(LDFLAGS) $+ -lboost_unit_test_framework -o $@

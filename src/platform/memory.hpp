@@ -27,12 +27,12 @@
 #include "platform/filesystem.hpp"
 
 namespace mage::platform {
-    void* allocate_resident_memory(std::size_t numbytes, bool swappable = false);
-    void deallocate_resident_memory(void* memory, std::size_t numbytes);
+    void* allocate_resident_memory(std::size_t num_bytes, bool swappable = false);
+    void deallocate_resident_memory(void* memory, std::size_t num_bytes);
 
     template <typename T>
-    T* allocate_resident_memory(std::size_t numbytes, bool swappable = false) {
-        void* memory = allocate_resident_memory(numbytes, swappable);
+    T* allocate_resident_memory(std::size_t num_bytes, bool swappable = false) {
+        void* memory = allocate_resident_memory(num_bytes, swappable);
         return reinterpret_cast<T*>(memory);
     }
 

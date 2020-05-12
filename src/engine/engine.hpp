@@ -19,6 +19,10 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#ifndef MAGE_ENGINE_ENGINE_HPP_
+#define MAGE_ENGINE_ENGINE_HPP_
+
+#include <cassert>
 #include <cstddef>
 #include "instruction.hpp"
 #include "platform/memory.hpp"
@@ -27,7 +31,11 @@ namespace mage::engine {
     template <typename Protocol>
     class Engine {
     public:
-        Engine(PageShift shift, std::uint64_t num_pages, Protocol& prot) : protocol(prot) {
+        Engine(Protocol& prot) : protocol(prot), memory(nullptr), memory_size(0) {
+        }
+
+        void init(PageShift shift, std::uint64_t num_pages) {
+            assert(this->memory == nullptr);
             this->memory_size = pg_addr(num_pages, shift) * sizeof(typename Protocol::Wire);
             this->memory = platform::allocate_resident_memory<typename Protocol::Wire>(this->memory_size);
         }
@@ -36,7 +44,7 @@ namespace mage::engine {
             platform::deallocate_resident_memory(this->memory, this->memory_size);
         }
 
-        void execute(const PackedPhysInstruction& phys);
+        std::size_t execute_instruction(const PackedPhysInstruction& phys);
 
         void execute_public_constant(const PackedPhysInstruction& phys);
         void execute_int_add(const PackedPhysInstruction& phys);
@@ -59,3 +67,5 @@ namespace mage::engine {
         std::size_t memory_size;
     };
 }
+
+#endif

@@ -26,9 +26,9 @@
 #include "addr.hpp"
 #include "instruction.hpp"
 #include "memprog/annotation.hpp"
-#include "memprog/programfile.hpp"
 #include "opcode.hpp"
 #include "platform/memory.hpp"
+#include "programfile.hpp"
 #include "util/prioqueue.hpp"
 
 namespace mage::memprog {
@@ -36,6 +36,8 @@ namespace mage::memprog {
     public:
         Allocator(std::string output_file, PhysPageNumber num_page_frames);
         virtual ~Allocator();
+
+        void set_page_shift(PageShift shift);
 
         virtual void allocate() = 0;
 

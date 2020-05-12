@@ -26,10 +26,17 @@
 namespace mage::memprog {
     Program* Program::current_working_program = nullptr;
 
-    Program::Program(std::string filename, PageShift shift) : VirtProgramFileWriter(filename), next_free_address(0), page_shift(shift) {
+    Program::Program(std::string filename, PageShift shift)
+        : VirtProgramFileWriter(filename, shift), next_free_address(0), page_shift(shift) {
     }
 
     Program::~Program() {
+        VirtPageNumber num_pages = pg_num(this->next_free_address, this->page_shift);
+        if (pg_offset(this->next_free_address, this->page_shift) == 0) {
+            num_pages--;
+        }
+        this->set_page_count(num_pages);
+
         if (Program::current_working_program == this) {
             Program::current_working_program = nullptr;
         }

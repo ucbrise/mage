@@ -29,7 +29,8 @@
 #include "opcode.hpp"
 
 namespace mage::memprog {
-    Allocator::Allocator(std::string output_file, PhysPageNumber num_page_frames) : num_swapouts(0), num_swapins(0), phys_prog(output_file) {
+    Allocator::Allocator(std::string output_file, PhysPageNumber num_page_frames)
+        : num_swapouts(0), num_swapins(0), phys_prog(output_file, 0, num_page_frames) {
         this->free_page_frames.reserve(num_page_frames);
         PhysPageNumber curr = num_page_frames;
         do {
@@ -39,6 +40,10 @@ namespace mage::memprog {
     }
 
     Allocator::~Allocator() {
+    }
+
+    void Allocator::set_page_shift(PageShift shift) {
+        this->phys_prog.set_page_shift(shift);
     }
 
     std::uint64_t Allocator::get_num_swapouts() const {
@@ -89,6 +94,7 @@ namespace mage::memprog {
 
     BeladyAllocator::BeladyAllocator(std::string output_file, std::string virtual_program_file, std::string annotations_file, PhysPageNumber num_page_frames, PageShift shift)
         : Allocator(output_file, num_page_frames), virt_prog(virtual_program_file.c_str(), false), annotations(annotations_file.c_str(), false), page_shift(shift) {
+        this->set_page_shift(this->virt_prog.mapping()->page_shift);
     }
 
     void BeladyAllocator::allocate() {

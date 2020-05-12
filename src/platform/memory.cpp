@@ -25,12 +25,12 @@
 #include <sys/mman.h>
 
 namespace mage::platform {
-    void* allocate_resident_memory(std::size_t numbytes, bool swappable) {
+    void* allocate_resident_memory(std::size_t num_bytes, bool swappable) {
         int flags = MAP_PRIVATE | MAP_ANONYMOUS;
         if (!swappable) {
             flags |= (MAP_NORESERVE | MAP_POPULATE);
         }
-        void* region = mmap(NULL, numbytes, PROT_READ | PROT_WRITE, flags, -1, 0);
+        void* region = mmap(NULL, num_bytes, PROT_READ | PROT_WRITE, flags, -1, 0);
         if (region == MAP_FAILED) {
             std::perror("allocate_resident_memory -> mmap");
             std::abort();
@@ -38,8 +38,8 @@ namespace mage::platform {
         return region;
     }
 
-    void deallocate_resident_memory(void* memory, std::size_t numbytes) {
-        if (munmap(memory, numbytes) != 0) {
+    void deallocate_resident_memory(void* memory, std::size_t num_bytes) {
+        if (munmap(memory, num_bytes) != 0) {
             std::perror("deallocate_resident_memory -> munmap");
             std::abort();
         }
