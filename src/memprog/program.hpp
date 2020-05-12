@@ -27,10 +27,10 @@
 #include <cstdlib>
 #include <memory>
 #include <vector>
-#include "memprog/addr.hpp"
-#include "memprog/instruction.hpp"
-#include "memprog/opcode.hpp"
+#include "addr.hpp"
+#include "instruction.hpp"
 #include "memprog/programfile.hpp"
+#include "opcode.hpp"
 #include "stream.hpp"
 
 namespace mage::memprog {

@@ -19,16 +19,16 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef MAGE_MEMPROG_INSTRUCTION_HPP_
-#define MAGE_MEMPROG_INSTRUCTION_HPP_
+#ifndef MAGE_INSTRUCTION_HPP_
+#define MAGE_INSTRUCTION_HPP_
 
 #include <cstddef>
 #include <cstdint>
-#include "memprog/addr.hpp"
-#include "memprog/opcode.hpp"
+#include "addr.hpp"
+#include "opcode.hpp"
 #include "util/binary.hpp"
 
-namespace mage::memprog {
+namespace mage {
     using BitWidth = std::uint8_t;
 
     enum InstructionFlags : std::uint8_t {

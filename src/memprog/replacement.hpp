@@ -23,11 +23,11 @@
 #define MAGE_MEMPROG_REPLACEMENT_HPP_
 
 #include <string>
-#include "memprog/addr.hpp"
+#include "addr.hpp"
+#include "instruction.hpp"
 #include "memprog/annotation.hpp"
-#include "memprog/instruction.hpp"
-#include "memprog/opcode.hpp"
 #include "memprog/programfile.hpp"
+#include "opcode.hpp"
 #include "platform/memory.hpp"
 #include "util/prioqueue.hpp"
 

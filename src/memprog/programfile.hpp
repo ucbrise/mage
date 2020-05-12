@@ -29,8 +29,8 @@
 #include <string>
 #include <vector>
 
-#include "memprog/addr.hpp"
-#include "memprog/instruction.hpp"
+#include "addr.hpp"
+#include "instruction.hpp"
 #include "util/filebuffer.hpp"
 #include "platform/filesystem.hpp"
 

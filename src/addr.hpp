@@ -19,10 +19,10 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef MAGE_MEMPROG_ADDR_H_
-#define MAGE_MEMPROG_ADDR_H_
+#ifndef MAGE_ADDR_H_
+#define MAGE_ADDR_H_
 
-namespace mage::memprog {
+namespace mage {
     /* VIRTUAL ADDRESSES */
 
     using VirtAddr = std::uint64_t;
@@ -38,6 +38,9 @@ namespace mage::memprog {
     }
     inline PageSize pg_mask(PageShift shift) {
         return pg_size(shift) - 1;
+    }
+    inline std::uint64_t pg_addr(std::uint64_t page_number, PageShift shift) {
+        return page_number << shift;
     }
 
     inline std::uint64_t pg_num(std::uint64_t addr, PageShift shift) {

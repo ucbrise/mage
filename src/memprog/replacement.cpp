@@ -23,10 +23,10 @@
 #include <cstdint>
 #include <array>
 #include <string>
-#include "memprog/addr.hpp"
+#include "addr.hpp"
+#include "instruction.hpp"
 #include "memprog/annotation.hpp"
-#include "memprog/instruction.hpp"
-#include "memprog/opcode.hpp"
+#include "opcode.hpp"
 
 namespace mage::memprog {
     Allocator::Allocator(std::string output_file, PhysPageNumber num_page_frames) : num_swapouts(0), num_swapins(0), phys_prog(output_file) {

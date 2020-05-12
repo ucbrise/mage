@@ -28,8 +28,8 @@
 #include <filesystem>
 #include <string>
 #include <unordered_map>
-#include "memprog/addr.hpp"
-#include "memprog/instruction.hpp"
+#include "addr.hpp"
+#include "instruction.hpp"
 #include "platform/memory.hpp"
 #include "util/filebuffer.hpp"
 #include "util/mapping.hpp"

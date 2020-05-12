@@ -28,6 +28,7 @@
 #include <string>
 
 using namespace mage::dsl;
+using mage::BitWidth;
 
 template <BitWidth bits>
 struct Input {

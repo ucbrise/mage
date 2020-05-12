@@ -22,18 +22,14 @@
 #ifndef MAGE_DSL_INTEGER_HPP_
 #define MAGE_DSL_INTEGER_HPP_
 
-#include "memprog/instruction.hpp"
-#include "memprog/opcode.hpp"
+#include "instruction.hpp"
 #include "memprog/program.hpp"
+#include "opcode.hpp"
 #include <cassert>
 #include <cstdint>
 
 namespace mage::dsl {
-    using memprog::BitWidth;
-    using memprog::VirtAddr;
     using memprog::Program;
-    using memprog::OpCode;
-    using memprog::invalid_vaddr;
 
     template <BitWidth bits>
     class Integer;
@@ -45,12 +41,14 @@ namespace mage::dsl {
         template <BitWidth other_bits>
         friend class Integer;
 
+        static_assert(bits > 0);
+
     public:
         Integer(Program& program = *Program::get_current_working_program()) : v(invalid_vaddr), p(&program) {
         }
 
         Integer(std::uint32_t public_constant, Program& program = *Program::get_current_working_program()) : p(&program) {
-            memprog::Instruction& instr = this->p->instruction();
+            Instruction& instr = this->p->instruction();
             instr.header.operation = OpCode::PublicConstant;
             instr.header.width = bits;
             instr.header.flags = 0;
@@ -64,7 +62,7 @@ namespace mage::dsl {
         void mark_input() {
             assert(this->v == invalid_vaddr);
 
-            memprog::Instruction& instr = this->p->instruction();
+            Instruction& instr = this->p->instruction();
             instr.header.operation = OpCode::Input;
             instr.header.width = bits;
             instr.header.flags = 0;
@@ -199,7 +197,7 @@ namespace mage::dsl {
     private:
         template <BitWidth arg0_bits>
         Integer(OpCode operation, const Integer<arg0_bits>& arg0) : p(arg0.p) {
-            memprog::Instruction& instr = this->p->instruction();
+            Instruction& instr = this->p->instruction();
             instr.header.operation = operation;
             instr.header.width = arg0_bits;
             instr.header.flags = 0;
@@ -211,7 +209,7 @@ namespace mage::dsl {
         Integer(OpCode operation, const Integer<arg_bits>& arg0, const Integer<arg_bits>& arg1) : p(arg0.p) {
             assert(arg0.p == arg1.p);
 
-            memprog::Instruction& instr = this->p->instruction();
+            Instruction& instr = this->p->instruction();
             instr.header.operation = operation;
             instr.header.width = arg_bits;
             instr.header.flags = 0;
@@ -225,7 +223,7 @@ namespace mage::dsl {
             assert(arg0.p == arg1.p);
             assert(arg0.p == arg2.p);
 
-            memprog::Instruction& instr = this->p->instruction();
+            Instruction& instr = this->p->instruction();
             instr.header.operation = operation;
             instr.header.width = bits;
             instr.header.flags = 0;

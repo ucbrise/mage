@@ -19,15 +19,15 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef MAGE_MEMPROG_OPCODE_HPP_
-#define MAGE_MEMPROG_OPCODE_HPP_
+#ifndef MAGE_OPCODE_HPP_
+#define MAGE_OPCODE_HPP_
 
 #include <cstddef>
 #include <cstdint>
-#include "memprog/addr.hpp"
+#include "addr.hpp"
 #include "util/binary.hpp"
 
-namespace mage::memprog {
+namespace mage {
     enum class OpCode : std::uint8_t {
         Undefined = 0,
         SwapIn,
