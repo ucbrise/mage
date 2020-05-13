@@ -25,9 +25,26 @@
 #include "addr.hpp"
 #include "instruction.hpp"
 #include "opcode.hpp"
+#include "platform/filesystem.hpp"
 #include "schemes/plaintext.hpp"
 
 namespace mage::engine {
+    template <typename Protocol>
+    void Engine<Protocol>::execute_swap_in(const PackedPhysInstruction& phys) {
+        StoragePageNumber saddr = pg_addr(phys.swap.storage, this->page_shift);
+        PhysPageNumber paddr = pg_addr(phys.header.output, this->page_shift);
+        platform::seek_file(this->swapfd, saddr);
+        platform::read_from_file(this->swapfd, &this->memory[paddr], pg_size(this->page_shift));
+    }
+
+    template <typename Protocol>
+    void Engine<Protocol>::execute_swap_out(const PackedPhysInstruction& phys) {
+        PhysPageNumber paddr = pg_addr(phys.header.output, this->page_shift);
+        StoragePageNumber saddr = pg_addr(phys.swap.storage, this->page_shift);
+        platform::seek_file(this->swapfd, saddr);
+        platform::write_to_file(this->swapfd, &this->memory[paddr], pg_size(this->page_shift));
+    }
+
     template <typename Protocol>
     void Engine<Protocol>::execute_public_constant(const PackedPhysInstruction& phys) {
         typename Protocol::Wire* output = &this->memory[phys.header.output];
@@ -291,10 +308,10 @@ namespace mage::engine {
     std::size_t Engine<Protocol>::execute_instruction(const PackedPhysInstruction& phys) {
         switch (phys.header.operation) {
         case OpCode::SwapIn:
-            // TODO
+            this->execute_swap_in(phys);
             return PackedPhysInstruction::size(OpCode::SwapIn);
         case OpCode::SwapOut:
-            // TODO
+            this->execute_swap_out(phys);
             return PackedPhysInstruction::size(OpCode::SwapOut);
         case OpCode::Input:
             // For now

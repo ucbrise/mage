@@ -25,6 +25,7 @@
 #include <cassert>
 #include <cstddef>
 #include "instruction.hpp"
+#include "platform/filesystem.hpp"
 #include "platform/memory.hpp"
 
 namespace mage::engine {
@@ -34,18 +35,23 @@ namespace mage::engine {
         Engine(Protocol& prot) : protocol(prot), memory(nullptr), memory_size(0) {
         }
 
-        void init(PageShift shift, std::uint64_t num_pages) {
+        void init(PageShift shift, std::uint64_t num_pages, std::uint64_t swap_pages, std::string swapfile) {
             assert(this->memory == nullptr);
             this->memory_size = pg_addr(num_pages, shift) * sizeof(typename Protocol::Wire);
             this->memory = platform::allocate_resident_memory<typename Protocol::Wire>(this->memory_size);
+            this->swapfd = platform::create_file(swapfile.c_str(), pg_addr(swap_pages, shift) * sizeof(typename Protocol::Wire), true);
+            this->page_shift = shift;
         }
 
         virtual ~Engine() {
             platform::deallocate_resident_memory(this->memory, this->memory_size);
+            platform::close_file(this->swapfd);
         }
 
         std::size_t execute_instruction(const PackedPhysInstruction& phys);
 
+        void execute_swap_in(const PackedPhysInstruction& phys);
+        void execute_swap_out(const PackedPhysInstruction& phys);
         void execute_public_constant(const PackedPhysInstruction& phys);
         void execute_int_add(const PackedPhysInstruction& phys);
         void execute_int_increment(const PackedPhysInstruction& phys);
@@ -64,7 +70,9 @@ namespace mage::engine {
     private:
         Protocol& protocol;
         typename Protocol::Wire* memory;
+        PageShift page_shift;
         std::size_t memory_size;
+        int swapfd;
     };
 }
 

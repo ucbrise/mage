@@ -29,8 +29,12 @@
 #include <unistd.h>
 
 namespace mage::platform {
-    int create_file(const char* filename, std::size_t length) {
-        int fd = open(filename, O_CREAT | O_RDWR | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    int create_file(const char* filename, std::size_t length, bool direct) {
+        int flags = O_CREAT | O_RDWR | O_TRUNC;
+        if (direct) {
+            flags |= O_DIRECT;
+        }
+        int fd = open(filename, flags, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
         if (fd == -1) {
             std::perror("create_file -> open");
             std::abort();
@@ -42,8 +46,12 @@ namespace mage::platform {
         return fd;
     }
 
-    int open_file(const char* filename, std::size_t* length) {
-        int fd = open(filename, O_RDWR);
+    int open_file(const char* filename, std::size_t* length, bool direct) {
+        int flags = O_RDWR;
+        if (direct) {
+            flags |= O_DIRECT;
+        }
+        int fd = open(filename, flags);
         if (fd == -1) {
             std::perror("open_file -> open");
             std::abort();

@@ -43,6 +43,7 @@ namespace mage {
         std::uint64_t num_output_ranges;
         std::uint64_t ranges_offset;
         std::uint64_t num_pages;
+        std::uint64_t num_swap_pages;
         PageShift page_shift;
 
         OutputRange* get_output_ranges() {
@@ -54,7 +55,7 @@ namespace mage {
     class ProgramFileWriter : private util::BufferedFileWriter {
     public:
         ProgramFileWriter(std::string filename, PageShift shift = 0, std::uint64_t num_pages = 0)
-            : util::BufferedFileWriter(filename.c_str()), instruction_count(0), page_shift(shift), page_count(num_pages) {
+            : util::BufferedFileWriter(filename.c_str()), instruction_count(0), page_shift(shift), page_count(num_pages), swap_page_count(0) {
             ProgramFileHeader header = { 0 };
             platform::write_to_file(this->fd, &header, sizeof(header));
         }
@@ -66,11 +67,12 @@ namespace mage {
             platform::write_to_file(this->fd, outputs.data(), outputs.size() * sizeof(OutputRange));
             platform::seek_file(this->fd, 0);
 
-            ProgramFileHeader header;
+            ProgramFileHeader header = { 0 };
             header.num_instructions = this->instruction_count;
             header.num_output_ranges = this->outputs.size();
             header.ranges_offset = ranges_offset;
             header.num_pages = this->page_count;
+            header.num_swap_pages = this->swap_page_count;
             header.page_shift = this->page_shift;
             platform::write_to_file(this->fd, &header, sizeof(header));
         }
@@ -97,6 +99,10 @@ namespace mage {
             this->page_count = num_pages;
         }
 
+        void set_swap_page_count(std::uint64_t num_swap_pages) {
+            this->swap_page_count = num_swap_pages;
+        }
+
         PackedInstruction<addr_bits, storage_bits>& start_instruction(std::size_t maximum_size = sizeof(PackedInstruction<addr_bits, storage_bits>)) {
             return this->start_write<PackedInstruction<addr_bits, storage_bits>>(maximum_size);
         }
@@ -115,6 +121,7 @@ namespace mage {
     private:
         std::uint64_t instruction_count;
         std::uint64_t page_count;
+        std::uint64_t swap_page_count;
         PageShift page_shift;
         std::vector<OutputRange> outputs;
     };

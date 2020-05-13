@@ -31,6 +31,6 @@ int main(int argc, char** argv) {
     }
 
     mage::schemes::Plaintext p;
-    mage::engine::SingleCoreEngine executor(argv[1], p);
+    mage::engine::SingleCoreEngine executor(argv[1], "swapfile", p);
     executor.execute_program();
 }
