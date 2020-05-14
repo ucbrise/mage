@@ -99,6 +99,16 @@ namespace mage::platform {
         return processed;
     }
 
+    std::size_t read_available_from_file(int fd, void* buffer, std::size_t length) {
+        std::uint8_t* data = reinterpret_cast<std::uint8_t*>(buffer);
+        ssize_t rv = read(fd, data, length);
+        if (rv < 0) {
+            std::perror("read_from_file -> read");
+            std::abort();
+        }
+        return rv;
+    }
+
     void seek_file(int fd, std::int64_t amount, bool relative) {
         if (lseek(fd, (off_t) amount, relative ? SEEK_CUR : SEEK_SET) == -1) {
             std::perror("seek_in_file -> lseek");

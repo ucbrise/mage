@@ -27,6 +27,7 @@
 #include "opcode.hpp"
 #include "platform/filesystem.hpp"
 #include "schemes/plaintext.hpp"
+#include "schemes/halfgates.hpp"
 
 namespace mage::engine {
     template <typename Protocol>
@@ -367,5 +368,7 @@ namespace mage::engine {
     }
 
     /* Explicitly instantiate Engine template for each protocol. */
-    template class Engine<schemes::Plaintext>;
+    template class Engine<schemes::PlaintextEvaluator>;
+    template class Engine<schemes::HalfGatesGarbler>;
+    template class Engine<schemes::HalfGatesEvaluator>;
 }

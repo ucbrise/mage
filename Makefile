@@ -2,7 +2,7 @@ CXX = clang++
 CXXFLAGS = -std=c++2a -Ofast -DNDEBUG -march=native -ggdb3 -pthread -I./src/
 LDFLAGS = -pthread
 
-MAGE_DIRS = src src/planner src/platform src/loader src/memprog src/engine src/schemes/ag2pc src/util
+MAGE_DIRS = src src/planner src/platform src/loader src/memprog src/engine src/schemes src/schemes/ag2pc src/util
 MAGE_CPP_SOURCES = $(foreach dir,$(MAGE_DIRS),$(wildcard $(dir)/*.cpp))
 MAGE_HEADERS = $(foreach dir,$(MAGE_DIRS),$(wildcard $(dir)/*.hpp))
 

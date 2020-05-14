@@ -31,6 +31,7 @@ namespace mage::platform {
     int open_file(const char* filename, std::uint64_t* length, bool direct = false);
     void write_to_file(int fd, const void* buffer, std::size_t length);
     std::size_t read_from_file(int fd, void* buffer, std::size_t length);
+    std::size_t read_available_from_file(int fd, void* buffer, std::size_t length);
     void seek_file(int fd, std::int64_t amount, bool relative = false);
     std::uint64_t tell_file(int fd);
     void close_file(int fd);

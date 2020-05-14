@@ -25,6 +25,7 @@
 #include "engine/engine.hpp"
 #include "engine/singlecore.hpp"
 #include "platform/network.hpp"
+#include "schemes/halfgates.hpp"
 #include "schemes/plaintext.hpp"
 
 using namespace mage;
@@ -37,11 +38,14 @@ int main(int argc, char** argv) {
 
     /* Decide if we're garbling or evaluating. */
 
-    bool garble;
+    bool plaintext = false;
+    bool garble = false;
     if (std::strcmp(argv[1], "garble") == 0) {
         garble = true;
     } else if (std::strcmp(argv[1], "evaluate") == 0) {
         garble = false;
+    } else if (std::strcmp(argv[1], "plaintext") == 0) {
+        plaintext = true;
     } else {
         std::cerr << "First argument must be \"garble\" or \"evaluate\"" << std::endl;
         return 1;
@@ -59,6 +63,13 @@ int main(int argc, char** argv) {
 
     std::string output_file(file_base);
     output_file.append(".output");
+
+    if (plaintext) {
+        schemes::PlaintextEvaluator p(input_file.c_str(), output_file.c_str());
+        engine::SingleCoreEngine executor(prog_file.c_str(), "swapfile", p);
+        executor.execute_program();
+        return 0;
+    }
 
     /* Parse the host/port. */
 
@@ -78,13 +89,17 @@ int main(int argc, char** argv) {
     int socket;
     if (garble) {
         socket = platform::network_connect(host.c_str(), port.c_str());
+
+        schemes::HalfGatesGarbler p(input_file.c_str(), output_file.c_str(), socket);
+        engine::SingleCoreEngine executor(prog_file.c_str(), "garbler_swapfile", p);
+        executor.execute_program();
     } else {
         socket = platform::network_accept(port.c_str());
-    }
 
-    schemes::Plaintext p(input_file.c_str(), output_file.c_str());
-    engine::SingleCoreEngine executor(prog_file.c_str(), "swapfile", p);
-    executor.execute_program();
+        schemes::HalfGatesEvaluator p(input_file.c_str(), socket);
+        engine::SingleCoreEngine executor(prog_file.c_str(), "evaluator_swapfile", p);
+        executor.execute_program();
+    }
 
     platform::network_close(socket);
 }

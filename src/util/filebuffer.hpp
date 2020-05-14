@@ -40,17 +40,19 @@ namespace mage::util {
     class BufferedFileWriter {
     public:
         BufferedFileWriter(const char* filename, std::size_t buffer_size = 1 << 18)
-            : position(0), buffer(buffer_size, true) {
+            : owns_fd(true), position(0), buffer(buffer_size, true) {
             this->fd = platform::create_file(filename, 0);
         }
 
         BufferedFileWriter(int file_descriptor, std::size_t buffer_size = 1 << 18)
-            : fd(file_descriptor), position(0), buffer(buffer_size, true) {
+            : fd(file_descriptor), owns_fd(false), position(0), buffer(buffer_size, true) {
         }
 
         virtual ~BufferedFileWriter() {
             this->flush();
-            platform::close_file(this->fd);
+            if (this->owns_fd) {
+                platform::close_file(this->fd);
+            }
         }
 
         template <typename T>
@@ -92,6 +94,7 @@ namespace mage::util {
 
     protected:
         int fd;
+        bool owns_fd;
 
     private:
         std::size_t position;
@@ -102,16 +105,25 @@ namespace mage::util {
     class BufferedFileReader {
     public:
         BufferedFileReader(const char* filename, std::size_t buffer_size = 1 << 18)
-            : position(buffer_size), buffer(buffer_size, true), eof(buffer_size) {
+            : owns_fd(true), position(0), buffer(buffer_size, true), active_size(0) {
             this->fd = platform::open_file(filename, nullptr);
         }
 
         BufferedFileReader(int file_descriptor, std::size_t buffer_size = 1 << 18)
-            : fd(file_descriptor), position(buffer_size), buffer(buffer_size, true), eof(buffer_size) {
+            : fd(file_descriptor), owns_fd(false), position(0), buffer(buffer_size, true), active_size(0) {
         }
 
         virtual ~BufferedFileReader() {
-            platform::close_file(this->fd);
+            if (this->owns_fd) {
+                platform::close_file(this->fd);
+            }
+        }
+
+        template <typename T>
+        T& read(std::size_t size = sizeof(T)) {
+            T& rv = this->start_read<T>(size);
+            this->finish_read(size);
+            return rv;
         }
 
         template <typename T>
@@ -124,10 +136,10 @@ namespace mage::util {
             if constexpr(backwards_readable) {
                 maximum_size += 1;
             }
-            if (maximum_size > this->buffer.size() - this->position) {
+            if (maximum_size > this->active_size - this->position) {
                 this->rebuffer();
             }
-            assert(maximum_size <= this->buffer.size() - this->position);
+            assert(maximum_size <= this->active_size - this->position);
             return &this->buffer.mapping()[this->position];
         }
 
@@ -136,32 +148,23 @@ namespace mage::util {
                 actual_size += 1;
             }
             this->position += actual_size;
-            if (this->position == this->buffer.size()) {
-                this->rebuffer();
-            } else if (this->position > this->eof) {
-                std::abort();
-            }
-        }
-
-        bool at_eof() const {
-            return this->position == this->eof;
         }
 
         void rebuffer() {
             std::uint8_t* mapping = this->buffer.mapping();
-            std::size_t size = this->buffer.size();
-            std::size_t leftover = size - this->position;
-            std::copy(&mapping[this->position], &mapping[size], mapping);
-            this->eof = leftover + platform::read_from_file(this->fd, &mapping[leftover], this->position);
+            std::size_t leftover = this->active_size - this->position;
+            std::copy(&mapping[this->position], &mapping[this->active_size], mapping);
+            this->active_size = leftover + platform::read_available_from_file(this->fd, &mapping[leftover], this->buffer.size() - leftover);
             this->position = 0;
         }
 
     protected:
         int fd;
+        bool owns_fd;
 
     private:
+        std::size_t active_size;
         std::size_t position;
-        std::size_t eof;
         platform::MappedFile<std::uint8_t> buffer;
     };
 
@@ -170,16 +173,18 @@ namespace mage::util {
         static_assert(backwards_readable);
     public:
         BufferedReverseFileReader(const char* filename, std::size_t buffer_size = 1 << 18)
-            : position(0), buffer(buffer_size, true) {
+            : owns_fd(true), position(0), buffer(buffer_size, true) {
             this->fd = platform::open_file(filename, &this->length_left);
         }
 
         BufferedReverseFileReader(int file_descriptor, std::size_t buffer_size = 1 << 18)
-            : fd(file_descriptor), position(0), buffer(buffer_size, true) {
+            : fd(file_descriptor), owns_fd(false), position(0), buffer(buffer_size, true) {
         }
 
         virtual ~BufferedReverseFileReader() {
-            platform::close_file(this->fd);
+            if (this->owns_fd) {
+                platform::close_file(this->fd);
+            }
         }
 
         template <typename T>
@@ -219,6 +224,7 @@ namespace mage::util {
 
     protected:
         int fd;
+        bool owns_fd;
         std::uint64_t length_left;
 
     private:

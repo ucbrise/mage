@@ -22,14 +22,15 @@
 #ifndef MAGE_SCHEMES_PLAINTEXT_HPP_
 #define MAGE_SCHEMES_PLAINTEXT_HPP_
 
+#include <string>
 #include "util/binaryfile.hpp"
 
 namespace mage::schemes {
-    class Plaintext {
+    class PlaintextEvaluator {
     public:
         using Wire = unsigned __int128;
 
-        Plaintext(std::string input_file, std::string output_file) : input_reader(input_file.c_str()), output_writer(output_file.c_str()) {
+        PlaintextEvaluator(std::string input_file, std::string output_file) : input_reader(input_file.c_str()), output_writer(output_file.c_str()) {
         }
 
         void input(Wire* data, unsigned int length) {
