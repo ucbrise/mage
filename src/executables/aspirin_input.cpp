@@ -19,10 +19,27 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "dsl/integer.hpp"
+#include <cstdint>
 #include <iostream>
+#include <string>
+#include "util/binaryfile.hpp"
 
 int main(int argc, char** argv) {
-    std::cout << "hello, world" << std::endl;
+    if (argc != 2) {
+        std::cout << "Usage: " << argv[0] << " input_size_per_party" << std::endl;
+        return 0;
+    }
+    std::string input_size_per_party(argv[1]);
+    int input_size = std::stoi(input_size_per_party);
+
+    std::string output_file("aspirin_input_");
+    output_file.append(argv[1]);
+
+    mage::util::BinaryFileWriter writer(output_file);
+    for (int i = 0; i != input_size * 2; i++) {
+        writer.write64(0);
+        writer.write1(0);
+    }
+
     return 0;
 }

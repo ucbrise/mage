@@ -86,7 +86,7 @@ void create_aspirin_circuit(Program& p, int input_size_per_party) {
 }
 
 std::uint8_t page_shift = 10;
-std::uint64_t num_pages = 1 << 5;
+std::uint64_t num_pages = 1769472;
 
 int main(int argc, char** argv) {
     int input_size_per_party = 128;
@@ -108,7 +108,7 @@ int main(int argc, char** argv) {
         create_aspirin_circuit(program, input_size_per_party);
         std::cout << "Created program with " << program.num_instructions() << " instructions" << std::endl;
     }
-
+    
     std::string ann_filename = filename;
     ann_filename.append(".ann");
     mage::memprog::annotate_program(ann_filename, program_filename, page_shift);

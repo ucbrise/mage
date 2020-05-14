@@ -39,7 +39,7 @@ namespace mage::engine {
             assert(this->memory == nullptr);
             this->memory_size = pg_addr(num_pages, shift) * sizeof(typename Protocol::Wire);
             this->memory = platform::allocate_resident_memory<typename Protocol::Wire>(this->memory_size);
-            this->swapfd = platform::create_file(swapfile.c_str(), pg_addr(swap_pages, shift) * sizeof(typename Protocol::Wire), true);
+            this->swapfd = platform::create_file(swapfile.c_str(), pg_addr(swap_pages, shift) * sizeof(typename Protocol::Wire), false);
             this->page_shift = shift;
         }
 

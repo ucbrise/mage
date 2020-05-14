@@ -314,11 +314,11 @@ namespace mage::engine {
             this->execute_swap_out(phys);
             return PackedPhysInstruction::size(OpCode::SwapOut);
         case OpCode::Input:
-            // For now
-            for (BitWidth i = 0; i != phys.no_args.width; i++) {
-                this->protocol.zero(this->memory[phys.header.output + i]);
-            }
+            this->protocol.input(&this->memory[phys.header.output], phys.no_args.width);
             return PackedPhysInstruction::size(OpCode::Input);
+        case OpCode::Output:
+            this->protocol.output(&this->memory[phys.header.output], phys.no_args.width);
+            return PackedPhysInstruction::size(OpCode::Output);
         case OpCode::PublicConstant:
             this->execute_public_constant(phys);
             return PackedPhysInstruction::size(OpCode::PublicConstant);

@@ -54,6 +54,13 @@ namespace mage::util {
         }
 
         template <typename T>
+        T& write(std::size_t size = sizeof(T)) {
+            void* rv = this->start_write(size);
+            this->finish_write(size);
+            return *reinterpret_cast<T*>(rv);
+        }
+
+        template <typename T>
         T& start_write(std::size_t maximum_size = sizeof(T)) {
             void* rv = this->start_write(maximum_size);
             return *reinterpret_cast<T*>(rv);

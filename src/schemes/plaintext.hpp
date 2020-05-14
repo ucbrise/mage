@@ -27,6 +27,16 @@ namespace mage::schemes {
     public:
         using Wire = unsigned __int128;
 
+        void input(Wire* data, unsigned int length) {
+            for (unsigned int i = 0; i != length; i++) {
+                data[i] = 0;
+            }
+        }
+
+        void output(const Wire* data, unsigned int length) {
+            // TODO
+        }
+
         void op_and(Wire& output, const Wire& input1, const Wire& input2) {
             output = input1 & input2;
         }
