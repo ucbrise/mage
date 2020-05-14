@@ -22,19 +22,28 @@
 #ifndef MAGE_SCHEMES_PLAINTEXT_HPP_
 #define MAGE_SCHEMES_PLAINTEXT_HPP_
 
+#include "util/binaryfile.hpp"
+
 namespace mage::schemes {
     class Plaintext {
     public:
         using Wire = unsigned __int128;
 
+        Plaintext(std::string input_file, std::string output_file) : input_reader(input_file.c_str()), output_writer(output_file.c_str()) {
+        }
+
         void input(Wire* data, unsigned int length) {
             for (unsigned int i = 0; i != length; i++) {
-                data[i] = 0;
+                std::uint8_t bit = this->input_reader.read1();
+                data[i] = bit;
             }
         }
 
         void output(const Wire* data, unsigned int length) {
-            // TODO
+            for (unsigned int i = 0; i != length; i++) {
+                std::uint8_t bit = static_cast<std::uint8_t>(data[i]) & 0x1;
+                this->output_writer.write1(bit);
+            }
         }
 
         void op_and(Wire& output, const Wire& input1, const Wire& input2) {
@@ -64,6 +73,10 @@ namespace mage::schemes {
         void zero(Wire& output) const {
             output = 0;
         }
+
+    private:
+        util::BinaryFileReader input_reader;
+        util::BinaryFileWriter output_writer;
     };
 }
 

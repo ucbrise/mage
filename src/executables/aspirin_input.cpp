@@ -32,10 +32,11 @@ int main(int argc, char** argv) {
     std::string input_size_per_party(argv[1]);
     int input_size = std::stoi(input_size_per_party);
 
-    std::string output_file("aspirin_input_");
-    output_file.append(argv[1]);
+    std::string output_file("aspirin_");
+    output_file.append(std::to_string(input_size));
+    output_file.append(".input");
 
-    mage::util::BinaryFileWriter writer(output_file);
+    mage::util::BinaryFileWriter writer(output_file.c_str());
     for (int i = 0; i != input_size * 2; i++) {
         writer.write64(0);
         writer.write1(0);

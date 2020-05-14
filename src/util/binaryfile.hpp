@@ -28,7 +28,7 @@
 namespace mage::util {
     class BinaryFileWriter : private BufferedFileWriter<false> {
     public:
-        BinaryFileWriter(std::string output_file) : BufferedFileWriter<false>(output_file.c_str()), total_num_bits(0), current_byte(0) {
+        BinaryFileWriter(const char* output_file) : BufferedFileWriter<false>(output_file), total_num_bits(0), current_byte(0) {
         }
 
         ~BinaryFileWriter() {
@@ -83,7 +83,7 @@ namespace mage::util {
 
     class BinaryFileReader : private BufferedFileReader<false> {
     public:
-        BinaryFileReader(std::string input_file) : BufferedFileReader<false>(input_file.c_str()), total_num_bits(0), current_byte(0) {
+        BinaryFileReader(const char* input_file) : BufferedFileReader<false>(input_file), total_num_bits(0), current_byte(0) {
         }
 
         std::uint8_t read1() {
