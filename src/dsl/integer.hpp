@@ -70,7 +70,11 @@ namespace mage::dsl {
         }
 
         void mark_output() {
-            this->p->mark_output(this->v, bits);
+            Instruction& instr = this->p->instruction();
+            instr.header.operation = OpCode::Output;
+            instr.header.width = bits;
+            instr.header.flags = 0;
+            this->v = this->p->commit_instruction(bits);
         }
 
         Integer<bits>& operator =(const Integer<bits>& other) {

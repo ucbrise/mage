@@ -94,20 +94,21 @@ namespace mage::memprog {
     }
 
     BeladyAllocator::BeladyAllocator(std::string output_file, std::string virtual_program_file, std::string annotations_file, PhysPageNumber num_page_frames, PageShift shift)
-        : Allocator(output_file, num_page_frames), virt_prog(virtual_program_file.c_str(), false), annotations(annotations_file.c_str(), false), page_shift(shift) {
-        this->set_page_shift(this->virt_prog.mapping()->page_shift);
+        : Allocator(output_file, num_page_frames), virt_prog(virtual_program_file.c_str()), annotations(annotations_file.c_str()), page_shift(shift) {
+        this->set_page_shift(this->virt_prog.get_header().page_shift);
     }
 
     void BeladyAllocator::allocate() {
-        ProgramFileHeader* header = this->virt_prog.mapping();
-        PackedVirtInstruction* current = reinterpret_cast<PackedVirtInstruction*>(header + 1);
-        Annotation* ann = this->annotations.mapping();
+        InstructionNumber num_instructions = this->virt_prog.get_header().num_instructions;
         std::array<bool, 5> just_swapped_in;
         std::array<PhysPageNumber, 5> ppns;
         std::array<VirtPageNumber, 5> vpns;
-        for (InstructionNumber i = 0; i != header->num_instructions; i++) {
-            std::uint8_t num_pages = current->store_page_numbers(vpns.data(), this->page_shift);
-            assert(num_pages == ann->header.num_pages);
+        for (InstructionNumber i = 0; i != num_instructions; i++) {
+            PackedVirtInstruction& current = this->virt_prog.start_instruction();
+            std::uint8_t num_pages = current.store_page_numbers(vpns.data(), this->page_shift);
+            std::size_t ann_size;
+            Annotation& ann = this->annotations.read<Annotation>(ann_size);
+            assert(num_pages == ann.header.num_pages);
             for (std::uint8_t j = 0; j != num_pages; j++) {
                 VirtPageNumber vpn = vpns[j];
 
@@ -126,7 +127,7 @@ namespace mage::memprog {
                      * don't accidentally swap two different virtual pages into
                      * the same physical page frame.
                      */
-                    if (ann->slots[j].next_use == invalid_instr) {
+                    if (ann.slots[j].next_use == invalid_instr) {
                         this->page_table.erase(iter);
                         this->next_use_heap.erase(vpn);
                     }
@@ -166,8 +167,8 @@ namespace mage::memprog {
                          * used again, skip updating the page table (see the
                          * comment above: "If page is never used again...").
                          */
-                        assert(j == 0 && (current->header.flags & FlagOutputPageFirstUse) != 0);
-                        if (ann->slots[j].next_use != invalid_instr) {
+                        assert(j == 0 && (current.header.flags & FlagOutputPageFirstUse) != 0);
+                        if (ann.slots[j].next_use != invalid_instr) {
                             PageTableEntry pte;
                             pte.resident = true;
                             pte.ppn = ppn;
@@ -184,7 +185,7 @@ namespace mage::memprog {
                         PageTableEntry& pte = iter->second;
                         assert(!pte.resident);
                         this->emit_swapin(pte.spn, ppn);
-                        if (ann->slots[j].next_use == invalid_instr) {
+                        if (ann.slots[j].next_use == invalid_instr) {
                             this->page_table.erase(iter);
                         } else {
                             pte.resident = true;
@@ -196,14 +197,14 @@ namespace mage::memprog {
             }
 
             PackedPhysInstruction& phys = this->phys_prog.start_instruction();
-            phys.header.operation = current->header.operation;
-            phys.no_args.width = current->no_args.width;
-            phys.header.flags = current->header.flags;
-            phys.restore_page_numbers(*current, ppns.data(), this->page_shift);
+            phys.header.operation = current.header.operation;
+            phys.no_args.width = current.no_args.width;
+            phys.header.flags = current.header.flags;
+            phys.restore_page_numbers(current, ppns.data(), this->page_shift);
             this->phys_prog.finish_instruction(phys.size());
 
             for (std::uint8_t j = 0; j != num_pages; j++) {
-                InstructionNumber next_use = ann->slots[j].next_use;
+                InstructionNumber next_use = ann.slots[j].next_use;
                 /*
                  * If the page is never used again, then the above code has
                  * already removed its page table entry. Here, we just mark its
@@ -221,8 +222,7 @@ namespace mage::memprog {
                 }
             }
 
-            current = current->next();
-            ann = ann->next();
+            this->virt_prog.finish_instruction(current.size());
         }
     }
 }

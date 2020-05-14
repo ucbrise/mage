@@ -109,14 +109,9 @@ int main(int argc, char** argv) {
         std::cout << "Created program with " << program.num_instructions() << " instructions" << std::endl;
     }
 
-    std::string revann_filename = filename;
-    revann_filename.append(".revann");
-    std::uint64_t working_set = mage::memprog::reverse_annotate_program(revann_filename, program_filename, page_shift);
-    std::cout << "Reverse-annotated program (working set size is " << working_set << " pages)" << std::endl;
-
     std::string ann_filename = filename;
     ann_filename.append(".ann");
-    mage::memprog::unreverse_annotations(ann_filename, revann_filename);
+    mage::memprog::annotate_program(ann_filename, program_filename, page_shift);
     std::cout << "Computed actual annotations" << std::endl;
 
     {

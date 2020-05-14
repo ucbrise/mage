@@ -29,7 +29,7 @@
 #include <unistd.h>
 
 namespace mage::platform {
-    int create_file(const char* filename, std::size_t length, bool direct) {
+    int create_file(const char* filename, std::uint64_t length, bool direct) {
         int flags = O_CREAT | O_RDWR | O_TRUNC;
         if (direct) {
             flags |= O_DIRECT;
@@ -46,7 +46,7 @@ namespace mage::platform {
         return fd;
     }
 
-    int open_file(const char* filename, std::size_t* length, bool direct) {
+    int open_file(const char* filename, std::uint64_t* length, bool direct) {
         int flags = O_RDWR;
         if (direct) {
             flags |= O_DIRECT;
@@ -62,7 +62,7 @@ namespace mage::platform {
                 std::perror("open_file -> lseek");
                 std::abort();
             }
-            *length = (std::size_t) end;
+            *length = (std::uint64_t) end;
         }
         return fd;
     }
@@ -99,14 +99,14 @@ namespace mage::platform {
         return processed;
     }
 
-    void seek_file(int fd, std::size_t position) {
-        if (lseek(fd, (off_t) position, SEEK_SET) == -1) {
+    void seek_file(int fd, std::int64_t amount, bool relative) {
+        if (lseek(fd, (off_t) amount, relative ? SEEK_CUR : SEEK_SET) == -1) {
             std::perror("seek_in_file -> lseek");
             std::abort();
         }
     }
 
-    std::size_t tell_file(int fd) {
+    std::uint64_t tell_file(int fd) {
         off_t rv = lseek(fd, 0, SEEK_CUR);
         if (rv == -1) {
             std::perror("tell_file -> lseek");

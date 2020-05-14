@@ -33,6 +33,7 @@ namespace mage {
         SwapIn,
         SwapOut,
         Input, // 1 argument
+        Output, // 1 argument
         PublicConstant, // 0 arguments
         IntAdd, // 2 arguments
         IntIncrement, // 1 argument
@@ -106,6 +107,7 @@ namespace mage {
         constexpr void set(OpCode op)  {
             switch (op) {
             case OpCode::Input:
+            case OpCode::Output:
                 this->layout = InstructionFormat::NoArgs;
                 this->single_bit = false;
                 break;

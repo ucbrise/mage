@@ -36,6 +36,7 @@
  */
 
 namespace mage::util {
+    template <bool backwards_readable = false>
     class BufferedFileWriter {
     public:
         BufferedFileWriter(const char* filename, std::size_t buffer_size = 1 << 18)
@@ -59,15 +60,22 @@ namespace mage::util {
         }
 
         void* start_write(std::size_t maximum_size) {
+            if constexpr(backwards_readable) {
+                maximum_size += 1;
+            }
             if (maximum_size > this->buffer.size() - this->position) {
                 this->flush();
             }
             assert(maximum_size <= this->buffer.size() - this->position);
-            return &this->buffer.mapping()[position];
+            return &this->buffer.mapping()[this->position];
         }
 
         void finish_write(std::size_t actual_size) {
             this->position += actual_size;
+            if constexpr(backwards_readable) {
+                this->buffer.mapping()[this->position] = static_cast<std::uint8_t>(actual_size);
+                this->position++;
+            }
         }
 
         void flush() {
@@ -83,6 +91,7 @@ namespace mage::util {
         platform::MappedFile<std::uint8_t> buffer;
     };
 
+    template <bool backwards_readable>
     class BufferedFileReader {
     public:
         BufferedFileReader(const char* filename, std::size_t buffer_size = 1 << 18)
@@ -105,6 +114,9 @@ namespace mage::util {
         }
 
         void* start_read(std::size_t maximum_size) {
+            if constexpr(backwards_readable) {
+                maximum_size += 1;
+            }
             if (maximum_size > this->buffer.size() - this->position) {
                 this->rebuffer();
             }
@@ -113,6 +125,9 @@ namespace mage::util {
         }
 
         void finish_read(std::size_t actual_size) {
+            if constexpr(backwards_readable) {
+                actual_size += 1;
+            }
             this->position += actual_size;
             if (this->position == this->buffer.size()) {
                 this->rebuffer();
@@ -140,6 +155,67 @@ namespace mage::util {
     private:
         std::size_t position;
         std::size_t eof;
+        platform::MappedFile<std::uint8_t> buffer;
+    };
+
+    template <bool backwards_readable>
+    class BufferedReverseFileReader {
+        static_assert(backwards_readable);
+    public:
+        BufferedReverseFileReader(const char* filename, std::size_t buffer_size = 1 << 18)
+            : position(0), buffer(buffer_size, true) {
+            this->fd = platform::open_file(filename, &this->length_left);
+        }
+
+        BufferedReverseFileReader(int file_descriptor, std::size_t buffer_size = 1 << 18)
+            : fd(file_descriptor), position(0), buffer(buffer_size, true) {
+        }
+
+        virtual ~BufferedReverseFileReader() {
+            platform::close_file(this->fd);
+        }
+
+        template <typename T>
+        T& read(std::size_t& size) {
+            void* rv = this->read(size);
+            return *reinterpret_cast<T*>(rv);
+        }
+
+        void* read(std::size_t& size) {
+            std::uint8_t* mapping = this->buffer.mapping();
+            if (this->position == 0) {
+                this->rebuffer();
+            }
+            assert(this->position != 0);
+            this->position--;
+            size = mapping[this->position];
+            if (size > this->position) {
+                this->rebuffer();
+            }
+            assert(size <= this->position);
+            this->position -= size;
+            return &mapping[this->position];
+        }
+
+        void rebuffer() {
+            std::uint8_t* mapping = this->buffer.mapping();
+            std::size_t size = this->buffer.size();
+            std::uint64_t to_read = size - this->position;
+            to_read = std::min(to_read, this->length_left);
+            std::copy_backward(mapping, &mapping[this->position], &mapping[to_read + this->position]);
+
+            this->position += to_read;
+            this->length_left -= to_read;
+            platform::seek_file(this->fd, this->length_left);
+            platform::read_from_file(this->fd, mapping, to_read);
+        }
+
+    protected:
+        int fd;
+        std::uint64_t length_left;
+
+    private:
+        std::size_t position;
         platform::MappedFile<std::uint8_t> buffer;
     };
 }

@@ -117,8 +117,8 @@ namespace mage::memprog {
     private:
         std::unordered_map<VirtPageNumber, PageTableEntry> page_table;
         util::PriorityQueue<BeladyScore, VirtPageNumber> next_use_heap;
-        platform::MappedFile<ProgramFileHeader> virt_prog;
-        platform::MappedFile<Annotation> annotations;
+        VirtProgramFileReader virt_prog;
+        util::BufferedReverseFileReader<true> annotations;
         PageShift page_shift;
     };
 }

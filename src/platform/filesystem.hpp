@@ -23,15 +23,16 @@
 #define MAGE_PLATFORM_FILESYSTEM_HPP_
 
 #include <cstddef>
+#include <cstdint>
 
 namespace mage::platform {
-    /* I'd prefer off_t instead of std::size_t, but off_t is POSIX. */
-    int create_file(const char* filename, std::size_t length, bool direct = false);
-    int open_file(const char* filename, std::size_t* length, bool direct = false);
+    /* I'd prefer off_t instead of std::uint64_t, but off_t is POSIX. */
+    int create_file(const char* filename, std::uint64_t length, bool direct = false);
+    int open_file(const char* filename, std::uint64_t* length, bool direct = false);
     void write_to_file(int fd, const void* buffer, std::size_t length);
     std::size_t read_from_file(int fd, void* buffer, std::size_t length);
-    void seek_file(int fd, std::size_t position);
-    std::size_t tell_file(int fd);
+    void seek_file(int fd, std::int64_t amount, bool relative = false);
+    std::uint64_t tell_file(int fd);
     void close_file(int fd);
 }
 
