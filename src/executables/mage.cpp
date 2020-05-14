@@ -19,18 +19,72 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <cstring>
 #include <iostream>
+#include <string>
 #include "engine/engine.hpp"
 #include "engine/singlecore.hpp"
+#include "platform/network.hpp"
 #include "schemes/plaintext.hpp"
 
+using namespace mage;
+
 int main(int argc, char** argv) {
-    if (argc != 2) {
-        std::cout << "Usage: " << argv[0] << " memory_program" << std::endl;
+    if (argc != 4) {
+        std::cerr << "Usage: " << argv[0] << " garble/evaluate program_name host:port" << std::endl;
         return 1;
     }
 
-    mage::schemes::Plaintext p;
-    mage::engine::SingleCoreEngine executor(argv[1], "swapfile", p);
+    /* Decide if we're garbling or evaluating. */
+
+    bool garble;
+    if (std::strcmp(argv[1], "garble") == 0) {
+        garble = true;
+    } else if (std::strcmp(argv[1], "evaluate") == 0) {
+        garble = false;
+    } else {
+        std::cerr << "First argument must be \"garble\" or \"evaluate\"" << std::endl;
+        return 1;
+    }
+
+    /* Generate the file names. */
+
+    std::string file_base(argv[2]);
+
+    std::string prog_file(file_base);
+    prog_file.append(".memprog");
+
+    std::string input_file(file_base);
+    input_file.append(".input");
+
+    std::string output_file(file_base);
+    output_file.append(".output");
+
+    /* Parse the host/port. */
+
+    std::string host(argv[3]);
+    std::string port;
+    std::size_t colon_index = host.find_last_of(':');
+    if (colon_index == std::string::npos) {
+        port = host;
+        host = "127.0.0.1";
+    } else {
+        port = host.substr(colon_index + 1);
+        host.erase(colon_index);
+    }
+
+    /* Create the network connection. */
+
+    int socket;
+    if (garble) {
+        socket = platform::network_connect(host.c_str(), port.c_str());
+    } else {
+        socket = platform::network_accept(port.c_str());
+    }
+
+    schemes::Plaintext p(input_file.c_str(), output_file.c_str());
+    engine::SingleCoreEngine executor(prog_file.c_str(), "swapfile", p);
     executor.execute_program();
+
+    platform::network_close(socket);
 }
