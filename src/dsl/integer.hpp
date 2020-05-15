@@ -74,7 +74,8 @@ namespace mage::dsl {
             instr.header.operation = OpCode::Output;
             instr.header.width = bits;
             instr.header.flags = 0;
-            this->v = this->p->commit_instruction(bits);
+            instr.header.output = this->v;
+            this->p->commit_instruction(0);
         }
 
         Integer<bits>& operator =(const Integer<bits>& other) {

@@ -189,6 +189,8 @@ namespace mage {
                         this->three_args.input3 = pg_set_num(original.three_args.input3, input3_ppn, page_shift);
                     }
                 }
+            } else if (info.uses_constant()) {
+                this->constant.constant = original.constant.constant;
             }
             return num_pages;
         }

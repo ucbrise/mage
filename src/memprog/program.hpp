@@ -44,10 +44,12 @@ namespace mage::memprog {
         }
 
         VirtAddr commit_instruction(BitWidth output_width) {
-            bool fresh_page;
-            this->current.header.output = this->allocate_virtual(output_width, fresh_page);
-            if (fresh_page) {
-                this->current.header.flags |= FlagOutputPageFirstUse;
+            if (output_width != 0) {
+                bool fresh_page;
+                this->current.header.output = this->allocate_virtual(output_width, fresh_page);
+                if (fresh_page) {
+                    this->current.header.flags |= FlagOutputPageFirstUse;
+                }
             }
             this->append_instruction(this->current);
             return this->current.header.output;

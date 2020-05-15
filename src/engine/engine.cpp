@@ -35,7 +35,7 @@ namespace mage::engine {
         StoragePageNumber saddr = pg_addr(phys.swap.storage, this->page_shift);
         PhysPageNumber paddr = pg_addr(phys.header.output, this->page_shift);
         platform::seek_file(this->swapfd, saddr);
-        platform::read_from_file(this->swapfd, &this->memory[paddr], pg_size(this->page_shift));
+        platform::read_from_file(this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename Protocol::Wire));
     }
 
     template <typename Protocol>
@@ -43,7 +43,7 @@ namespace mage::engine {
         PhysPageNumber paddr = pg_addr(phys.header.output, this->page_shift);
         StoragePageNumber saddr = pg_addr(phys.swap.storage, this->page_shift);
         platform::seek_file(this->swapfd, saddr);
-        platform::write_to_file(this->swapfd, &this->memory[paddr], pg_size(this->page_shift));
+        platform::write_to_file(this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename Protocol::Wire));
     }
 
     template <typename Protocol>
