@@ -61,6 +61,7 @@ namespace mage::schemes {
 
         // HACK: assume all output goes to the garbler
         ~HalfGatesGarbler() {
+            this->conn_writer.flush(); // otherwise we may deadlock
             for (std::uint64_t i = 0; i != this->output_label_lsbs.size(); i++) {
                 bool evaluator_lsb = this->conn_reader.read<bool>();
                 bool result = (this->output_label_lsbs[i] != evaluator_lsb);
@@ -89,18 +90,15 @@ namespace mage::schemes {
         }
 
         void op_and(Wire& output, const Wire& input1, const Wire& input2) {
-            crypto::block out[2];
+            crypto::block out1;
             crypto::block table[2];
-            table[0] = this->conn_reader.read<crypto::block>();
-            table[1] = this->conn_reader.read<crypto::block>();
             if (mitccrh.key_used == KS_BATCH_N) {
                 mitccrh.renew_ks(this->global_id);
             }
-            garble_gate_garble_halfgates(input1, crypto::xorBlocks(input1, this->delta), input2, crypto::xorBlocks(input2, this->delta), &out[0], &out[1], this->delta, table, &this->mitccrh);
+            garble_gate_garble_halfgates(input1, crypto::xorBlocks(input1, this->delta), input2, crypto::xorBlocks(input2, this->delta), &output, &out1, this->delta, table, &this->mitccrh);
             this->global_id++;
             this->conn_writer.write<crypto::block>() = table[0];
             this->conn_writer.write<crypto::block>() = table[1];
-            output = out[0];
         }
 
         void op_xor(Wire& output, const Wire& input1, const Wire& input2) {
@@ -192,7 +190,6 @@ namespace mage::schemes {
             tmp.random_block(&this->start_point);
             mitccrh.start_point = this->start_point;
 
-            this->seed = this->conn_reader.read<Wire>();
             this->start_point = this->conn_reader.read<Wire>();
             this->mitccrh.setS(this->start_point);
 
@@ -215,10 +212,13 @@ namespace mage::schemes {
 
         void op_and(Wire& output, const Wire& input1, const Wire& input2) {
             crypto::block table[2];
+            table[0] = this->conn_reader.read<crypto::block>();
+            table[1] = this->conn_reader.read<crypto::block>();
             if (mitccrh.key_used == KS_BATCH_N) {
                 mitccrh.renew_ks(this->global_id);
             }
             garble_gate_eval_halfgates(input1, input2, &output, table, &this->mitccrh);
+            this->global_id++;
         }
 
         void op_xor(Wire& output, const Wire& input1, const Wire& input2) {
@@ -274,7 +274,6 @@ namespace mage::schemes {
 
         std::int64_t global_id;
         Wire start_point;
-        Wire seed;
         Wire public_constants[2];
         crypto::MiTCCRH mitccrh;
 
