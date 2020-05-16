@@ -24,8 +24,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include "addr.hpp"
-#include "util/binary.hpp"
 
 namespace mage {
     enum class OpCode : std::uint8_t {

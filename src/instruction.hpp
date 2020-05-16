@@ -26,7 +26,6 @@
 #include <cstdint>
 #include "addr.hpp"
 #include "opcode.hpp"
-#include "util/binary.hpp"
 
 namespace mage {
     using BitWidth = std::uint8_t;
@@ -270,60 +269,60 @@ namespace mage {
             return this->pack<addr_bits, storage_bits>(packed, info.format());
         }
 
-        template <std::uint8_t addr_bits, std::uint8_t storage_bits>
-        std::size_t write_to_output(std::ostream& out) const {
-            PackedInstruction<addr_bits, storage_bits> packed;
-            std::size_t size = this->pack(packed);
-            out.write(reinterpret_cast<const char*>(&packed), size);
-            return size;
-        }
+        // template <std::uint8_t addr_bits, std::uint8_t storage_bits>
+        // std::size_t write_to_output(std::ostream& out) const {
+        //     PackedInstruction<addr_bits, storage_bits> packed;
+        //     std::size_t size = this->pack(packed);
+        //     out.write(reinterpret_cast<const char*>(&packed), size);
+        //     return size;
+        // }
 
-        template <std::uint8_t addr_bits, std::uint8_t storage_bits>
-        std::size_t read_from_input(std::istream& in) {
-            /* TODO: handle endianness when populating PACKED */
-            PackedInstruction<addr_bits, storage_bits> packed;
-            in.read(reinterpret_cast<char*>(&packed.header), sizeof(packed.header));
-
-            this->header.operation = packed.header.operation;
-            this->header.flags = packed.header.flags;
-            this->header.output = packed.header.output;
-
-            OpInfo info(this->header.operation);
-            switch (info.format()) {
-            case InstructionFormat::NoArgs:
-                this->header.width = packed.no_args.width;
-                return sizeof(packed.header);
-            case InstructionFormat::OneArg:
-                in.read(reinterpret_cast<char*>(&packed.one_arg), sizeof(packed.one_arg));
-                this->header.width = packed.one_arg.width;
-                this->one_arg.input1 = packed.one_arg.input1;
-                return sizeof(packed.header) + sizeof(packed.one_arg);
-            case InstructionFormat::TwoArgs:
-                in.read(reinterpret_cast<char*>(&packed.two_args), sizeof(packed.two_args));
-                this->header.width = packed.two_args.width;
-                this->two_args.input1 = packed.two_args.input1;
-                this->two_args.input2 = packed.two_args.input2;
-                return sizeof(packed.header) + sizeof(packed.two_args);
-            case InstructionFormat::ThreeArgs:
-                in.read(reinterpret_cast<char*>(&packed.three_args), sizeof(packed.three_args));
-                this->header.width = packed.three_args.width;
-                this->three_args.input1 = packed.three_args.input1;
-                this->three_args.input2 = packed.three_args.input2;
-                this->three_args.input3 = packed.three_args.input3;
-                return sizeof(packed.header) + sizeof(packed.three_args);
-            case InstructionFormat::Constant:
-                in.read(reinterpret_cast<char*>(&packed.constant), sizeof(packed.constant));
-                this->header.width = packed.constant.width;
-                this->constant.constant = packed.constant.constant;
-                return sizeof(packed.header) + sizeof(packed.constant);
-            case InstructionFormat::Swap:
-                in.read(reinterpret_cast<char*>(&packed.swap), sizeof(packed.swap));
-                this->swap.storage = packed.swap.storage;
-                return sizeof(packed.header) + sizeof(packed.swap);
-            default:
-                std::abort();
-            }
-        }
+        // template <std::uint8_t addr_bits, std::uint8_t storage_bits>
+        // std::size_t read_from_input(std::istream& in) {
+        //     /* TODO: handle endianness when populating PACKED */
+        //     PackedInstruction<addr_bits, storage_bits> packed;
+        //     in.read(reinterpret_cast<char*>(&packed.header), sizeof(packed.header));
+        //
+        //     this->header.operation = packed.header.operation;
+        //     this->header.flags = packed.header.flags;
+        //     this->header.output = packed.header.output;
+        //
+        //     OpInfo info(this->header.operation);
+        //     switch (info.format()) {
+        //     case InstructionFormat::NoArgs:
+        //         this->header.width = packed.no_args.width;
+        //         return sizeof(packed.header);
+        //     case InstructionFormat::OneArg:
+        //         in.read(reinterpret_cast<char*>(&packed.one_arg), sizeof(packed.one_arg));
+        //         this->header.width = packed.one_arg.width;
+        //         this->one_arg.input1 = packed.one_arg.input1;
+        //         return sizeof(packed.header) + sizeof(packed.one_arg);
+        //     case InstructionFormat::TwoArgs:
+        //         in.read(reinterpret_cast<char*>(&packed.two_args), sizeof(packed.two_args));
+        //         this->header.width = packed.two_args.width;
+        //         this->two_args.input1 = packed.two_args.input1;
+        //         this->two_args.input2 = packed.two_args.input2;
+        //         return sizeof(packed.header) + sizeof(packed.two_args);
+        //     case InstructionFormat::ThreeArgs:
+        //         in.read(reinterpret_cast<char*>(&packed.three_args), sizeof(packed.three_args));
+        //         this->header.width = packed.three_args.width;
+        //         this->three_args.input1 = packed.three_args.input1;
+        //         this->three_args.input2 = packed.three_args.input2;
+        //         this->three_args.input3 = packed.three_args.input3;
+        //         return sizeof(packed.header) + sizeof(packed.three_args);
+        //     case InstructionFormat::Constant:
+        //         in.read(reinterpret_cast<char*>(&packed.constant), sizeof(packed.constant));
+        //         this->header.width = packed.constant.width;
+        //         this->constant.constant = packed.constant.constant;
+        //         return sizeof(packed.header) + sizeof(packed.constant);
+        //     case InstructionFormat::Swap:
+        //         in.read(reinterpret_cast<char*>(&packed.swap), sizeof(packed.swap));
+        //         this->swap.storage = packed.swap.storage;
+        //         return sizeof(packed.header) + sizeof(packed.swap);
+        //     default:
+        //         std::abort();
+        //     }
+        // }
 
         // bool read_from_input(std::istream& in) {
         //     util::read_lower_bytes(in, *reinterpret_cast<std::uint8_t*>(&this->header.operation), sizeof(this->header.operation));
