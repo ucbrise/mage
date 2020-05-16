@@ -19,6 +19,7 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <iostream>
 #include <string>
 #include "addr.hpp"
 #include "engine/engine.hpp"

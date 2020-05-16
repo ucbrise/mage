@@ -218,8 +218,7 @@ namespace mage::util {
 
             this->position += to_read;
             this->length_left -= to_read;
-            platform::seek_file(this->fd, this->length_left);
-            platform::read_from_file(this->fd, mapping, to_read);
+            platform::read_from_file_at(this->fd, mapping, to_read, this->length_left);
         }
 
     protected:

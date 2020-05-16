@@ -27,9 +27,11 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <algorithm>
+#include "memory.hpp"
 
 namespace mage::platform {
-    int create_file(const char* filename, std::uint64_t length, bool direct) {
+    int create_file(const char* filename, std::uint64_t length, bool direct, bool unsparsify) {
         int flags = O_CREAT | O_RDWR | O_TRUNC;
         if (direct) {
             flags |= O_DIRECT;
@@ -42,6 +44,21 @@ namespace mage::platform {
         if (ftruncate(fd, (off_t) length) != 0) {
             std::perror("create_file -> ftruncate");
             std::abort();
+        }
+        if (unsparsify) {
+            static constexpr const std::uint64_t buf_size = 4096;
+            std::uint8_t* buf = allocate_resident_memory<std::uint8_t>(buf_size);
+            std::fill(buf, buf + buf_size, 0x00);
+            std::uint64_t left = length;
+            while (left != 0) {
+                ssize_t rv = write(fd, buf, std::min(left, buf_size));
+                if (rv < 0) {
+                    std::perror("create_file -> write");
+                    std::abort();
+                }
+                left -= rv;
+            }
+            deallocate_resident_memory(buf, buf_size);
         }
         return fd;
     }
@@ -82,6 +99,21 @@ namespace mage::platform {
         }
     }
 
+    void write_to_file_at(int fd, const void* buffer, std::size_t length, std::uint64_t offset) {
+        const std::uint8_t* data = reinterpret_cast<const std::uint8_t*>(buffer);
+        std::size_t processed = 0;
+        while (processed != length) {
+            ssize_t rv = pwrite(fd, &data[processed], length, (off_t) (offset + processed));
+            if (rv <= 0) {
+                if (rv < 0) {
+                    std::perror("write_to_file_at -> pwrite");
+                }
+                std::abort();
+            }
+            processed += rv;
+        }
+    }
+
     std::size_t read_from_file(int fd, void* buffer, std::size_t length) {
         std::uint8_t* data = reinterpret_cast<std::uint8_t*>(buffer);
         std::size_t processed = 0;
@@ -90,6 +122,23 @@ namespace mage::platform {
             if (rv <= 0) {
                 if (rv < 0) {
                     std::perror("read_from_file -> read");
+                    std::abort();
+                }
+                break;
+            }
+            processed += rv;
+        }
+        return processed;
+    }
+
+    std::size_t read_from_file_at(int fd, void* buffer, std::size_t length, std::uint64_t offset) {
+        std::uint8_t* data = reinterpret_cast<std::uint8_t*>(buffer);
+        std::size_t processed = 0;
+        while (processed != length) {
+            ssize_t rv = pread(fd, &data[processed], length, (off_t) (offset + processed));
+            if (rv <= 0) {
+                if (rv < 0) {
+                    std::perror("read_from_file -> pread");
                     std::abort();
                 }
                 break;

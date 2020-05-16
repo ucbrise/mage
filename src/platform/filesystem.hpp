@@ -27,10 +27,12 @@
 
 namespace mage::platform {
     /* I'd prefer off_t instead of std::uint64_t, but off_t is POSIX. */
-    int create_file(const char* filename, std::uint64_t length, bool direct = false);
+    int create_file(const char* filename, std::uint64_t length, bool direct = false, bool unsparsify = false);
     int open_file(const char* filename, std::uint64_t* length, bool direct = false);
     void write_to_file(int fd, const void* buffer, std::size_t length);
+    void write_to_file_at(int fd, const void* buffer, std::size_t length, std::uint64_t offset);
     std::size_t read_from_file(int fd, void* buffer, std::size_t length);
+    std::size_t read_from_file_at(int fd, void* buffer, std::size_t length, std::uint64_t offset);
     std::size_t read_available_from_file(int fd, void* buffer, std::size_t length);
     void seek_file(int fd, std::int64_t amount, bool relative = false);
     std::uint64_t tell_file(int fd);

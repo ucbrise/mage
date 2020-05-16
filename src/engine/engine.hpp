@@ -24,22 +24,35 @@
 
 #include <cassert>
 #include <cstddef>
+#include <cstdlib>
+#include <iostream>
 #include "instruction.hpp"
 #include "platform/filesystem.hpp"
 #include "platform/memory.hpp"
+#include "util/stats.hpp"
 
 namespace mage::engine {
     template <typename Protocol>
     class Engine {
     public:
-        Engine(Protocol& prot) : protocol(prot), memory(nullptr), memory_size(0) {
+        Engine(Protocol& prot) : protocol(prot), memory(nullptr), memory_size(0), swap_in("SWAP-IN (us)", true), swap_out("SWAP-OUT (us)", true) {
         }
 
         void init(PageShift shift, std::uint64_t num_pages, std::uint64_t swap_pages, std::string swapfile) {
             assert(this->memory == nullptr);
             this->memory_size = pg_addr(num_pages, shift) * sizeof(typename Protocol::Wire);
             this->memory = platform::allocate_resident_memory<typename Protocol::Wire>(this->memory_size);
-            this->swapfd = platform::create_file(swapfile.c_str(), pg_addr(swap_pages, shift) * sizeof(typename Protocol::Wire), false);
+            std::uint64_t required_size = pg_addr(swap_pages, shift) * sizeof(typename Protocol::Wire);
+            if (swapfile.starts_with("/dev/")) {
+                std::uint64_t length;
+                this->swapfd = platform::open_file(swapfile.c_str(), &length, true);
+                if (length < required_size) {
+                    std::cerr << "Disk too small: size is " << length << " B, requires " << required_size << " B" << std::endl;
+                    std::abort();
+                }
+            } else {
+                this->swapfd = platform::create_file(swapfile.c_str(), required_size, true, true);
+            }
             this->page_shift = shift;
         }
 
@@ -66,6 +79,9 @@ namespace mage::engine {
         void execute_bit_or(const PackedPhysInstruction& phys);
         void execute_bit_xor(const PackedPhysInstruction& phys);
         void execute_value_select(const PackedPhysInstruction& phys);
+
+        util::StreamStats swap_in;
+        util::StreamStats swap_out;
 
     private:
         Protocol& protocol;
