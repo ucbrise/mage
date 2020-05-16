@@ -20,6 +20,7 @@
  */
 
 #include <cstring>
+#include <chrono>
 #include <iostream>
 #include <string>
 #include "engine/engine.hpp"
@@ -86,20 +87,29 @@ int main(int argc, char** argv) {
 
     /* Create the network connection. */
 
+    std::chrono::time_point<std::chrono::steady_clock> start;
+    std::chrono::time_point<std::chrono::steady_clock> end;
+
     int socket;
     if (garble) {
         socket = platform::network_connect(host.c_str(), port.c_str());
 
         schemes::HalfGatesGarbler p(input_file.c_str(), output_file.c_str(), socket);
+        start = std::chrono::steady_clock::now();
         engine::SingleCoreEngine executor(prog_file.c_str(), "garbler_swapfile", p);
         executor.execute_program();
     } else {
         socket = platform::network_accept(port.c_str());
 
         schemes::HalfGatesEvaluator p(input_file.c_str(), socket);
+        start = std::chrono::steady_clock::now();
         engine::SingleCoreEngine executor(prog_file.c_str(), "evaluator_swapfile", p);
         executor.execute_program();
     }
+    end = std::chrono::steady_clock::now();
+
+    std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    std::cerr << ms.count() << " ms" << std::endl;
 
     platform::network_close(socket);
 }

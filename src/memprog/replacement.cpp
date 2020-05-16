@@ -59,15 +59,7 @@ namespace mage::memprog {
         return this->next_storage_frame;
     }
 
-    StoragePageNumber Allocator::emit_swapout(PhysPageNumber primary) {
-        StoragePageNumber secondary;
-        if (this->free_storage_frames.empty()) {
-            secondary = this->next_storage_frame++;
-        } else {
-            secondary = this->free_storage_frames.back();
-            this->free_storage_frames.pop_back();
-        }
-
+    void Allocator::emit_swapout(PhysPageNumber primary, StoragePageNumber secondary) {
         constexpr std::size_t length = PackedPhysInstruction::size(InstructionFormat::Swap);
         PackedPhysInstruction& phys = this->phys_prog.start_instruction(length);
         phys.header.operation = OpCode::SwapOut;
@@ -76,8 +68,6 @@ namespace mage::memprog {
         phys.swap.storage = secondary;
         this->phys_prog.finish_instruction(length);
         this->num_swapouts++;
-
-        return secondary;
     }
 
     void Allocator::emit_swapin(StoragePageNumber secondary, PhysPageNumber primary) {
@@ -89,8 +79,6 @@ namespace mage::memprog {
         phys.swap.storage = secondary;
         this->phys_prog.finish_instruction(length);
         this->num_swapins++;
-
-        this->free_storage_frames.push_back(secondary);
     }
 
     BeladyAllocator::BeladyAllocator(std::string output_file, std::string virtual_program_file, std::string annotations_file, PhysPageNumber num_page_frames, PageShift shift)
@@ -116,7 +104,9 @@ namespace mage::memprog {
                 if (iter != this->page_table.end() && iter->second.resident) {
                     /* Page is already resident; just use its current frame. */
                     just_swapped_in[j] = false;
-                    ppns[j] = iter->second.ppn;
+                    PageTableEntry& pte = iter->second;
+                    ppns[j] = pte.ppn;
+                    pte.dirty |= (j == 0);
 
                     /*
                      * If page is never used again, remove it from page table.
@@ -128,6 +118,9 @@ namespace mage::memprog {
                      * the same physical page frame.
                      */
                     if (ann.slots[j].next_use == invalid_instr) {
+                        if (pte.spn_allocated) {
+                            this->free_storage_frame(pte.spn);
+                        }
                         this->page_table.erase(iter);
                         this->next_use_heap.erase(vpn);
                     }
@@ -156,7 +149,14 @@ namespace mage::memprog {
                         ppn = evict_pte.ppn;
                         assert(pair.first.get_usage_time() != invalid_instr);
                         evict_pte.resident = false;
-                        evict_pte.spn = this->emit_swapout(ppn);
+                        if (evict_pte.dirty) {
+                            evict_pte.dirty = false;
+                            if (!evict_pte.spn_allocated) {
+                                evict_pte.spn = this->alloc_storage_frame();
+                                evict_pte.spn_allocated = true;
+                            }
+                            this->emit_swapout(ppn, evict_pte.spn);
+                        }
                     }
 
                     /* Now, swap the desired vpn into the page frame. */
@@ -171,6 +171,8 @@ namespace mage::memprog {
                         if (ann.slots[j].next_use != invalid_instr) {
                             PageTableEntry pte;
                             pte.resident = true;
+                            pte.spn_allocated = false;
+                            pte.dirty = true; // we're guaranteed to be an output on first use
                             pte.ppn = ppn;
                             auto rv = this->page_table.insert(std::make_pair(vpn, pte));
                             assert(rv.second);
@@ -184,10 +186,12 @@ namespace mage::memprog {
                          */
                         PageTableEntry& pte = iter->second;
                         assert(!pte.resident);
+                        assert(pte.spn_allocated);
                         this->emit_swapin(pte.spn, ppn);
                         if (ann.slots[j].next_use == invalid_instr) {
                             this->page_table.erase(iter);
                         } else {
+                            pte.dirty |= (j == 0);
                             pte.resident = true;
                             pte.ppn = ppn;
                         }

@@ -46,8 +46,22 @@ namespace mage::memprog {
         StoragePageNumber get_num_storage_frames() const;
 
     protected:
-        StoragePageNumber emit_swapout(PhysPageNumber primary);
+        void emit_swapout(PhysPageNumber primary, StoragePageNumber secondary);
         void emit_swapin(StoragePageNumber secondary, PhysPageNumber primary);
+
+        StoragePageNumber alloc_storage_frame() {
+            if (this->free_storage_frames.empty()) {
+                return this->next_storage_frame++;
+            } else {
+                StoragePageNumber spn = this->free_storage_frames.back();
+                this->free_storage_frames.pop_back();
+                return spn;
+            }
+        }
+
+        void free_storage_frame(StoragePageNumber spn) {
+            this->free_storage_frames.push_back(spn);
+        }
 
         bool page_frame_available() const {
             return !this->free_page_frames.empty();
@@ -87,11 +101,11 @@ namespace mage::memprog {
             return this->usage;
         }
 
-        bool operator<(const BeladyScore& other) const {
+        bool operator <(const BeladyScore& other) const {
             return this->usage > other.usage;
         }
 
-        bool operator==(const BeladyScore& other) const {
+        bool operator ==(const BeladyScore& other) const {
             return this->usage == other.usage;
         }
 
@@ -100,13 +114,12 @@ namespace mage::memprog {
     };
 
     struct PageTableEntry {
-        union {
-            PhysPageNumber ppn : physical_address_bits;
-            StoragePageNumber spn : storage_address_bits;
-            std::uint64_t pad : 56;
-        } __attribute__((packed));
+        bool spn_allocated;
         bool resident;
-    };
+        bool dirty;
+        StoragePageNumber spn : storage_address_bits;
+        PhysPageNumber ppn : physical_address_bits;
+    } __attribute__((packed));;
 
     class BeladyAllocator : public Allocator {
     public:
