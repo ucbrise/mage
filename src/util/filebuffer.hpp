@@ -136,10 +136,8 @@ namespace mage::util {
             if constexpr(backwards_readable) {
                 maximum_size += 1;
             }
-            if (maximum_size > this->active_size - this->position) {
-                this->rebuffer();
+            while (maximum_size > this->active_size - this->position && this->rebuffer()) {
             }
-            assert(maximum_size <= this->active_size - this->position);
             return &this->buffer.mapping()[this->position];
         }
 
@@ -150,12 +148,14 @@ namespace mage::util {
             this->position += actual_size;
         }
 
-        void rebuffer() {
+        bool rebuffer() {
             std::uint8_t* mapping = this->buffer.mapping();
             std::size_t leftover = this->active_size - this->position;
             std::copy(&mapping[this->position], &mapping[this->active_size], mapping);
-            this->active_size = leftover + platform::read_available_from_file(this->fd, &mapping[leftover], this->buffer.size() - leftover);
+            std::size_t rv = platform::read_available_from_file(this->fd, &mapping[leftover], this->buffer.size() - leftover);
+            this->active_size = leftover + rv;
             this->position = 0;
+            return rv != 0;
         }
 
     protected:
@@ -211,7 +211,7 @@ namespace mage::util {
 
         void rebuffer() {
             std::uint8_t* mapping = this->buffer.mapping();
-            std::size_t size = this->buffer.size();
+            std::size_t size = this->buffer.size() - slack;
             std::uint64_t to_read = size - this->position;
             to_read = std::min(to_read, this->length_left);
             std::copy_backward(mapping, &mapping[this->position], &mapping[to_read + this->position]);
@@ -230,6 +230,13 @@ namespace mage::util {
     private:
         std::size_t position;
         platform::MappedFile<std::uint8_t> buffer;
+
+        /*
+         * We need to rebuffer a few bytes early because at some optimization
+         * levels, the code for reading a bitfield accesses a few bytes past
+         * the struct.
+         */
+        static constexpr const std::size_t slack = 7;
     };
 }
 
