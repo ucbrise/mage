@@ -26,6 +26,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <iostream>
+#include <string>
 #include "instruction.hpp"
 #include "platform/filesystem.hpp"
 #include "platform/memory.hpp"
@@ -43,7 +44,7 @@ namespace mage::engine {
             this->memory_size = pg_addr(num_pages, shift) * sizeof(typename Protocol::Wire);
             this->memory = platform::allocate_resident_memory<typename Protocol::Wire>(this->memory_size);
             std::uint64_t required_size = pg_addr(swap_pages, shift) * sizeof(typename Protocol::Wire);
-            if (swapfile.starts_with("/dev/")) {
+            if (swapfile.rfind("/dev/", 0) != std::string::npos) {
                 std::uint64_t length;
                 this->swapfd = platform::open_file(swapfile.c_str(), &length, true);
                 if (length < required_size) {
