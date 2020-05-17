@@ -66,7 +66,7 @@ namespace mage::util {
     };
 
     inline std::ostream& operator <<(std::ostream& out, const StreamStats& s) {
-        return out << s.label << ": ( min = " << s.stat_min << ", avg = " << s.stat_sum / s.stat_count << ", max = " << s.stat_max << ", count = " << s.stat_count << ", sum = " << s.stat_sum;
+        return out << s.label << ": ( min = " << s.stat_min << ", avg = " << (s.stat_count == 0 ? 0 : s.stat_sum / s.stat_count) << ", max = " << s.stat_max << ", count = " << s.stat_count << ", sum = " << s.stat_sum;
     }
 }
 
