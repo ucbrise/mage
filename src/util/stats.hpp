@@ -32,7 +32,8 @@ namespace mage::util {
         friend std::ostream& operator <<(std::ostream& out, const StreamStats& s);
 
     public:
-        StreamStats(std::string name, bool print_stats_on_exit = false) : label(name), print_on_exit(print_stats_on_exit), stat_count(0) {
+        StreamStats(std::string name, bool print_stats_on_exit = false) : label(name), print_on_exit(print_stats_on_exit),
+            stat_max(0), stat_sum(0), stat_min(0), stat_count(0) {
         }
 
         ~StreamStats() {
