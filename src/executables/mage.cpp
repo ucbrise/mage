@@ -65,10 +65,17 @@ int main(int argc, char** argv) {
     std::string output_file(file_base);
     output_file.append(".output");
 
+    std::chrono::time_point<std::chrono::steady_clock> start;
+    std::chrono::time_point<std::chrono::steady_clock> end;
+
     if (plaintext) {
         schemes::PlaintextEvaluator p(input_file.c_str(), output_file.c_str());
+        start = std::chrono::steady_clock::now();
         engine::SingleCoreEngine executor(prog_file.c_str(), "swapfile", p);
         executor.execute_program();
+        end = std::chrono::steady_clock::now();
+        std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        std::cerr << ms.count() << " ms" << std::endl;
         return 0;
     }
 
@@ -86,9 +93,6 @@ int main(int argc, char** argv) {
     }
 
     /* Create the network connection. */
-
-    std::chrono::time_point<std::chrono::steady_clock> start;
-    std::chrono::time_point<std::chrono::steady_clock> end;
 
     int socket;
     if (garble) {
