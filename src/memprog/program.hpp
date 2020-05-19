@@ -29,15 +29,24 @@
 #include <vector>
 #include "addr.hpp"
 #include "instruction.hpp"
+#include "memprog/placement.hpp"
 #include "opcode.hpp"
 #include "programfile.hpp"
 #include "stream.hpp"
 
 namespace mage::memprog {
+    template <typename Placer>
     class Program : public VirtProgramFileWriter {
     public:
-        Program(std::string filename, PageShift shift = 16);
-        ~Program();
+        Program(std::string filename, PageShift shift = 16) : VirtProgramFileWriter(filename, shift), placer(shift) {
+        }
+
+        ~Program() {
+            this->set_page_count(this->placer.get_num_pages());
+            if (Program<Placer>::current_working_program == this) {
+                Program<Placer>::current_working_program = nullptr;
+            }
+        }
 
         Instruction& instruction() {
             return this->current;
@@ -46,7 +55,7 @@ namespace mage::memprog {
         VirtAddr commit_instruction(BitWidth output_width) {
             if (output_width != 0) {
                 bool fresh_page;
-                this->current.header.output = this->allocate_virtual(output_width, fresh_page);
+                this->current.header.output = this->placer.allocate_virtual(output_width, fresh_page);
                 if (fresh_page) {
                     this->current.header.flags |= FlagOutputPageFirstUse;
                 }
@@ -55,28 +64,30 @@ namespace mage::memprog {
             return this->current.header.output;
         }
 
-        static Program* set_current_working_program(Program* cwp);
-        static Program* get_current_working_program();
-
-    private:
-        VirtAddr allocate_virtual(BitWidth width, bool& fresh_page) {
-            VirtAddr addr;
-            assert(width != 0);
-            if (pg_num(this->next_free_address, this->page_shift) == pg_num(this->next_free_address + width - 1, this->page_shift)) {
-                addr = this->next_free_address;
-            } else {
-                addr = pg_next(this->next_free_address, this->page_shift);
-            }
-            this->next_free_address = addr + width;
-            fresh_page = (pg_offset(addr, this->page_shift) == 0);
-            return addr;
+        void recycle(VirtAddr addr, BitWidth width) {
+            this->placer.deallocate_virtual(addr, width);
         }
 
+        static Program<Placer>* set_current_working_program(Program<Placer>* cwp) {
+            Program<Placer>* old_cwp = Program<Placer>::current_working_program;
+            Program<Placer>::current_working_program = cwp;
+            return old_cwp;
+        }
+
+        static Program<Placer>* get_current_working_program() {
+            return Program<Placer>::current_working_program;
+        }
+
+    private:
         Instruction current;
-        VirtAddr next_free_address;
-        PageShift page_shift;
-        static Program* current_working_program;
+        Placer placer;
+        static Program<Placer>* current_working_program;
     };
+
+    template <typename Placer>
+    Program<Placer>* Program<Placer>::current_working_program = nullptr;
+
+    using DefaultProgram = Program<BinnedPlacer>;
 }
 
 #endif

@@ -117,6 +117,11 @@ namespace mage::util {
             this->data.resize(newsize);
         }
 
+        const K& get_key(const V& value) {
+            Index i = this->locator.at(value);
+            return this->data[i].first;
+        }
+
         void decrease_key(const K& newkey, const V& value) {
             Index i = this->locator.at(value);
             if (newkey == this->data[i].first) {
@@ -127,9 +132,20 @@ namespace mage::util {
             this->update(i, std::make_pair(newkey, value));
         }
 
+        void increase_key(const K& newkey, const V& value) {
+            Index i = this->locator.at(value);
+            if (newkey == this->data[i].first) {
+                return;
+            }
+            assert(newkey > this->data[i].first);
+            i = this->bubbleDown(i, newkey, this->data.size());
+            this->update(i, std::make_pair(newkey, value));
+        }
+
         bool contains(const V& value) {
             return this->locator.find(value) != this->locator.end();
         }
+
 
     private:
         using Index = std::uint64_t;

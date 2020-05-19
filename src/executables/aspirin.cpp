@@ -22,6 +22,7 @@
 #include "dsl/integer.hpp"
 #include "dsl/sort.hpp"
 #include "memprog/annotation.hpp"
+#include "memprog/program.hpp"
 #include "memprog/replacement.hpp"
 #include "programfile.hpp"
 #include <iostream>
@@ -32,7 +33,7 @@ using mage::BitWidth;
 
 template <BitWidth bits>
 struct Input {
-    Input(Program& p) : patient_id_concat_timestamp(p), diagnosis(p) {
+    Input(DefaultProgram& p) : patient_id_concat_timestamp(p), diagnosis(p) {
     }
 
     Integer<bits> patient_id_concat_timestamp;
@@ -46,12 +47,12 @@ struct Input {
 };
 
 template <BitWidth patient_id_bits = 32, BitWidth timestamp_bits = 32, BitWidth result_bits = 32>
-void create_aspirin_circuit(Program& p, int input_size_per_party) {
+void create_aspirin_circuit(DefaultProgram& p, int input_size_per_party) {
     int input_array_length = input_size_per_party * 2;
     std::vector<Input<patient_id_bits + timestamp_bits>> inputs;
-    inputs.resize(input_array_length, Input<patient_id_bits + timestamp_bits>(p));
 
     for (int i = 0; i != input_array_length; i++) {
+        inputs.emplace_back(p);
         inputs[i].patient_id_concat_timestamp.mark_input();
         inputs[i].diagnosis.mark_input();
     }
@@ -86,7 +87,8 @@ void create_aspirin_circuit(Program& p, int input_size_per_party) {
 }
 
 std::uint8_t page_shift = 10;
-std::uint64_t num_pages = 1 << 5;
+// std::uint64_t num_pages = 1 << 5;
+std::uint64_t num_pages = 65536 * 3;
 
 // About 27 GiB
 // std::uint64_t num_pages = 1769472;
@@ -107,7 +109,7 @@ int main(int argc, char** argv) {
     program_filename.append(".prog");
 
     {
-        mage::memprog::Program program(program_filename, page_shift);
+        mage::memprog::DefaultProgram program(program_filename, page_shift);
         create_aspirin_circuit(program, input_size_per_party);
         std::cout << "Created program with " << program.num_instructions() << " instructions" << std::endl;
     }

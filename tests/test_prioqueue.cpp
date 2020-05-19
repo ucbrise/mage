@@ -188,3 +188,40 @@ BOOST_DATA_TEST_CASE(test_prioqueue_decrease_key, bdata::make(reverse) + RandomI
         BOOST_CHECK(sorted[i] == popped[i]);
     }
 }
+
+BOOST_DATA_TEST_CASE(test_prioqueue_increase_key, bdata::make(reverse) + RandomIntsDataset(99)) {
+    std::vector<int> numbers(sample.data);
+
+    std::vector<int> numbers2;
+    for (int i = numbers.size() / 2; i != numbers.size(); i++) {
+        numbers2.push_back(numbers[i]);
+    }
+    numbers.resize(numbers.size() / 2);
+
+    for (int i = 0; i != numbers.size(); i++) {
+        numbers[i] = std::max(numbers[i], numbers2[i]);
+    }
+
+    PriorityQueue<int, int> pq;
+    for (int i = 0; i != numbers.size(); i++) {
+        pq.insert(numbers2[i], numbers[i]);
+    }
+
+    for (int i = 0; i != numbers.size(); i++) {
+        pq.increase_key(numbers[i], numbers[i]);
+    }
+
+    std::vector<int> popped;
+    while (!pq.empty()) {
+        auto res = pq.remove_min();
+        BOOST_CHECK(res.first == res.second);
+        popped.push_back(res.second);
+    }
+
+    std::vector<int> sorted(numbers);
+    std::sort(sorted.begin(), sorted.end());
+    BOOST_REQUIRE(sorted.size() == popped.size());
+    for (int i = 0; i != numbers.size(); i++) {
+        BOOST_CHECK(sorted[i] == popped[i]);
+    }
+}

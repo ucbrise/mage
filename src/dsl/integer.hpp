@@ -29,7 +29,7 @@
 #include <cstdint>
 
 namespace mage::dsl {
-    using memprog::Program;
+    using memprog::DefaultProgram;
 
     template <BitWidth bits>
     class Integer;
@@ -44,10 +44,10 @@ namespace mage::dsl {
         static_assert(bits > 0);
 
     public:
-        Integer(Program& program = *Program::get_current_working_program()) : v(invalid_vaddr), p(&program) {
+        Integer(DefaultProgram& program = *DefaultProgram::get_current_working_program()) : v(invalid_vaddr), p(&program), sliced(false) {
         }
 
-        Integer(std::uint32_t public_constant, Program& program = *Program::get_current_working_program()) : p(&program) {
+        Integer(std::uint32_t public_constant, DefaultProgram& program = *DefaultProgram::get_current_working_program()) : p(&program), sliced(false) {
             Instruction& instr = this->p->instruction();
             instr.header.operation = OpCode::PublicConstant;
             instr.header.width = bits;
@@ -56,11 +56,20 @@ namespace mage::dsl {
             this->v = this->p->commit_instruction(bits);
         }
 
-        Integer(const Integer<bits>& other) : v(other.v), p(other.p) {
+        Integer(const Integer<bits>& other) = delete;
+
+        Integer(Integer<bits>&& other) : v(other.v), p(other.p), sliced(other.sliced) {
+            other.v = invalid_vaddr;
+            other.p = nullptr;
+            other.sliced = false;
+        }
+
+        ~Integer() {
+            this->recycle();
         }
 
         void mark_input() {
-            assert(this->v == invalid_vaddr);
+            this->recycle();
 
             Instruction& instr = this->p->instruction();
             instr.header.operation = OpCode::Input;
@@ -78,9 +87,19 @@ namespace mage::dsl {
             this->p->commit_instruction(0);
         }
 
-        Integer<bits>& operator =(const Integer<bits>& other) {
+        Integer<bits>& operator =(const Integer<bits>& other) = delete;
+
+        Integer<bits>& operator =(Integer<bits>&& other) {
+            this->recycle();
+
             this->v = other.v;
             this->p = other.p;
+            this->sliced = other.sliced;
+
+            other.v = invalid_vaddr;
+            other.p = nullptr;
+            other.sliced = false;
+
             return *this;
         }
 
@@ -200,8 +219,18 @@ namespace mage::dsl {
         }
 
     private:
+        void recycle() {
+            if (this->sliced) {
+                this->sliced = false;
+                this->v = invalid_vaddr;
+            } else if (this->v != invalid_vaddr) {
+                this->p->recycle(this->v, bits);
+                this->v = invalid_vaddr;
+            }
+        }
+
         template <BitWidth arg0_bits>
-        Integer(OpCode operation, const Integer<arg0_bits>& arg0) : p(arg0.p) {
+        Integer(OpCode operation, const Integer<arg0_bits>& arg0) : p(arg0.p), sliced(false) {
             Instruction& instr = this->p->instruction();
             instr.header.operation = operation;
             instr.header.width = arg0_bits;
@@ -211,7 +240,7 @@ namespace mage::dsl {
         }
 
         template <BitWidth arg_bits>
-        Integer(OpCode operation, const Integer<arg_bits>& arg0, const Integer<arg_bits>& arg1) : p(arg0.p) {
+        Integer(OpCode operation, const Integer<arg_bits>& arg0, const Integer<arg_bits>& arg1) : p(arg0.p), sliced(false) {
             assert(arg0.p == arg1.p);
 
             Instruction& instr = this->p->instruction();
@@ -224,7 +253,7 @@ namespace mage::dsl {
         }
 
         template <BitWidth arg2_bits>
-        Integer(OpCode operation, const Integer<bits>& arg0, const Integer<bits>& arg1, const Integer<arg2_bits>& arg2) : p(arg0.p) {
+        Integer(OpCode operation, const Integer<bits>& arg0, const Integer<bits>& arg1, const Integer<arg2_bits>& arg2) : p(arg0.p), sliced(false) {
             assert(arg0.p == arg1.p);
             assert(arg0.p == arg2.p);
 
@@ -238,14 +267,17 @@ namespace mage::dsl {
             this->v = this->p->commit_instruction(bits);
         }
 
-        Integer(VirtAddr alias_v, BitWidth offset, Program* program) : v(alias_v + offset), p(program) {
+        Integer(VirtAddr alias_v, BitWidth offset, DefaultProgram* program) : v(alias_v + offset), p(program), sliced(true) {
         }
 
         /* Address of the underlying data. */
         VirtAddr v;
 
         /* Program that this integer is part of. */
-        Program* p;
+        DefaultProgram* p;
+
+        /* Is the address sliced? */
+        bool sliced;
     };
 }
 
