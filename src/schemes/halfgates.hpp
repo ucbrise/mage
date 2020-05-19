@@ -31,9 +31,11 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include "crypto/aes.hpp"
 #include "crypto/block.hpp"
 #include "crypto/mitccrh.hpp"
 #include "crypto/prg.hpp"
+#include "crypto/prp.hpp"
 #include "util/binaryfile.hpp"
 
 namespace mage::schemes {
@@ -47,10 +49,6 @@ namespace mage::schemes {
             tmp.random_block(&this->seed);
             Wire a;
             this->set_delta(a);
-            tmp.random_block(&this->start_point);
-            this->mitccrh.setS(this->start_point);
-
-            this->conn_writer.write<Wire>() = this->start_point;
 
             Wire input_seed;
             this->prg.random_block(&input_seed);
@@ -92,11 +90,7 @@ namespace mage::schemes {
         void op_and(Wire& output, const Wire& input1, const Wire& input2) {
             crypto::block out1;
             crypto::block table[2];
-            if (mitccrh.key_used == KS_BATCH_N) {
-                mitccrh.renew_ks(this->global_id);
-            }
-            garble_gate_garble_halfgates(input1, crypto::xorBlocks(input1, this->delta), input2, crypto::xorBlocks(input2, this->delta), &output, &out1, this->delta, table, &this->mitccrh);
-            this->global_id++;
+            garble_gate_garble_halfgates(input1, crypto::xorBlocks(input1, this->delta), input2, crypto::xorBlocks(input2, this->delta), &output, &out1, this->delta, table, this->global_id++, &this->prp.aes);
             this->conn_writer.write<crypto::block>() = table[0];
             this->conn_writer.write<crypto::block>() = table[1];
         }
@@ -133,7 +127,52 @@ namespace mage::schemes {
             this->public_constants[1] = crypto::xorBlocks(this->public_constants[1], this->delta);
         }
 
-        static inline void garble_gate_garble_halfgates(crypto::block LA0, crypto::block A1, crypto::block LB0, crypto::block B1, crypto::block *out0, crypto::block *out1, crypto::block delta, crypto::block *table, crypto::MiTCCRH *mitccrh) {
+        static inline void garble_gate_garble_halfgates(crypto::block LA0, crypto::block A1, crypto::block LB0, crypto::block B1, crypto::block *out0, crypto::block *out1, crypto::block delta, crypto::block *table, std::uint64_t idx, const crypto::AES_KEY* key) {
+            long pa = crypto::getLSB(LA0);
+            long pb = crypto::getLSB(LB0);
+            crypto::block tweak1, tweak2;
+            crypto::block HLA0, HA1, HLB0, HB1;
+            crypto::block tmp, W0;
+
+            tweak1 = crypto::makeBlock(2 * idx, (std::uint64_t) 0);
+            tweak2 = crypto::makeBlock(2 * idx + 1, (std::uint64_t) 0);
+
+            {
+                crypto::block keys[4];
+                crypto::block masks[4];
+
+                keys[0] = crypto::xorBlocks(crypto::double_block(LA0), tweak1);
+                keys[1] = crypto::xorBlocks(crypto::double_block(A1), tweak1);
+                keys[2] = crypto::xorBlocks(crypto::double_block(LB0), tweak2);
+                keys[3] = crypto::xorBlocks(crypto::double_block(B1), tweak2);
+                masks[0] = keys[0];
+                masks[1] = keys[1];
+                masks[2] = keys[2];
+                masks[3] = keys[3];
+                AES_ecb_encrypt_blks(keys, 4, key);
+                HLA0 = crypto::xorBlocks(keys[0], masks[0]);
+                HA1 = crypto::xorBlocks(keys[1], masks[1]);
+                HLB0 = crypto::xorBlocks(keys[2], masks[2]);
+                HB1 = crypto::xorBlocks(keys[3], masks[3]);
+            }
+
+            table[0] = crypto::xorBlocks(HLA0, HA1);
+            if (pb)
+                table[0] = crypto::xorBlocks(table[0], delta);
+            W0 = HLA0;
+            if (pa)
+                W0 = crypto::xorBlocks(W0, table[0]);
+            tmp = crypto::xorBlocks(HLB0, HB1);
+            table[1] = crypto::xorBlocks(tmp, LA0);
+            W0 = crypto::xorBlocks(W0, HLB0);
+            if (pb)
+                W0 = crypto::xorBlocks(W0, tmp);
+
+            *out0 = W0;
+            *out1 = crypto::xorBlocks(*out0, delta);
+        }
+
+        static inline void garble_gate_garble_halfgates_mitccrh(crypto::block LA0, crypto::block A1, crypto::block LB0, crypto::block B1, crypto::block *out0, crypto::block *out1, crypto::block delta, crypto::block *table, crypto::MiTCCRH *mitccrh) {
             long pa = crypto::getLSB(LA0);
             long pb = crypto::getLSB(LB0);
             crypto::block HLA0, HA1, HLB0, HB1;
@@ -170,11 +209,10 @@ namespace mage::schemes {
 
         std::int64_t global_id;
         Wire delta;
-        Wire start_point;
         Wire seed;
         Wire public_constants[2];
-        crypto::MiTCCRH mitccrh;
 
+        crypto::PRP prp;
         crypto::PRG prg;
         crypto::PRG shared_prg;
     };
@@ -187,11 +225,6 @@ namespace mage::schemes {
             : global_id(0), input_reader(input_file.c_str()), conn_reader(conn_fd), conn_writer(conn_fd) {
             crypto::PRG tmp(crypto::fix_key);
             tmp.random_block(this->public_constants, 2);
-            tmp.random_block(&this->start_point);
-            mitccrh.start_point = this->start_point;
-
-            this->start_point = this->conn_reader.read<Wire>();
-            this->mitccrh.setS(this->start_point);
 
             crypto::block input_seed = this->conn_reader.read<crypto::block>();
             this->shared_prg.set_seed(input_seed);
@@ -214,11 +247,7 @@ namespace mage::schemes {
             crypto::block table[2];
             table[0] = this->conn_reader.read<crypto::block>();
             table[1] = this->conn_reader.read<crypto::block>();
-            if (mitccrh.key_used == KS_BATCH_N) {
-                mitccrh.renew_ks(this->global_id);
-            }
-            garble_gate_eval_halfgates(input1, input2, &output, table, &this->mitccrh);
-            this->global_id++;
+            garble_gate_eval_halfgates(input1, input2, &output, table, this->global_id++, &this->prp.aes);
         }
 
         void op_xor(Wire& output, const Wire& input1, const Wire& input2) {
@@ -246,7 +275,41 @@ namespace mage::schemes {
         }
 
     private:
-        static inline void garble_gate_eval_halfgates(crypto::block A, crypto::block B, crypto::block *out, const crypto::block *table, crypto::MiTCCRH *mitccrh) {
+        static inline void garble_gate_eval_halfgates(crypto::block A, crypto::block B, crypto::block *out, const crypto::block *table, std::uint64_t idx, const crypto::AES_KEY* key) {
+            crypto::block HA, HB, W;
+            int sa, sb;
+            crypto::block tweak1, tweak2;
+
+            sa = crypto::getLSB(A);
+            sb = crypto::getLSB(B);
+
+            tweak1 = crypto::makeBlock(2 * idx, (std::uint64_t) 0);
+            tweak2 = crypto::makeBlock(2 * idx + 1, (std::uint64_t) 0);
+
+            {
+                crypto::block keys[2];
+                crypto::block masks[2];
+
+                keys[0] = crypto::xorBlocks(crypto::double_block(A), tweak1);
+                keys[1] = crypto::xorBlocks(crypto::double_block(B), tweak2);
+                masks[0] = keys[0];
+                masks[1] = keys[1];
+                AES_ecb_encrypt_blks(keys, 2, key);
+                HA = crypto::xorBlocks(keys[0], masks[0]);
+                HB = crypto::xorBlocks(keys[1], masks[1]);
+            }
+
+            W = crypto::xorBlocks(HA, HB);
+            if (sa)
+                W = crypto::xorBlocks(W, table[0]);
+            if (sb) {
+                W = crypto::xorBlocks(W, table[1]);
+                W = crypto::xorBlocks(W, A);
+            }
+            *out = W;
+        }
+
+        static inline void garble_gate_eval_halfgates_mitccrh(crypto::block A, crypto::block B, crypto::block *out, const crypto::block *table, crypto::MiTCCRH *mitccrh) {
             crypto::block HA, HB, W;
             int sa, sb;
 
@@ -273,10 +336,9 @@ namespace mage::schemes {
         util::BufferedFileWriter<false> conn_writer;
 
         std::int64_t global_id;
-        Wire start_point;
         Wire public_constants[2];
-        crypto::MiTCCRH mitccrh;
 
+        crypto::PRP prp;
         crypto::PRG shared_prg;
     };
 }
