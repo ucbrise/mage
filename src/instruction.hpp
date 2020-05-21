@@ -78,6 +78,8 @@ namespace mage {
             struct {
                 std::uint64_t storage : storage_bits;
             } __attribute__((packed)) swap;
+            struct {
+            } __attribute__((packed)) nothing;
         };
 
         static constexpr std::size_t size(InstructionFormat format) {
@@ -94,6 +96,8 @@ namespace mage {
                 return sizeof(PackedInstruction<addr_bits, storage_bits>::header) + sizeof(PackedInstruction<addr_bits, storage_bits>::constant);
             case InstructionFormat::Swap:
                 return sizeof(PackedInstruction<addr_bits, storage_bits>::header) + sizeof(PackedInstruction<addr_bits, storage_bits>::swap);
+            case InstructionFormat::Nothing:
+                return sizeof(PackedInstruction<addr_bits, storage_bits>::header) + sizeof(PackedInstruction<addr_bits, storage_bits>::nothing);
             default:
                 std::abort();
             }
@@ -205,7 +209,6 @@ namespace mage {
 
         union {
             struct {
-                // Input
             } no_args;
             struct {
                 std::uint64_t input1;
@@ -225,6 +228,8 @@ namespace mage {
             struct {
                 std::uint64_t storage;
             } swap;
+            struct {
+            } nothing;
         };
 
         template <std::uint8_t addr_bits, std::uint8_t storage_bits>
@@ -258,6 +263,9 @@ namespace mage {
                 return sizeof(packed.header) + sizeof(packed.constant);
             case InstructionFormat::Swap:
                 packed.swap.storage = this->swap.storage;
+                return sizeof(packed.header) + sizeof(packed.swap);
+            case InstructionFormat::Nothing:
+                return sizeof(packed.header) + sizeof(packed.nothing);
             default:
                 std::abort();
             }

@@ -30,8 +30,10 @@
 namespace mage {
     enum class OpCode : std::uint8_t {
         Undefined = 0,
-        SwapIn,
-        SwapOut,
+        IssueSwapIn,
+        IssueSwapOut,
+        FinishSwapIn,
+        FinishSwapOut,
         Input, // 1 argument
         Output, // 1 argument
         PublicConstant, // 0 arguments
@@ -56,7 +58,8 @@ namespace mage {
         TwoArgs = 2,
         ThreeArgs = 3,
         Constant = 4,
-        Swap = 5
+        Swap = 5,
+        Nothing = 6
     };
 
     constexpr int instruction_format_num_args(InstructionFormat format) {
@@ -71,6 +74,7 @@ namespace mage {
             return 3;
         case InstructionFormat::Constant:
         case InstructionFormat::Swap:
+        case InstructionFormat::Nothing:
             return 0;
         default:
             std::abort();
@@ -87,6 +91,7 @@ namespace mage {
         case InstructionFormat::Constant:
             return true;
         case InstructionFormat::Swap:
+        case InstructionFormat::Nothing:
             return false;
         default:
             std::abort();
@@ -111,9 +116,14 @@ namespace mage {
                 this->layout = InstructionFormat::NoArgs;
                 this->single_bit = false;
                 break;
-            case OpCode::SwapIn:
-            case OpCode::SwapOut:
+            case OpCode::IssueSwapIn:
+            case OpCode::IssueSwapOut:
                 this->layout = InstructionFormat::Swap;
+                this->single_bit = false;
+                break;
+            case OpCode::FinishSwapIn:
+            case OpCode::FinishSwapOut:
+                this->layout = InstructionFormat::Nothing;
                 this->single_bit = false;
                 break;
             case OpCode::PublicConstant:

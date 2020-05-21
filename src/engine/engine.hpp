@@ -21,12 +21,14 @@
 
 #ifndef MAGE_ENGINE_ENGINE_HPP_
 #define MAGE_ENGINE_ENGINE_HPP_
-
 #include <cassert>
 #include <cstddef>
+#include <cstdio>
 #include <cstdlib>
+#include <libaio.h>
 #include <iostream>
 #include <string>
+#include <unordered_map>
 #include "instruction.hpp"
 #include "platform/filesystem.hpp"
 #include "platform/memory.hpp"
@@ -35,8 +37,14 @@
 namespace mage::engine {
     template <typename Protocol>
     class Engine {
+        static const constexpr int aio_max_events = 1024;
+        static const constexpr int aio_process_batch_size = 32;
     public:
-        Engine(Protocol& prot) : protocol(prot), memory(nullptr), memory_size(0), swap_in("SWAP-IN (us)", true), swap_out("SWAP-OUT (us)", true) {
+        Engine(Protocol& prot) : protocol(prot), memory(nullptr), memory_size(0), swap_in("SWAP-IN (us)", true), swap_out("SWAP-OUT (us)", true), aio_ctx(0) {
+            if (io_setup(aio_max_events, &this->aio_ctx) != 0) {
+                std::perror("io_setup");
+                std::abort();
+            }
         }
 
         void init(PageShift shift, std::uint64_t num_pages, std::uint64_t swap_pages, std::string swapfile) {
@@ -58,14 +66,21 @@ namespace mage::engine {
         }
 
         virtual ~Engine() {
+            if (io_destroy(this->aio_ctx) != 0) {
+                std::perror("io_destroy");
+                std::abort();
+            }
             platform::deallocate_resident_memory(this->memory, this->memory_size);
             platform::close_file(this->swapfd);
         }
 
         std::size_t execute_instruction(const PackedPhysInstruction& phys);
+        void wait_for_finish_swap(PhysPageNumber ppn);
 
-        void execute_swap_in(const PackedPhysInstruction& phys);
-        void execute_swap_out(const PackedPhysInstruction& phys);
+        void execute_issue_swap_in(const PackedPhysInstruction& phys);
+        void execute_issue_swap_out(const PackedPhysInstruction& phys);
+        void execute_finish_swap_in(const PackedPhysInstruction& phys);
+        void execute_finish_swap_out(const PackedPhysInstruction& phys);
         void execute_public_constant(const PackedPhysInstruction& phys);
         void execute_int_add(const PackedPhysInstruction& phys);
         void execute_int_increment(const PackedPhysInstruction& phys);
@@ -90,6 +105,9 @@ namespace mage::engine {
         PageShift page_shift;
         std::size_t memory_size;
         int swapfd;
+
+        io_context_t aio_ctx;
+        std::unordered_map<PhysPageNumber, struct iocb> in_flight_swaps;
     };
 }
 

@@ -86,9 +86,9 @@ void create_aspirin_circuit(DefaultProgram& p, int input_size_per_party) {
     total.mark_output();
 }
 
-std::uint8_t page_shift = 10;
-// std::uint64_t num_pages = 1 << 5;
-std::uint64_t num_pages = 65536 * 3;
+std::uint8_t page_shift = 15;
+std::uint64_t num_pages = 1 << 5;
+// std::uint64_t num_pages = 65536 * 3;
 
 // About 27 GiB
 // std::uint64_t num_pages = 1769472;

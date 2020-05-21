@@ -60,24 +60,42 @@ namespace mage::memprog {
     }
 
     void Allocator::emit_swapout(PhysPageNumber primary, StoragePageNumber secondary) {
-        constexpr std::size_t length = PackedPhysInstruction::size(InstructionFormat::Swap);
-        PackedPhysInstruction& phys = this->phys_prog.start_instruction(length);
-        phys.header.operation = OpCode::SwapOut;
+        constexpr std::size_t length_init = PackedPhysInstruction::size(InstructionFormat::Swap);
+        constexpr std::size_t length_finish = PackedPhysInstruction::size(InstructionFormat::Nothing);
+
+        PackedPhysInstruction& phys = this->phys_prog.start_instruction(length_init);
+        phys.header.operation = OpCode::IssueSwapOut;
         phys.header.flags = 0;
         phys.header.output = primary;
         phys.swap.storage = secondary;
-        this->phys_prog.finish_instruction(length);
+        this->phys_prog.finish_instruction(length_init);
+
+        PackedPhysInstruction& finish = this->phys_prog.start_instruction(length_finish);
+        finish.header.operation = OpCode::FinishSwapOut;
+        finish.header.flags = 0;
+        finish.header.output = primary;
+        this->phys_prog.finish_instruction(length_finish);
+
         this->num_swapouts++;
     }
 
     void Allocator::emit_swapin(StoragePageNumber secondary, PhysPageNumber primary) {
-        constexpr std::size_t length = PackedPhysInstruction::size(InstructionFormat::Swap);
-        PackedPhysInstruction& phys = this->phys_prog.start_instruction(length);
-        phys.header.operation = OpCode::SwapIn;
+        constexpr std::size_t length_init = PackedPhysInstruction::size(InstructionFormat::Swap);
+        constexpr std::size_t length_finish = PackedPhysInstruction::size(InstructionFormat::Nothing);
+
+        PackedPhysInstruction& phys = this->phys_prog.start_instruction(length_init);
+        phys.header.operation = OpCode::IssueSwapIn;
         phys.header.flags = 0;
         phys.header.output = primary;
         phys.swap.storage = secondary;
-        this->phys_prog.finish_instruction(length);
+        this->phys_prog.finish_instruction(length_init);
+
+        PackedPhysInstruction& finish = this->phys_prog.start_instruction(length_finish);
+        finish.header.operation = OpCode::FinishSwapIn;
+        finish.header.flags = 0;
+        finish.header.output = primary;
+        this->phys_prog.finish_instruction(length_finish);
+
         this->num_swapins++;
     }
 

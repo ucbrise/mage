@@ -19,6 +19,9 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#ifndef MAGE_ENGINE_SINGLECORE_HPP_
+#define MAGE_ENGINE_SINGLECORE_HPP_
+
 #include <iostream>
 #include <string>
 #include "addr.hpp"
@@ -47,3 +50,5 @@ namespace mage::engine {
         PhysProgramFileReader input;
     };
 }
+
+#endif

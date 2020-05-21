@@ -20,8 +20,11 @@
  */
 
 #include "engine/engine.hpp"
+#include <cassert>
+#include <cerrno>
 #include <cstdint>
 #include <cstdlib>
+#include <libaio.h>
 #include <chrono>
 #include "addr.hpp"
 #include "instruction.hpp"
@@ -33,23 +36,88 @@
 namespace mage::engine {
 
     template <typename Protocol>
-    void Engine<Protocol>::execute_swap_in(const PackedPhysInstruction& phys) {
+    void Engine<Protocol>::execute_issue_swap_in(const PackedPhysInstruction& phys) {
         StoragePageNumber saddr = pg_addr(phys.swap.storage, this->page_shift);
         PhysPageNumber paddr = pg_addr(phys.header.output, this->page_shift);
+
+        struct iocb& op = this->in_flight_swaps[phys.header.output];
+        struct iocb* op_ptr = &op;
+        io_prep_pread(op_ptr, this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename Protocol::Wire), saddr);
+        op_ptr->data = &this->memory[paddr];
         auto start = std::chrono::steady_clock::now();
-        platform::read_from_file_at(this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename Protocol::Wire), saddr);
+        int rv = io_submit(this->aio_ctx, 1, &op_ptr);
+        if (rv != 1) {
+            std::cerr << "io_submit: " << std::strerror(-rv) << std::endl;
+            std::abort();
+        }
+        // platform::read_from_file_at(this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename Protocol::Wire), saddr);
         auto end = std::chrono::steady_clock::now();
         this->swap_in.event(std::chrono::duration_cast<std::chrono::microseconds>(end - start).count());
     }
 
     template <typename Protocol>
-    void Engine<Protocol>::execute_swap_out(const PackedPhysInstruction& phys) {
+    void Engine<Protocol>::execute_issue_swap_out(const PackedPhysInstruction& phys) {
         PhysPageNumber paddr = pg_addr(phys.header.output, this->page_shift);
         StoragePageNumber saddr = pg_addr(phys.swap.storage, this->page_shift);
+
+        struct iocb& op = this->in_flight_swaps[phys.header.output];
+        struct iocb* op_ptr = &op;
+        io_prep_pwrite(op_ptr, this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename Protocol::Wire), saddr);
+        op_ptr->data = &this->memory[paddr];
         auto start = std::chrono::steady_clock::now();
-        platform::write_to_file_at(this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename Protocol::Wire), saddr);
+        int rv = io_submit(this->aio_ctx, 1, &op_ptr);
+        if (rv != 1) {
+            std::cerr << "io_submit: " << std::strerror(-rv) << std::endl;
+            std::abort();
+        }
+        //platform::write_to_file_at(this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename Protocol::Wire), saddr);
         auto end = std::chrono::steady_clock::now();
         this->swap_out.event(std::chrono::duration_cast<std::chrono::microseconds>(end - start).count());
+    }
+
+    template <typename Protocol>
+    void Engine<Protocol>::wait_for_finish_swap(PhysPageNumber ppn) {
+        auto iter = this->in_flight_swaps.find(ppn);
+        if (iter == this->in_flight_swaps.end()) {
+            return;
+        }
+
+        bool found = false;
+        do {
+            struct io_event events[aio_process_batch_size];
+            int rv = io_getevents(this->aio_ctx, 1, aio_process_batch_size, events, nullptr);
+            if (rv < 1) {
+                std::cerr << "io_getevents: " << std::strerror(-rv) << std::endl;
+                std::abort();
+            }
+            for (int i = 0; i != rv; i++) {
+                struct io_event& event = events[i];
+                typename Protocol::Wire* page_start = reinterpret_cast<typename Protocol::Wire*>(event.data);
+                assert(page_start != nullptr);
+                PhysPageNumber found_ppn = pg_num(page_start - this->memory, this->page_shift);
+
+                iter = this->in_flight_swaps.find(found_ppn);
+                assert(iter != this->in_flight_swaps.end());
+                assert(event.obj == &iter->second);
+                this->in_flight_swaps.erase(iter);
+                if (event.res < 0) {
+                    std::cerr << "Swap failed" << std::endl;
+                    std::abort();
+                }
+
+                found = (found || (found_ppn == ppn));
+            }
+        } while (!found);
+    }
+
+    template <typename Protocol>
+    void Engine<Protocol>::execute_finish_swap_in(const PackedPhysInstruction& phys) {
+        this->wait_for_finish_swap(phys.header.output);
+    }
+
+    template <typename Protocol>
+    void Engine<Protocol>::execute_finish_swap_out(const PackedPhysInstruction& phys) {
+        this->wait_for_finish_swap(phys.header.output);
     }
 
     template <typename Protocol>
@@ -314,12 +382,18 @@ namespace mage::engine {
     template <typename Protocol>
     std::size_t Engine<Protocol>::execute_instruction(const PackedPhysInstruction& phys) {
         switch (phys.header.operation) {
-        case OpCode::SwapIn:
-            this->execute_swap_in(phys);
-            return PackedPhysInstruction::size(OpCode::SwapIn);
-        case OpCode::SwapOut:
-            this->execute_swap_out(phys);
-            return PackedPhysInstruction::size(OpCode::SwapOut);
+        case OpCode::IssueSwapIn:
+            this->execute_issue_swap_in(phys);
+            return PackedPhysInstruction::size(OpCode::IssueSwapIn);
+        case OpCode::IssueSwapOut:
+            this->execute_issue_swap_out(phys);
+            return PackedPhysInstruction::size(OpCode::IssueSwapOut);
+        case OpCode::FinishSwapIn:
+            this->execute_finish_swap_in(phys);
+            return PackedPhysInstruction::size(OpCode::FinishSwapIn);
+        case OpCode::FinishSwapOut:
+            this->execute_finish_swap_out(phys);
+            return PackedPhysInstruction::size(OpCode::FinishSwapOut);
         case OpCode::Input:
             this->protocol.input(&this->memory[phys.header.output], phys.no_args.width);
             return PackedPhysInstruction::size(OpCode::Input);
