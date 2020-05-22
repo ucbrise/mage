@@ -24,6 +24,7 @@
 #include "memprog/annotation.hpp"
 #include "memprog/program.hpp"
 #include "memprog/replacement.hpp"
+#include "memprog/scheduling.hpp"
 #include "programfile.hpp"
 #include <iostream>
 #include <string>
@@ -88,6 +89,7 @@ void create_aspirin_circuit(DefaultProgram& p, int input_size_per_party) {
 
 std::uint8_t page_shift = 15;
 std::uint64_t num_pages = 1 << 5;
+std::uint64_t max_in_flight = 1024;
 // std::uint64_t num_pages = 65536 * 3;
 
 // About 27 GiB
@@ -117,14 +119,22 @@ int main(int argc, char** argv) {
     std::string ann_filename = filename;
     ann_filename.append(".ann");
     mage::memprog::annotate_program(ann_filename, program_filename, page_shift);
-    std::cout << "Computed actual annotations" << std::endl;
+    std::cout << "Computed annotations" << std::endl;
+
+    std::string repprog_filename = filename;
+    repprog_filename.append(".repprog");
+    {
+        mage::memprog::BeladyAllocator allocator(repprog_filename, program_filename, ann_filename, num_pages, page_shift);
+        allocator.allocate();
+        std::cout << "Finished replacement stage: " << allocator.get_num_swapouts() << " swapouts, " << allocator.get_num_swapins() << " swapins" << std::endl;
+    }
 
     {
         std::string memprog_filename = filename;
         memprog_filename.append(".memprog");
-        mage::memprog::BeladyAllocator allocator(memprog_filename, program_filename, ann_filename, num_pages, page_shift);
-        allocator.allocate();
-        std::cout << "Finished replacement stage: " << allocator.get_num_swapouts() << " swapouts, " << allocator.get_num_swapins() << " swapins" << std::endl;
+        mage::memprog::NOPScheduler scheduler(repprog_filename, memprog_filename);
+        scheduler.schedule();
+        std::cout << "Finished scheduling swaps" << std::endl;
     }
 
     return 0;
