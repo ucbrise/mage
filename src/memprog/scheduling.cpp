@@ -120,7 +120,7 @@ namespace mage::memprog {
     }
 
     BackdatingScheduler::BackdatingScheduler(std::string input_file, std::string output_file, std::uint64_t backdate_gap, std::uint64_t max_in_flight)
-        : Scheduler(input_file, output_file), readahead(input_file), gap(backdate_gap) {
+        : Scheduler(input_file, output_file), readahead(input_file), gap(backdate_gap), num_allocation_failures(0), num_synchronous_swapins(0) {
         const ProgramFileHeader& header = this->input.get_header();
         this->output.set_page_count(header.num_pages + max_in_flight);
         this->output.set_swap_page_count(header.num_pages);
@@ -131,6 +131,14 @@ namespace mage::memprog {
             i--;
             this->free_pages.push_back(last_page + i);
         } while (i != 0);
+    }
+
+    std::uint64_t BackdatingScheduler::get_num_allocation_failures() const {
+        return this->num_allocation_failures;
+    }
+
+    std::uint64_t BackdatingScheduler::get_num_synchronous_swapins() const {
+        return this->num_synchronous_swapins;
     }
 
     void BackdatingScheduler::emit_issue_swapin(StoragePageNumber secondary, PhysPageNumber primary) {
@@ -160,6 +168,8 @@ namespace mage::memprog {
             this->emit_finish_swapout(ppn);
             return true;
         }
+
+        this->num_allocation_failures++;
         return false;
     }
 
@@ -188,7 +198,13 @@ namespace mage::memprog {
                 // this->scheduled_swapout_elisions.insert(iter->second);
             } else if (this->allocate_page_frame(ppn)) {
                 // TODO: initiate the swap-in to this page frame
-                this->emit_issue_swapin(spn, ppn);
+                auto iter2 = this->in_flight_swapouts.find(spn);
+                if (iter2 == this->in_flight_swapouts.end()) {
+                    // This is safe because there are no swapouts in the gap
+                    this->emit_issue_swapin(spn, ppn);
+                } else {
+                    this->emit_page_copy(iter2->second.second, ppn);
+                }
                 this->in_flight_swapins[spn] = ppn;
             } else {
                 // TODO: Queue this swap-in to happen later once a free slot open up
@@ -226,6 +242,7 @@ namespace mage::memprog {
             } else {
                 this->emit_issue_swapin(spn, ppn);
                 this->emit_finish_swapin(ppn);
+                this->num_synchronous_swapins++;
                 // std::pair<StoragePageNumber, PhysPageNumber> pair(spn, ppn);
                 // assert(this->queued_swapins.contains(pair));
                 // this->queued_swapins.erase(pair);
@@ -295,7 +312,7 @@ namespace mage::memprog {
         // Process the remaining instructions
         for (j = 0; i != num_instructions; i++, j++) {
             PackedPhysInstruction& current = this->input.start_instruction();
-            this->process_gap_decrease(current, i);
+            this->process_gap_decrease(current, j);
             this->input.finish_instruction(current.size());
 
             PackedPhysInstruction& phys = this->readahead.start_instruction();
@@ -306,7 +323,7 @@ namespace mage::memprog {
         // Drain the gap
         for (; j != num_instructions; j++) {
             PackedPhysInstruction& current = this->input.start_instruction();
-            this->process_gap_decrease(current, i);
+            this->process_gap_decrease(current, j);
             this->input.finish_instruction(current.size());
         }
 

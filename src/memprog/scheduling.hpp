@@ -61,6 +61,8 @@ namespace mage::memprog {
     public:
         BackdatingScheduler(std::string input_file, std::string output_file, std::uint64_t backdate_gap, std::uint64_t max_in_flight);
 
+        std::uint64_t get_num_allocation_failures() const;
+        std::uint64_t get_num_synchronous_swapins() const;
 
         bool allocate_page_frame(PhysPageNumber& ppn);
         void deallocate_page_frame(PhysPageNumber ppn);
@@ -84,6 +86,9 @@ namespace mage::memprog {
         std::unordered_map<StoragePageNumber, std::pair<InstructionNumber, PhysPageNumber>> in_flight_swapouts;
         std::uint64_t gap;
         std::vector<PhysPageNumber> free_pages;
+
+        std::uint64_t num_allocation_failures;
+        std::uint64_t num_synchronous_swapins;
     };
 }
 

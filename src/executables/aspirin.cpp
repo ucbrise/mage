@@ -140,9 +140,9 @@ int main(int argc, char** argv) {
     {
         std::string memprog_filename = filename;
         memprog_filename.append(".memprog");
-        mage::memprog::BackdatingScheduler scheduler(repprog_filename, memprog_filename, 10000, max_in_flight);
+        mage::memprog::BackdatingScheduler scheduler(repprog_filename, memprog_filename, 100, max_in_flight);
         scheduler.schedule();
-        std::cout << "Finished scheduling swaps" << std::endl;
+        std::cout << "Finished scheduling swaps: " << scheduler.get_num_allocation_failures() << " allocation failures, " << scheduler.get_num_synchronous_swapins() << " synchronous swapins" << std::endl;
     }
 
     return 0;
