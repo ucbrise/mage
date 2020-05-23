@@ -87,8 +87,8 @@ void create_aspirin_circuit(DefaultProgram& p, int input_size_per_party) {
     total.mark_output();
 }
 
-std::uint8_t page_shift = 15;
-std::uint64_t num_pages = 1 << 5;
+std::uint8_t page_shift = 15; // 0.5 MiB
+std::uint64_t num_pages = 1 << 8;
 std::uint64_t max_in_flight = 1024;
 // std::uint64_t num_pages = 65536 * 3;
 
@@ -129,10 +129,18 @@ int main(int argc, char** argv) {
         std::cout << "Finished replacement stage: " << allocator.get_num_swapouts() << " swapouts, " << allocator.get_num_swapins() << " swapins" << std::endl;
     }
 
+    // {
+    //     std::string memprog_filename = filename;
+    //     memprog_filename.append(".memprog");
+    //     mage::memprog::NOPScheduler scheduler(repprog_filename, memprog_filename);
+    //     scheduler.schedule();
+    //     std::cout << "Finished scheduling swaps" << std::endl;
+    // }
+
     {
         std::string memprog_filename = filename;
         memprog_filename.append(".memprog");
-        mage::memprog::NOPScheduler scheduler(repprog_filename, memprog_filename);
+        mage::memprog::BackdatingScheduler scheduler(repprog_filename, memprog_filename, 10000, max_in_flight);
         scheduler.schedule();
         std::cout << "Finished scheduling swaps" << std::endl;
     }

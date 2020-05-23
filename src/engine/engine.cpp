@@ -40,6 +40,7 @@ namespace mage::engine {
         StoragePageNumber saddr = pg_addr(phys.swap.storage, this->page_shift);
         PhysPageNumber paddr = pg_addr(phys.header.output, this->page_shift);
 
+        assert(this->in_flight_swaps.find(phys.header.output) == this->in_flight_swaps.end());
         struct iocb& op = this->in_flight_swaps[phys.header.output];
         struct iocb* op_ptr = &op;
         io_prep_pread(op_ptr, this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename Protocol::Wire), saddr);
@@ -60,6 +61,7 @@ namespace mage::engine {
         PhysPageNumber paddr = pg_addr(phys.header.output, this->page_shift);
         StoragePageNumber saddr = pg_addr(phys.swap.storage, this->page_shift);
 
+        assert(this->in_flight_swaps.find(phys.header.output) == this->in_flight_swaps.end());
         struct iocb& op = this->in_flight_swaps[phys.header.output];
         struct iocb* op_ptr = &op;
         io_prep_pwrite(op_ptr, this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename Protocol::Wire), saddr);
@@ -73,6 +75,14 @@ namespace mage::engine {
         //platform::write_to_file_at(this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename Protocol::Wire), saddr);
         auto end = std::chrono::steady_clock::now();
         this->swap_out.event(std::chrono::duration_cast<std::chrono::microseconds>(end - start).count());
+    }
+
+    template <typename Protocol>
+    void Engine<Protocol>::execute_copy_swap(const PackedPhysInstruction& phys) {
+        PhysPageNumber to_paddr = pg_addr(phys.header.output, this->page_shift);
+        PhysPageNumber from_paddr = pg_addr(phys.swap.storage, this->page_shift);
+
+        std::copy(&this->memory[from_paddr], &this->memory[from_paddr + pg_size(this->page_shift)], &this->memory[to_paddr]);
     }
 
     template <typename Protocol>
@@ -388,6 +398,9 @@ namespace mage::engine {
         case OpCode::IssueSwapOut:
             this->execute_issue_swap_out(phys);
             return PackedPhysInstruction::size(OpCode::IssueSwapOut);
+        case OpCode::CopySwap:
+            this->execute_copy_swap(phys);
+            return PackedPhysInstruction::size(OpCode::CopySwap);
         case OpCode::FinishSwapIn:
             this->execute_finish_swap_in(phys);
             return PackedPhysInstruction::size(OpCode::FinishSwapIn);

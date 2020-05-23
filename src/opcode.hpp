@@ -34,6 +34,7 @@ namespace mage {
         IssueSwapOut,
         FinishSwapIn,
         FinishSwapOut,
+        CopySwap,
         Input, // 1 argument
         Output, // 1 argument
         PublicConstant, // 0 arguments
@@ -118,6 +119,7 @@ namespace mage {
                 break;
             case OpCode::IssueSwapIn:
             case OpCode::IssueSwapOut:
+            case OpCode::CopySwap:
                 this->layout = InstructionFormat::Swap;
                 this->single_bit = false;
                 break;
