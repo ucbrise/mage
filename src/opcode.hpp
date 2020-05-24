@@ -53,6 +53,57 @@ namespace mage {
         ValueSelect // 3 arguments
     };
 
+    constexpr const char* opcode_to_string(OpCode op) {
+        switch (op) {
+        case OpCode::Undefined:
+            return "Undefined";
+        case OpCode::IssueSwapIn:
+            return "IssueSwapIn";
+        case OpCode::IssueSwapOut:
+            return "IssueSwapOut";
+        case OpCode::FinishSwapIn:
+            return "FinishSwapIn";
+        case OpCode::FinishSwapOut:
+            return "FinishSwapOut";
+        case OpCode::CopySwap:
+            return "CopySwap";
+        case OpCode::Input:
+            return "Input";
+        case OpCode::Output:
+            return "Output";
+        case OpCode::PublicConstant:
+            return "PublicConstant";
+        case OpCode::IntAdd:
+            return "IntAdd";
+        case OpCode::IntIncrement:
+            return "IntIncrement";
+        case OpCode::IntSub:
+            return "IntSub";
+        case OpCode::IntDecrement:
+            return "IntDecrement";
+        case OpCode::IntLess:
+            return "IntLess";
+        case OpCode::Equal:
+            return "Equal";
+        case OpCode::IsZero:
+            return "IsZero";
+        case OpCode::NonZero:
+            return "NonZero";
+        case OpCode::BitNOT:
+            return "BitNOT";
+        case OpCode::BitAND:
+            return "BitAND";
+        case OpCode::BitOR:
+            return "BitOR";
+        case OpCode::BitXOR:
+            return "BitXOR";
+        case OpCode::ValueSelect:
+            return "ValueSelect";
+        default:
+            std::abort();
+        }
+    }
+
     enum class InstructionFormat : std::uint8_t {
         NoArgs = 0,
         OneArg = 1,

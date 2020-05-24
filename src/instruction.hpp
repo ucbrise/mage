@@ -24,6 +24,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <ostream>
 #include "addr.hpp"
 #include "opcode.hpp"
 
@@ -364,6 +365,26 @@ namespace mage {
         //     return in.good();
         // }
     };
+
+    template<std::uint8_t addr_bits, std::uint8_t storage_bits>
+    std::ostream& operator <<(std::ostream& out, const PackedInstruction<addr_bits, storage_bits>& p) {
+        const char* name = opcode_to_string(p.header.operation);
+        out << name;
+
+        OpInfo info(p.header.operation);
+        int num_args = info.num_args();
+        if (num_args == 0) {
+            out << "(" << p.header.output << ")";
+        } else if (num_args == 1) {
+            out << "<" << (int) p.one_arg.width << ">(" << p.header.output << ", " << p.one_arg.input1 << ")";
+        } else if (num_args == 2) {
+            out << "<" << (int) p.two_args.width << ">(" << p.header.output << ", " << p.two_args.input1 << ", " << p.two_args.input2 << ")";
+        } else if (num_args == 3) {
+            out << "<" << (int) p.three_args.width << ">(" << p.header.output << ", " << p.three_args.input1 << ", " << p.three_args.input2 << ", " << p.three_args.input3 << ")";
+        }
+
+        return out;
+    }
 
     using PackedVirtInstruction = PackedInstruction<virtual_address_bits, virtual_address_bits>;
     using PackedPhysInstruction = PackedInstruction<physical_address_bits, storage_address_bits>;
