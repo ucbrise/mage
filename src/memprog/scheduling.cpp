@@ -272,7 +272,8 @@ namespace mage::memprog {
             PhysPageNumber ppn;
             if (this->allocate_page_frame(ppn)) {
                 this->emit_page_copy(phys.header.output, ppn);
-                if (in_flight_swapouts.contains(spn)) {
+                auto iter2 = this->in_flight_swapouts.find(spn);
+                if (iter2 != this->in_flight_swapouts.end()) {
                     /*
                      * This could happen if we swap out to a storage page, then
                      * manage to copy from the ppn without reading from disk.
@@ -280,10 +281,9 @@ namespace mage::memprog {
                      * the storage page is read in the future, but if it isn't,
                      * we'll end up here.
                      */
-                    auto iter = this->in_flight_swapouts.find(spn);
-                    this->emit_finish_swapout(iter->second.second);
+                    this->emit_finish_swapout(iter2->second.second);
                     this->in_flight_swapout_queue.erase(spn);
-                    this->in_flight_swapouts.erase(iter);
+                    this->in_flight_swapouts.erase(iter2);
                 }
                 this->emit_issue_swapout(ppn, spn);
                 this->in_flight_swapouts[spn] = std::make_pair(i, ppn);
