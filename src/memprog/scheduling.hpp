@@ -59,7 +59,7 @@ namespace mage::memprog {
 
     class BackdatingScheduler : public Scheduler {
     public:
-        BackdatingScheduler(std::string input_file, std::string output_file, std::uint64_t backdate_gap, std::uint64_t max_in_flight);
+        BackdatingScheduler(std::string input_file, std::string output_file, std::uint64_t backdate_gap, std::uint32_t max_in_flight);
 
         std::uint64_t get_num_allocation_failures() const;
         std::uint64_t get_num_synchronous_swapins() const;

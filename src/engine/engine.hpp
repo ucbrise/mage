@@ -41,14 +41,16 @@ namespace mage::engine {
         static const constexpr int aio_process_batch_size = 64;
     public:
         Engine(Protocol& prot) : protocol(prot), memory(nullptr), memory_size(0), swap_in("SWAP-IN (us)", true), swap_out("SWAP-OUT (us)", true), aio_ctx(0) {
-            if (io_setup(aio_max_events, &this->aio_ctx) != 0) {
+        }
+
+        void init(PageShift shift, std::uint64_t num_pages, std::uint64_t swap_pages, std::uint32_t concurrent_swaps, std::string swapfile) {
+            assert(this->memory == nullptr);
+
+            if (io_setup(concurrent_swaps, &this->aio_ctx) != 0) {
                 std::perror("io_setup");
                 std::abort();
             }
-        }
 
-        void init(PageShift shift, std::uint64_t num_pages, std::uint64_t swap_pages, std::string swapfile) {
-            assert(this->memory == nullptr);
             this->memory_size = pg_addr(num_pages, shift) * sizeof(typename Protocol::Wire);
             this->memory = platform::allocate_resident_memory<typename Protocol::Wire>(this->memory_size);
             std::uint64_t required_size = pg_addr(swap_pages, shift) * sizeof(typename Protocol::Wire);

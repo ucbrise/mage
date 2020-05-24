@@ -34,7 +34,7 @@ namespace mage::engine {
     public:
         SingleCoreEngine(std::string program, std::string swapfile, Protocol& prot) : Engine<Protocol>(prot), input(program.c_str()) {
             const ProgramFileHeader& header = this->input.get_header();
-            this->init(header.page_shift, header.num_pages, header.num_swap_pages, swapfile);
+            this->init(header.page_shift, header.num_pages, header.num_swap_pages, header.max_concurrent_swaps, swapfile);
         }
 
         void execute_program() {

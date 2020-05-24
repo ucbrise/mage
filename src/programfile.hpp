@@ -37,6 +37,7 @@ namespace mage {
         InstructionNumber num_instructions;
         std::uint64_t num_pages;
         std::uint64_t num_swap_pages;
+        std::uint32_t max_concurrent_swaps;
         PageShift page_shift;
     };
 
@@ -44,7 +45,7 @@ namespace mage {
     class ProgramFileWriter : private util::BufferedFileWriter<backwards_readable> {
     public:
         ProgramFileWriter(std::string filename, PageShift shift = 0, std::uint64_t num_pages = 0)
-            : util::BufferedFileWriter<backwards_readable>(filename.c_str()), instruction_count(0), page_shift(shift), page_count(num_pages), swap_page_count(0) {
+            : util::BufferedFileWriter<backwards_readable>(filename.c_str()), instruction_count(0), page_shift(shift), page_count(num_pages), swap_page_count(0), concurrent_swaps(1) {
             ProgramFileHeader header = { 0 };
             platform::write_to_file(this->fd, &header, sizeof(header));
         }
@@ -57,6 +58,7 @@ namespace mage {
             header.num_instructions = this->instruction_count;
             header.num_pages = this->page_count;
             header.num_swap_pages = this->swap_page_count;
+            header.max_concurrent_swaps = this->concurrent_swaps;
             header.page_shift = this->page_shift;
             platform::write_to_file(this->fd, &header, sizeof(header));
         }
@@ -65,16 +67,20 @@ namespace mage {
             return this->instruction_count;
         }
 
-        void set_page_shift(PageShift shift) {
-            this->page_shift = shift;
-        }
-
         void set_page_count(std::uint64_t num_pages) {
             this->page_count = num_pages;
         }
 
         void set_swap_page_count(std::uint64_t num_swap_pages) {
             this->swap_page_count = num_swap_pages;
+        }
+
+        void set_concurrent_swaps(std::uint32_t max_concurrent_swaps) {
+            this->concurrent_swaps = max_concurrent_swaps;
+        }
+
+        void set_page_shift(PageShift shift) {
+            this->page_shift = shift;
         }
 
         PackedInstruction<addr_bits, storage_bits>& start_instruction(std::size_t maximum_size = sizeof(PackedInstruction<addr_bits, storage_bits>)) {
@@ -96,6 +102,7 @@ namespace mage {
         std::uint64_t instruction_count;
         std::uint64_t page_count;
         std::uint64_t swap_page_count;
+        std::uint32_t concurrent_swaps;
         PageShift page_shift;
     };
 

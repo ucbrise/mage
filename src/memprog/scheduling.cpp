@@ -119,11 +119,12 @@ namespace mage::memprog {
         }
     }
 
-    BackdatingScheduler::BackdatingScheduler(std::string input_file, std::string output_file, std::uint64_t backdate_gap, std::uint64_t max_in_flight)
+    BackdatingScheduler::BackdatingScheduler(std::string input_file, std::string output_file, std::uint64_t backdate_gap, std::uint32_t max_in_flight)
         : Scheduler(input_file, output_file), readahead(input_file), gap(backdate_gap), current_instruction(0), num_allocation_failures(0), num_synchronous_swapins(0) {
         const ProgramFileHeader& header = this->input.get_header();
         this->output.set_page_count(header.num_pages + max_in_flight);
         this->output.set_swap_page_count(header.num_pages);
+        this->output.set_concurrent_swaps(max_in_flight + 1);
         this->output.set_page_shift(header.page_shift);
         PhysPageNumber last_page = header.num_pages;
         std::uint64_t i = max_in_flight;
