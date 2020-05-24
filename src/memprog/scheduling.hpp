@@ -86,6 +86,7 @@ namespace mage::memprog {
         std::unordered_map<StoragePageNumber, std::pair<InstructionNumber, PhysPageNumber>> in_flight_swapouts;
         std::uint64_t gap;
         std::vector<PhysPageNumber> free_pages;
+        InstructionNumber current_instruction;
 
         std::uint64_t num_allocation_failures;
         std::uint64_t num_synchronous_swapins;

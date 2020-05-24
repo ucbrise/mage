@@ -120,7 +120,7 @@ namespace mage::memprog {
     }
 
     BackdatingScheduler::BackdatingScheduler(std::string input_file, std::string output_file, std::uint64_t backdate_gap, std::uint64_t max_in_flight)
-        : Scheduler(input_file, output_file), readahead(input_file), gap(backdate_gap), num_allocation_failures(0), num_synchronous_swapins(0) {
+        : Scheduler(input_file, output_file), readahead(input_file), gap(backdate_gap), current_instruction(0), num_allocation_failures(0), num_synchronous_swapins(0) {
         const ProgramFileHeader& header = this->input.get_header();
         this->output.set_page_count(header.num_pages + max_in_flight);
         this->output.set_swap_page_count(header.num_pages);
@@ -159,14 +159,18 @@ namespace mage::memprog {
             this->free_pages.pop_back();
             return true;
         }
-        while (!this->in_flight_swapout_queue.empty()) {
-            StoragePageNumber spn = this->in_flight_swapout_queue.remove_min().second;
-            auto iter = this->in_flight_swapouts.find(spn);
-            assert(iter != this->in_flight_swapouts.end());
-            ppn = iter->second.second;
-            this->in_flight_swapouts.erase(iter);
-            this->emit_finish_swapout(ppn);
-            return true;
+        if (!this->in_flight_swapout_queue.empty()) {
+            std::pair<InstructionNumber, StoragePageNumber> pair = this->in_flight_swapout_queue.min();
+            if (pair.first + this->gap <= this->current_instruction) {
+                StoragePageNumber spn = pair.second;
+                this->in_flight_swapout_queue.remove_min();
+                auto iter = this->in_flight_swapouts.find(spn);
+                assert(iter != this->in_flight_swapouts.end());
+                ppn = iter->second.second;
+                this->in_flight_swapouts.erase(iter);
+                this->emit_finish_swapout(ppn);
+                return true;
+            }
         }
 
         this->num_allocation_failures++;
@@ -300,7 +304,7 @@ namespace mage::memprog {
 
     void BackdatingScheduler::schedule() {
         std::uint64_t num_instructions = this->input.get_header().num_instructions;
-        std::uint64_t i, j;
+        InstructionNumber i;
 
         // First, create a gap
         for (i = 0; i != this->gap && i != num_instructions; i++) {
@@ -310,9 +314,9 @@ namespace mage::memprog {
         }
 
         // Process the remaining instructions
-        for (j = 0; i != num_instructions; i++, j++) {
+        for (; i != num_instructions; i++, this->current_instruction++) {
             PackedPhysInstruction& current = this->input.start_instruction();
-            this->process_gap_decrease(current, j);
+            this->process_gap_decrease(current, this->current_instruction);
             this->input.finish_instruction(current.size());
 
             PackedPhysInstruction& phys = this->readahead.start_instruction();
@@ -321,9 +325,9 @@ namespace mage::memprog {
         }
 
         // Drain the gap
-        for (; j != num_instructions; j++) {
+        for (; this->current_instruction != num_instructions; this->current_instruction++) {
             PackedPhysInstruction& current = this->input.start_instruction();
-            this->process_gap_decrease(current, j);
+            this->process_gap_decrease(current, this->current_instruction);
             this->input.finish_instruction(current.size());
         }
 

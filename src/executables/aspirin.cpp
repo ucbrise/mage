@@ -87,9 +87,9 @@ void create_aspirin_circuit(DefaultProgram& p, int input_size_per_party) {
     total.mark_output();
 }
 
-std::uint8_t page_shift = 15; // 0.5 MiB
-std::uint64_t num_pages = 1 << 8;
-std::uint64_t max_in_flight = 1024;
+std::uint8_t page_shift = 12; // 64 KiB
+std::uint64_t num_pages = 1 << 11;
+std::uint64_t max_in_flight = 100;
 // std::uint64_t num_pages = 65536 * 3;
 
 // About 27 GiB
@@ -140,7 +140,7 @@ int main(int argc, char** argv) {
     {
         std::string memprog_filename = filename;
         memprog_filename.append(".memprog");
-        mage::memprog::BackdatingScheduler scheduler(repprog_filename, memprog_filename, 100, max_in_flight);
+        mage::memprog::BackdatingScheduler scheduler(repprog_filename, memprog_filename, 4000, max_in_flight);
         scheduler.schedule();
         std::cout << "Finished scheduling swaps: " << scheduler.get_num_allocation_failures() << " allocation failures, " << scheduler.get_num_synchronous_swapins() << " synchronous swapins" << std::endl;
     }
