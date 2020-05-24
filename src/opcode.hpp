@@ -101,7 +101,7 @@ namespace mage {
 
     class OpInfo {
     public:
-        constexpr OpInfo(OpCode op) : layout(InstructionFormat::NoArgs), single_bit(false) {
+        constexpr OpInfo(OpCode op) : layout(InstructionFormat::NoArgs), single_bit(false), has_output(true) {
             this->set(op);
         }
 
@@ -113,24 +113,32 @@ namespace mage {
         constexpr void set(OpCode op)  {
             switch (op) {
             case OpCode::Input:
+                this->layout = InstructionFormat::NoArgs;
+                this->single_bit = false;
+                this->has_output = true;
+                break;
             case OpCode::Output:
                 this->layout = InstructionFormat::NoArgs;
                 this->single_bit = false;
+                this->has_output = false;
                 break;
             case OpCode::IssueSwapIn:
             case OpCode::IssueSwapOut:
             case OpCode::CopySwap:
                 this->layout = InstructionFormat::Swap;
                 this->single_bit = false;
+                this->has_output = false;
                 break;
             case OpCode::FinishSwapIn:
             case OpCode::FinishSwapOut:
                 this->layout = InstructionFormat::Nothing;
                 this->single_bit = false;
+                this->has_output = false;
                 break;
             case OpCode::PublicConstant:
                 this->layout = InstructionFormat::Constant;
                 this->single_bit = false;
+                this->has_output = true;
                 break;
             case OpCode::IntAdd:
             case OpCode::IntSub:
@@ -139,26 +147,31 @@ namespace mage {
             case OpCode::BitXOR:
                 this->layout = InstructionFormat::TwoArgs;
                 this->single_bit = false;
+                this->has_output = true;
                 break;
             case OpCode::IntIncrement:
             case OpCode::IntDecrement:
             case OpCode::BitNOT:
                 this->layout = InstructionFormat::OneArg;
                 this->single_bit = false;
+                this->has_output = true;
                 break;
             case OpCode::IntLess:
             case OpCode::Equal:
                 this->layout = InstructionFormat::TwoArgs;
                 this->single_bit = true;
+                this->has_output = true;
                 break;
             case OpCode::IsZero:
             case OpCode::NonZero:
                 this->layout = InstructionFormat::OneArg;
                 this->single_bit = true;
+                this->has_output = true;
                 break;
             case OpCode::ValueSelect:
                 this->layout = InstructionFormat::ThreeArgs;
                 this->single_bit = false;
+                this->has_output = true;
                 break;
             default:
                 std::abort();
@@ -177,6 +190,10 @@ namespace mage {
             return this->single_bit;
         }
 
+        constexpr bool has_variable_output() const {
+            return this->has_output;
+        }
+
         constexpr InstructionFormat format() const {
             return this->layout;
         }
@@ -184,6 +201,7 @@ namespace mage {
     private:
         InstructionFormat layout;
         bool single_bit;
+        bool has_output;
     };
 }
 

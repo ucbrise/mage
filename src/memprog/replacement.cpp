@@ -97,12 +97,14 @@ namespace mage::memprog {
         std::array<VirtPageNumber, 5> vpns;
         for (InstructionNumber i = 0; i != num_instructions; i++) {
             PackedVirtInstruction& current = this->virt_prog.start_instruction();
+            OpInfo info(current.header.operation);
             std::uint8_t num_pages = current.store_page_numbers(vpns.data(), this->page_shift);
             std::size_t ann_size;
             Annotation& ann = this->annotations.read<Annotation>(ann_size);
             assert(num_pages == ann.header.num_pages);
             for (std::uint8_t j = 0; j != num_pages; j++) {
                 VirtPageNumber vpn = vpns[j];
+                bool dirties_page = (j == 0) && info.has_variable_output();
 
                 auto iter = this->page_table.find(vpn);
                 if (iter != this->page_table.end() && iter->second.resident) {
@@ -110,7 +112,7 @@ namespace mage::memprog {
                     just_swapped_in[j] = false;
                     PageTableEntry& pte = iter->second;
                     ppns[j] = pte.ppn;
-                    pte.dirty |= (j == 0);
+                    pte.dirty |= dirties_page;
 
                     /*
                      * If page is never used again, remove it from page table.
@@ -195,7 +197,7 @@ namespace mage::memprog {
                         if (ann.slots[j].next_use == invalid_instr) {
                             this->page_table.erase(iter);
                         } else {
-                            pte.dirty |= (j == 0);
+                            pte.dirty |= dirties_page;
                             pte.resident = true;
                             pte.ppn = ppn;
                         }
