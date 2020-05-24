@@ -37,8 +37,8 @@
 namespace mage::engine {
     template <typename Protocol>
     class Engine {
-        static const constexpr int aio_max_events = 1024;
-        static const constexpr int aio_process_batch_size = 32;
+        static const constexpr int aio_max_events = 2048;
+        static const constexpr int aio_process_batch_size = 64;
     public:
         Engine(Protocol& prot) : protocol(prot), memory(nullptr), memory_size(0), swap_in("SWAP-IN (us)", true), swap_out("SWAP-OUT (us)", true), aio_ctx(0) {
             if (io_setup(aio_max_events, &this->aio_ctx) != 0) {

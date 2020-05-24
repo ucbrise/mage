@@ -70,6 +70,7 @@ namespace mage::memprog {
         PhysPageNumber alloc_page_frame() {
             PhysPageNumber ppn = this->free_page_frames.back();
             this->free_page_frames.pop_back();
+            this->pages_end = std::max(this->pages_end, ppn + 1);
             return ppn;
         }
 
@@ -83,6 +84,7 @@ namespace mage::memprog {
         std::vector<PhysPageNumber> free_page_frames;
         std::vector<StoragePageNumber> free_storage_frames;
         StoragePageNumber next_storage_frame;
+        PhysPageNumber pages_end;
 
         /* Keeps track of the number of swaps performed in the allocation. */
         std::uint64_t num_swapouts;

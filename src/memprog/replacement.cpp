@@ -30,7 +30,7 @@
 
 namespace mage::memprog {
     Allocator::Allocator(std::string output_file, PhysPageNumber num_page_frames)
-        : next_storage_frame(0), num_swapouts(0), num_swapins(0), phys_prog(output_file, 0, num_page_frames) {
+        : next_storage_frame(0), pages_end(0), num_swapouts(0), num_swapins(0), phys_prog(output_file, 0, num_page_frames) {
         this->free_page_frames.reserve(num_page_frames);
         PhysPageNumber curr = num_page_frames;
         do {
@@ -40,6 +40,7 @@ namespace mage::memprog {
     }
 
     Allocator::~Allocator() {
+        this->phys_prog.set_page_count(this->pages_end);
         this->phys_prog.set_swap_page_count(this->next_storage_frame);
     }
 
