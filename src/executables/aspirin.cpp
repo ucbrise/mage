@@ -81,7 +81,7 @@ void create_aspirin_circuit(DefaultProgram& p, int input_size_per_party) {
         Integer<patient_id_bits> patient_id_ip1 = inputs[i+1].patient_id_concat_timestamp.template slice<patient_id_bits>(timestamp_bits);
         add = add & (patient_id_i == patient_id_ip1);
         Integer next = total.increment();
-        total = Integer<result_bits>::select(add, total, next);
+        total = Integer<result_bits>::select(add, next, total);
     }
 
     total.mark_output();

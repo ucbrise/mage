@@ -43,7 +43,7 @@ namespace mage::engine {
         assert(this->in_flight_swaps.find(phys.header.output) == this->in_flight_swaps.end());
         struct iocb& op = this->in_flight_swaps[phys.header.output];
         struct iocb* op_ptr = &op;
-        io_prep_pread(op_ptr, this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename Protocol::Wire), saddr);
+        io_prep_pread(op_ptr, this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename Protocol::Wire), saddr * sizeof(typename Protocol::Wire));
         op_ptr->data = &this->memory[paddr];
         auto start = std::chrono::steady_clock::now();
         int rv = io_submit(this->aio_ctx, 1, &op_ptr);
@@ -51,7 +51,7 @@ namespace mage::engine {
             std::cerr << "io_submit: " << std::strerror(-rv) << std::endl;
             std::abort();
         }
-        // platform::read_from_file_at(this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename Protocol::Wire), saddr);
+        // platform::read_from_file_at(this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename Protocol::Wire), saddr * sizeof(typename Protocol::Wire));
         auto end = std::chrono::steady_clock::now();
         this->swap_in.event(std::chrono::duration_cast<std::chrono::microseconds>(end - start).count());
     }
@@ -64,7 +64,7 @@ namespace mage::engine {
         assert(this->in_flight_swaps.find(phys.header.output) == this->in_flight_swaps.end());
         struct iocb& op = this->in_flight_swaps[phys.header.output];
         struct iocb* op_ptr = &op;
-        io_prep_pwrite(op_ptr, this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename Protocol::Wire), saddr);
+        io_prep_pwrite(op_ptr, this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename Protocol::Wire), saddr * sizeof(typename Protocol::Wire));
         op_ptr->data = &this->memory[paddr];
         auto start = std::chrono::steady_clock::now();
         int rv = io_submit(this->aio_ctx, 1, &op_ptr);
@@ -72,7 +72,7 @@ namespace mage::engine {
             std::cerr << "io_submit: " << std::strerror(-rv) << std::endl;
             std::abort();
         }
-        //platform::write_to_file_at(this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename Protocol::Wire), saddr);
+        //platform::write_to_file_at(this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename Protocol::Wire), saddr * sizeof(typename Protocol::Wire));
         auto end = std::chrono::steady_clock::now();
         this->swap_out.event(std::chrono::duration_cast<std::chrono::microseconds>(end - start).count());
     }
@@ -375,7 +375,7 @@ namespace mage::engine {
         typename Protocol::Wire* input1 = &this->memory[phys.three_args.input1];
         typename Protocol::Wire* input2 = &this->memory[phys.three_args.input2];
         typename Protocol::Wire* input3 = &this->memory[phys.three_args.input3];
-        BitWidth width = phys.two_args.width;
+        BitWidth width = phys.three_args.width;
 
         typename Protocol::Wire selector;
         this->protocol.op_copy(selector, *input3);
@@ -385,7 +385,7 @@ namespace mage::engine {
         for (BitWidth i = 0; i != width; i++) {
             this->protocol.op_xor(different, input1[i], input2[i]);
             this->protocol.op_and(temp, different, selector);
-            this->protocol.op_xor(output[i], temp, input1[i]);
+            this->protocol.op_xor(output[i], temp, input2[i]);
         }
     }
 
