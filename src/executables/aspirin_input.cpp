@@ -37,10 +37,17 @@ int main(int argc, char** argv) {
     output_file.append(".input");
 
     mage::util::BinaryFileWriter writer(output_file.c_str());
-    for (int i = 0; i != input_size * 2; i++) {
-        writer.write64(0);
-        writer.write1(0);
+    for (std::uint64_t i = 0; i != input_size * 2; i++) {
+        if (i < input_size) {
+            writer.write64((i << 32) | 1);
+            writer.write1(i == 0 ? 0 : 1);
+        } else {
+            writer.write64(((2 * input_size - i - 1) << 32) | 2);
+            writer.write1(0);
+        }
     }
+
+    /* Correct output is 1, (input_size - 1). */
 
     return 0;
 }
