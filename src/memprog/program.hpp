@@ -32,7 +32,6 @@
 #include "memprog/placement.hpp"
 #include "opcode.hpp"
 #include "programfile.hpp"
-#include "stream.hpp"
 
 namespace mage::memprog {
     template <typename Placer>

@@ -71,7 +71,7 @@ int main(int argc, char** argv) {
     if (plaintext) {
         schemes::PlaintextEvaluator p(input_file.c_str(), output_file.c_str());
         start = std::chrono::steady_clock::now();
-        engine::SingleCoreEngine executor(prog_file.c_str(), "swapfile", p);
+        engine::SingleCoreEngine executor(prog_file.c_str(), "/dev/nvme0n1p7", p);
         executor.execute_program();
         end = std::chrono::steady_clock::now();
         std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
