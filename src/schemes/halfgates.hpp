@@ -89,10 +89,9 @@ namespace mage::schemes {
 
         void op_and(Wire& output, const Wire& input1, const Wire& input2) {
             crypto::block out1;
-            crypto::block table[2];
+            crypto::block* table = reinterpret_cast<crypto::block*>(this->conn_writer.start_write(2 * sizeof(crypto::block)));
             garble_gate_garble_halfgates(input1, crypto::xorBlocks(input1, this->delta), input2, crypto::xorBlocks(input2, this->delta), &output, &out1, this->delta, table, this->global_id++, &this->prp.aes);
-            this->conn_writer.write<crypto::block>() = table[0];
-            this->conn_writer.write<crypto::block>() = table[1];
+            this->conn_writer.finish_write(2 * sizeof(crypto::block));
         }
 
         void op_xor(Wire& output, const Wire& input1, const Wire& input2) {
@@ -244,10 +243,9 @@ namespace mage::schemes {
         }
 
         void op_and(Wire& output, const Wire& input1, const Wire& input2) {
-            crypto::block table[2];
-            table[0] = this->conn_reader.read<crypto::block>();
-            table[1] = this->conn_reader.read<crypto::block>();
+            crypto::block* table = reinterpret_cast<crypto::block*>(this->conn_reader.start_read(2 * sizeof(crypto::block)));
             garble_gate_eval_halfgates(input1, input2, &output, table, this->global_id++, &this->prp.aes);
+            this->conn_reader.finish_read(2 * sizeof(crypto::block));
         }
 
         void op_xor(Wire& output, const Wire& input1, const Wire& input2) {
