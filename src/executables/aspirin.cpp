@@ -26,6 +26,7 @@
 #include "memprog/replacement.hpp"
 #include "memprog/scheduling.hpp"
 #include "programfile.hpp"
+#include <chrono>
 #include <iostream>
 #include <string>
 
@@ -110,12 +111,15 @@ int main(int argc, char** argv) {
     std::string program_filename = filename;
     program_filename.append(".prog");
 
+    auto program_start = std::chrono::steady_clock::now();
     {
         mage::memprog::DefaultProgram program(program_filename, page_shift);
         create_aspirin_circuit(program, input_size_per_party);
         std::cout << "Created program with " << program.num_instructions() << " instructions" << std::endl;
     }
+    auto program_end = std::chrono::steady_clock::now();
 
+    auto replacement_start = std::chrono::steady_clock::now();
     std::string ann_filename = filename;
     ann_filename.append(".ann");
     mage::memprog::annotate_program(ann_filename, program_filename, page_shift);
@@ -128,6 +132,9 @@ int main(int argc, char** argv) {
         allocator.allocate();
         std::cout << "Finished replacement stage: " << allocator.get_num_swapouts() << " swapouts, " << allocator.get_num_swapins() << " swapins" << std::endl;
     }
+    auto replacement_end = std::chrono::steady_clock::now();
+
+    auto scheduling_start = std::chrono::steady_clock::now();
 
     // {
     //     std::string memprog_filename = filename;
@@ -144,6 +151,16 @@ int main(int argc, char** argv) {
         scheduler.schedule();
         std::cout << "Finished scheduling swaps: " << scheduler.get_num_allocation_failures() << " allocation failures, " << scheduler.get_num_synchronous_swapins() << " synchronous swapins" << std::endl;
     }
+
+    auto scheduling_end = std::chrono::steady_clock::now();
+
+    std::cout << std::endl;
+
+    std::cout << "Phase Times (ms): ";
+    std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(program_end - program_start).count() << " ";
+    std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(replacement_end - replacement_start).count() << " ";
+    std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(scheduling_end - scheduling_start).count();
+    std::cout << std::endl;
 
     return 0;
 }
