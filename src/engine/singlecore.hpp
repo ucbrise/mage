@@ -27,6 +27,7 @@
 #include "addr.hpp"
 #include "engine/engine.hpp"
 #include "programfile.hpp"
+#include "util/stats.hpp"
 
 namespace mage::engine {
     template <typename Protocol>
@@ -35,6 +36,7 @@ namespace mage::engine {
         SingleCoreEngine(std::string program, std::string swapfile, Protocol& prot) : Engine<Protocol>(prot), input(program.c_str()) {
             const ProgramFileHeader& header = this->input.get_header();
             this->init(header.page_shift, header.num_pages, header.num_swap_pages, header.max_concurrent_swaps, swapfile);
+            this->input.enable_stats("READ-INSTR (ns)");
         }
 
         void execute_program() {

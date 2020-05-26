@@ -40,12 +40,12 @@ namespace mage::engine {
         StoragePageNumber saddr = pg_addr(phys.swap.storage, this->page_shift);
         PhysPageNumber paddr = pg_addr(phys.header.output, this->page_shift);
 
+        auto start = std::chrono::steady_clock::now();
         assert(this->in_flight_swaps.find(phys.header.output) == this->in_flight_swaps.end());
         struct iocb& op = this->in_flight_swaps[phys.header.output];
         struct iocb* op_ptr = &op;
         io_prep_pread(op_ptr, this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename Protocol::Wire), saddr * sizeof(typename Protocol::Wire));
         op_ptr->data = &this->memory[paddr];
-        auto start = std::chrono::steady_clock::now();
         int rv = io_submit(this->aio_ctx, 1, &op_ptr);
         if (rv != 1) {
             std::cerr << "io_submit: " << std::strerror(-rv) << std::endl;
@@ -53,7 +53,7 @@ namespace mage::engine {
         }
         // platform::read_from_file_at(this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename Protocol::Wire), saddr * sizeof(typename Protocol::Wire));
         auto end = std::chrono::steady_clock::now();
-        this->swap_in.event(std::chrono::duration_cast<std::chrono::microseconds>(end - start).count());
+        this->swap_in.event(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count());
     }
 
     template <typename Protocol>
@@ -61,12 +61,12 @@ namespace mage::engine {
         PhysPageNumber paddr = pg_addr(phys.header.output, this->page_shift);
         StoragePageNumber saddr = pg_addr(phys.swap.storage, this->page_shift);
 
+        auto start = std::chrono::steady_clock::now();
         assert(this->in_flight_swaps.find(phys.header.output) == this->in_flight_swaps.end());
         struct iocb& op = this->in_flight_swaps[phys.header.output];
         struct iocb* op_ptr = &op;
         io_prep_pwrite(op_ptr, this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename Protocol::Wire), saddr * sizeof(typename Protocol::Wire));
         op_ptr->data = &this->memory[paddr];
-        auto start = std::chrono::steady_clock::now();
         int rv = io_submit(this->aio_ctx, 1, &op_ptr);
         if (rv != 1) {
             std::cerr << "io_submit: " << std::strerror(-rv) << std::endl;
@@ -74,7 +74,7 @@ namespace mage::engine {
         }
         //platform::write_to_file_at(this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename Protocol::Wire), saddr * sizeof(typename Protocol::Wire));
         auto end = std::chrono::steady_clock::now();
-        this->swap_out.event(std::chrono::duration_cast<std::chrono::microseconds>(end - start).count());
+        this->swap_out.event(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count());
     }
 
     template <typename Protocol>
@@ -91,6 +91,8 @@ namespace mage::engine {
         if (iter == this->in_flight_swaps.end()) {
             return;
         }
+
+        auto start = std::chrono::steady_clock::now();
 
         bool found = false;
         do {
@@ -118,6 +120,9 @@ namespace mage::engine {
                 found = (found || (found_ppn == ppn));
             }
         } while (!found);
+
+        auto end = std::chrono::steady_clock::now();
+        this->swap_blocked.event(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count());
     }
 
     template <typename Protocol>

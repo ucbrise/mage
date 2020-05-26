@@ -113,6 +113,10 @@ namespace mage {
             platform::read_from_file(this->fd, &this->header, sizeof(this->header));
         }
 
+        void enable_stats(const std::string& label) {
+            this->util::BufferedFileReader<backwards_readable>::enable_stats(label);
+        }
+
         PackedInstruction<addr_bits, storage_bits>& start_instruction(std::size_t maximum_size = sizeof(PackedInstruction<addr_bits, storage_bits>)) {
             return this->template start_read<PackedInstruction<addr_bits, storage_bits>>(maximum_size);
         }

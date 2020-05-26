@@ -27,8 +27,10 @@
 #include <cstdint>
 #include <cstdlib>
 #include <algorithm>
+#include <chrono>
 #include "platform/filesystem.hpp"
 #include "platform/memory.hpp"
+#include "util/stats.hpp"
 
 /*
  * This file provides alternatives to the default file stream buffer in
@@ -40,12 +42,12 @@ namespace mage::util {
     class BufferedFileWriter {
     public:
         BufferedFileWriter(const char* filename, std::size_t buffer_size = 1 << 18)
-            : owns_fd(true), position(0), buffer(buffer_size, true) {
+            : owns_fd(true), use_stats(false), position(0), buffer(buffer_size, true) {
             this->fd = platform::create_file(filename, 0);
         }
 
         BufferedFileWriter(int file_descriptor, std::size_t buffer_size = 1 << 18)
-            : fd(file_descriptor), owns_fd(false), position(0), buffer(buffer_size, true) {
+            : fd(file_descriptor), owns_fd(false), use_stats(false), position(0), buffer(buffer_size, true) {
         }
 
         virtual ~BufferedFileWriter() {
@@ -53,6 +55,11 @@ namespace mage::util {
             if (this->owns_fd) {
                 platform::close_file(this->fd);
             }
+        }
+
+        void enable_stats(const std::string& label) {
+            this->use_stats = true;
+            this->stats.set_label(label);
         }
 
         template <typename T>
@@ -88,6 +95,19 @@ namespace mage::util {
         }
 
         void flush() {
+            if (this->use_stats) {
+                auto start = std::chrono::steady_clock::now();
+
+                this->_flush();
+
+                auto end = std::chrono::steady_clock::now();
+                this->stats.event(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count());
+            } else {
+                this->_flush();
+            }
+        }
+
+        void _flush() {
             platform::write_to_file(this->fd, this->buffer.mapping(), this->position);
             this->position = 0;
         }
@@ -95,6 +115,8 @@ namespace mage::util {
     protected:
         int fd;
         bool owns_fd;
+        bool use_stats;
+        util::StreamStats stats;
 
     private:
         std::size_t position;
@@ -105,18 +127,23 @@ namespace mage::util {
     class BufferedFileReader {
     public:
         BufferedFileReader(const char* filename, std::size_t buffer_size = 1 << 18)
-            : owns_fd(true), position(0), buffer(buffer_size, true), active_size(0) {
+            : owns_fd(true), use_stats(false), position(0), buffer(buffer_size, true), active_size(0) {
             this->fd = platform::open_file(filename, nullptr);
         }
 
         BufferedFileReader(int file_descriptor, std::size_t buffer_size = 1 << 18)
-            : fd(file_descriptor), owns_fd(false), position(0), buffer(buffer_size, true), active_size(0) {
+            : fd(file_descriptor), owns_fd(false), use_stats(false), position(0), buffer(buffer_size, true), active_size(0) {
         }
 
         virtual ~BufferedFileReader() {
             if (this->owns_fd) {
                 platform::close_file(this->fd);
             }
+        }
+
+        void enable_stats(const std::string& label) {
+            this->use_stats = true;
+            this->stats.set_label(label);
         }
 
         template <typename T>
@@ -149,6 +176,21 @@ namespace mage::util {
         }
 
         bool rebuffer() {
+            if (this->use_stats) {
+                auto start = std::chrono::steady_clock::now();
+
+                bool rv = this->_rebuffer();
+
+                auto end = std::chrono::steady_clock::now();
+                this->stats.event(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count());
+
+                return rv;
+            } else {
+                return this->_rebuffer();
+            }
+        }
+
+        bool _rebuffer() {
             std::uint8_t* mapping = this->buffer.mapping();
             std::size_t leftover = this->active_size - this->position;
             std::copy(&mapping[this->position], &mapping[this->active_size], mapping);
@@ -161,6 +203,8 @@ namespace mage::util {
     protected:
         int fd;
         bool owns_fd;
+        bool use_stats;
+        util::StreamStats stats;
 
     private:
         std::size_t active_size;

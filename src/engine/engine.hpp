@@ -40,7 +40,7 @@ namespace mage::engine {
         static const constexpr int aio_max_events = 2048;
         static const constexpr int aio_process_batch_size = 64;
     public:
-        Engine(Protocol& prot) : protocol(prot), memory(nullptr), memory_size(0), swap_in("SWAP-IN (us)", true), swap_out("SWAP-OUT (us)", true), aio_ctx(0) {
+        Engine(Protocol& prot) : protocol(prot), memory(nullptr), memory_size(0), swap_in("SWAP-IN (ns)", true), swap_out("SWAP-OUT (ns)", true), swap_blocked("SWAP_BLOCKED (ns)", true), aio_ctx(0) {
         }
 
         void init(PageShift shift, std::uint64_t num_pages, std::uint64_t swap_pages, std::uint32_t concurrent_swaps, std::string swapfile) {
@@ -101,6 +101,7 @@ namespace mage::engine {
 
         util::StreamStats swap_in;
         util::StreamStats swap_out;
+        util::StreamStats swap_blocked;
 
     private:
         Protocol& protocol;

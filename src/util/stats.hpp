@@ -32,6 +32,9 @@ namespace mage::util {
         friend std::ostream& operator <<(std::ostream& out, const StreamStats& s);
 
     public:
+        StreamStats() : StreamStats("<anonymous>") {
+        }
+
         StreamStats(std::string name, bool print_stats_on_exit = false) : label(name), print_on_exit(print_stats_on_exit),
             stat_max(0), stat_sum(0), stat_min(0), stat_count(0) {
         }
@@ -40,6 +43,11 @@ namespace mage::util {
             if (this->print_on_exit) {
                 std::cout << *this << std::endl;
             }
+        }
+
+        void set_label(const std::string& label, bool print_stats_on_exit = true) {
+            this->label = label;
+            this->print_on_exit = print_stats_on_exit;
         }
 
         void event(std::uint64_t stat, std::uint64_t count = 1) {
@@ -67,7 +75,7 @@ namespace mage::util {
     };
 
     inline std::ostream& operator <<(std::ostream& out, const StreamStats& s) {
-        return out << s.label << ": ( min = " << s.stat_min << ", avg = " << (s.stat_count == 0 ? 0 : s.stat_sum / s.stat_count) << ", max = " << s.stat_max << ", count = " << s.stat_count << ", sum = " << s.stat_sum;
+        return out << s.label << ": ( min = " << s.stat_min << ", avg = " << (s.stat_count == 0 ? 0 : s.stat_sum / s.stat_count) << ", max = " << s.stat_max << ", count = " << s.stat_count << ", sum = " << s.stat_sum << " )";
     }
 }
 

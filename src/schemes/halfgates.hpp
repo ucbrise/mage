@@ -45,6 +45,8 @@ namespace mage::schemes {
 
         HalfGatesGarbler(std::string input_file, std::string output_file, int conn_fd)
             : global_id(0), input_reader(input_file.c_str()), output_writer(output_file.c_str()), conn_reader(conn_fd), conn_writer(conn_fd) {
+            this->conn_writer.enable_stats("GATE-SEND (ns)");
+
             crypto::PRG tmp;
             tmp.random_block(&this->seed);
             Wire a;
@@ -222,6 +224,8 @@ namespace mage::schemes {
 
         HalfGatesEvaluator(std::string input_file, int conn_fd)
             : global_id(0), input_reader(input_file.c_str()), conn_reader(conn_fd), conn_writer(conn_fd) {
+            this->conn_reader.enable_stats("GATE-RECV (ns)");
+
             crypto::PRG tmp(crypto::fix_key);
             tmp.random_block(this->public_constants, 2);
 
