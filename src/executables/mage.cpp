@@ -113,7 +113,7 @@ int main(int argc, char** argv) {
     end = std::chrono::steady_clock::now();
 
     std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    std::cerr << ms.count() << " ms" << std::endl;
+    std::cout << ms.count() << " ms" << std::endl;
 
     platform::network_close(socket);
 }
