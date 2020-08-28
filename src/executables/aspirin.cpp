@@ -55,8 +55,8 @@ void create_aspirin_circuit(DefaultProgram& p, int input_size_per_party) {
 
     for (int i = 0; i != input_array_length; i++) {
         inputs.emplace_back(p);
-        inputs[i].patient_id_concat_timestamp.mark_input();
-        inputs[i].diagnosis.mark_input();
+        inputs[i].patient_id_concat_timestamp.mark_input(Party::GARBLER);
+        inputs[i].diagnosis.mark_input(Party::GARBLER);
     }
 
     // Verify the input first.
@@ -89,7 +89,7 @@ void create_aspirin_circuit(DefaultProgram& p, int input_size_per_party) {
 }
 
 std::uint8_t page_shift = 12; // 64 KiB
-std::uint64_t num_pages = 1 << 11;
+std::uint64_t num_pages = 1 << 10;
 std::uint64_t max_in_flight = 256;
 // std::uint64_t num_pages = 65536 * 3;
 

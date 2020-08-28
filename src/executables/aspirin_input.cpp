@@ -41,9 +41,11 @@ int main(int argc, char** argv) {
         if (i < input_size) {
             writer.write64((i << 32) | 1);
             writer.write1(i == 0 ? 0 : 1);
+            /* All patients except patient 0 have a diagnosis at t = 1. */
         } else {
             writer.write64(((2 * input_size - i - 1) << 32) | 2);
             writer.write1(0);
+            /* All patients were prescribed aspirin at t = 2. */
         }
     }
 

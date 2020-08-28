@@ -22,6 +22,8 @@
 #ifndef MAGE_ADDR_H_
 #define MAGE_ADDR_H_
 
+#include <cstdint>
+
 namespace mage {
     /* VIRTUAL ADDRESSES */
 

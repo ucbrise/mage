@@ -71,13 +71,17 @@ namespace mage::schemes {
         }
 
         // HACK: assume all input comes from the garbler
-        void input(Wire* data, unsigned int length) {
-            this->shared_prg.random_block(data, length);
-            for (unsigned int i = 0; i != length; i++) {
-                std::uint8_t bit = this->input_reader.read1();
-                 if (bit != 0) {
-                     data[i] = crypto::xorBlocks(data[i], this->delta);
-                 }
+        void input(Wire* data, unsigned int length, bool garbler) {
+            if (garbler) {
+                this->shared_prg.random_block(data, length);
+                for (unsigned int i = 0; i != length; i++) {
+                    std::uint8_t bit = this->input_reader.read1();
+                     if (bit != 0) {
+                         data[i] = crypto::xorBlocks(data[i], this->delta);
+                     }
+                }
+            } else {
+                // TODO: if party == evaluator, use OT to send label
             }
         }
 
@@ -234,8 +238,12 @@ namespace mage::schemes {
         }
 
         // HACK: assume all input comes from the garbler
-        void input(Wire* data, unsigned int length) {
-            this->shared_prg.random_block(data, length);
+        void input(Wire* data, unsigned int length, bool garbler) {
+            if (garbler) {
+                this->shared_prg.random_block(data, length);
+            } else {
+                // Use OT to get label corresponding to bit.
+            }
         }
 
         // HACK: assume all output goes to the garbler

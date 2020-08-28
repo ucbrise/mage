@@ -33,10 +33,18 @@ namespace mage::schemes {
         PlaintextEvaluator(std::string input_file, std::string output_file) : input_reader(input_file.c_str()), output_writer(output_file.c_str()) {
         }
 
-        void input(Wire* data, unsigned int length) {
-            for (unsigned int i = 0; i != length; i++) {
-                std::uint8_t bit = this->input_reader.read1();
-                data[i] = bit;
+        void input(Wire* data, unsigned int length, bool garbler) {
+            if (garbler) {
+                for (unsigned int i = 0; i != length; i++) {
+                    std::uint8_t bit = this->input_reader.read1();
+                    data[i] = bit;
+                }
+            } else {
+                /*
+                 * For the real protocol, we would send the appropriate label
+                 * using OT. But, since this is plaintext anyway, just have the
+                 * other side generate the label.
+                 */
             }
         }
 
