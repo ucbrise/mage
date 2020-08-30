@@ -22,6 +22,7 @@
 #ifndef MAGE_SCHEMES_PLAINTEXT_HPP_
 #define MAGE_SCHEMES_PLAINTEXT_HPP_
 
+#include <iostream>
 #include <string>
 #include "util/binaryfile.hpp"
 
@@ -30,21 +31,15 @@ namespace mage::schemes {
     public:
         using Wire = unsigned __int128;
 
-        PlaintextEvaluator(std::string input_file, std::string output_file) : input_reader(input_file.c_str()), output_writer(output_file.c_str()) {
+        PlaintextEvaluator(std::string garbler_input_file, std::string evaluator_input_file, std::string output_file)
+            : garbler_input_reader(garbler_input_file.c_str()), evaluator_input_reader(evaluator_input_file.c_str()), output_writer(output_file.c_str()) {
         }
 
         void input(Wire* data, unsigned int length, bool garbler) {
-            if (garbler) {
-                for (unsigned int i = 0; i != length; i++) {
-                    std::uint8_t bit = this->input_reader.read1();
-                    data[i] = bit;
-                }
-            } else {
-                /*
-                 * For the real protocol, we would send the appropriate label
-                 * using OT. But, since this is plaintext anyway, just have the
-                 * other side generate the label.
-                 */
+            util::BinaryFileReader& input_reader = garbler ? this->garbler_input_reader : this->evaluator_input_reader;
+            for (unsigned int i = 0; i != length; i++) {
+                std::uint8_t bit = input_reader.read1();
+                data[i] = bit;
             }
         }
 
@@ -84,7 +79,8 @@ namespace mage::schemes {
         }
 
     private:
-        util::BinaryFileReader input_reader;
+        util::BinaryFileReader garbler_input_reader;
+        util::BinaryFileReader evaluator_input_reader;
         util::BinaryFileWriter output_writer;
     };
 }

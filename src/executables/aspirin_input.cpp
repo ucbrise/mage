@@ -32,19 +32,24 @@ int main(int argc, char** argv) {
     std::string input_size_per_party(argv[1]);
     int input_size = std::stoi(input_size_per_party);
 
-    std::string output_file("aspirin_");
-    output_file.append(std::to_string(input_size));
-    output_file.append(".input");
+    std::string garbler_file("aspirin_");
+    garbler_file.append(std::to_string(input_size));
+    garbler_file.append("_garbler.input");
 
-    mage::util::BinaryFileWriter writer(output_file.c_str());
+    std::string evaluator_file("aspirin_");
+    evaluator_file.append(std::to_string(input_size));
+    evaluator_file.append("_evaluator.input");
+
+    mage::util::BinaryFileWriter garbler_writer(garbler_file.c_str());
+    mage::util::BinaryFileWriter evaluator_writer(evaluator_file.c_str());
     for (std::uint64_t i = 0; i != input_size * 2; i++) {
         if (i < input_size) {
-            writer.write64((i << 32) | 1);
-            writer.write1(i == 0 ? 0 : 1);
+            garbler_writer.write64((i << 32) | 1);
+            garbler_writer.write1(i == 0 ? 0 : 1);
             /* All patients except patient 0 have a diagnosis at t = 1. */
         } else {
-            writer.write64(((2 * input_size - i - 1) << 32) | 2);
-            writer.write1(0);
+            evaluator_writer.write64(((2 * input_size - i - 1) << 32) | 2);
+            evaluator_writer.write1(0);
             /* All patients were prescribed aspirin at t = 2. */
         }
     }

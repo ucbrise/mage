@@ -1,8 +1,8 @@
 CXX = clang++
 CXXFLAGS = -std=c++2a -Ofast -DNDEBUG -march=native -ggdb3 -pthread -I./src/
-LDFLAGS = -pthread -laio
+LDFLAGS = -pthread -laio -lssl -lcrypto
 
-MAGE_DIRS = src src/dsl src/platform src/crypto src/memprog src/engine src/schemes src/util
+MAGE_DIRS = src src/dsl src/platform src/crypto src/crypto/ot src/memprog src/engine src/schemes src/util
 MAGE_CPP_SOURCES = $(foreach dir,$(MAGE_DIRS),$(wildcard $(dir)/*.cpp))
 MAGE_HEADERS = $(foreach dir,$(MAGE_DIRS),$(wildcard $(dir)/*.hpp))
 

@@ -19,6 +19,14 @@
 namespace mage::crypto {
     using block = __m128i;
 
+    inline block block_load_unaligned(const block* from) {
+        return _mm_loadu_si128(from);
+    }
+
+    inline void block_store_unaligned(const block& data, block* to) {
+        _mm_storeu_si128(to, data);
+    }
+
     inline bool getLSB(const block & x) {
         return (*((char*)&x)&1) == 1;
     }

@@ -34,9 +34,9 @@ namespace mage {
     enum InstructionFlags : std::uint8_t {
         FlagInput1Constant = 0x1,
         FlagInput2Constant = 0x2,
-        FlagInput3Constant = 0x3,
-        FlagOutputPageFirstUse = 0x4,
-        FlagEvaluatorInput = 0x5,
+        FlagInput3Constant = 0x4,
+        FlagOutputPageFirstUse = 0x8,
+        FlagEvaluatorInput = 0x10,
     };
 
     template <InstructionFlags... flags>

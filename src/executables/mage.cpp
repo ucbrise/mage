@@ -59,8 +59,11 @@ int main(int argc, char** argv) {
     std::string prog_file(file_base);
     prog_file.append(".memprog");
 
-    std::string input_file(file_base);
-    input_file.append(".input");
+    std::string garbler_input_file(file_base);
+    garbler_input_file.append("_garbler.input");
+
+    std::string evaluator_input_file(file_base);
+    evaluator_input_file.append("_evaluator.input");
 
     std::string output_file(file_base);
     output_file.append(".output");
@@ -69,9 +72,9 @@ int main(int argc, char** argv) {
     std::chrono::time_point<std::chrono::steady_clock> end;
 
     if (plaintext) {
-        schemes::PlaintextEvaluator p(input_file.c_str(), output_file.c_str());
+        schemes::PlaintextEvaluator p(garbler_input_file.c_str(), evaluator_input_file.c_str(), output_file.c_str());
         start = std::chrono::steady_clock::now();
-        engine::SingleCoreEngine executor(prog_file.c_str(), "/dev/nvme0n1p7", p);
+        engine::SingleCoreEngine executor(prog_file.c_str(), "swapfile", p); // can use, e.g., "/dev/nvme0n1p7" if you have permission
         executor.execute_program();
         end = std::chrono::steady_clock::now();
         std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
@@ -98,14 +101,14 @@ int main(int argc, char** argv) {
     if (garble) {
         socket = platform::network_connect(host.c_str(), port.c_str());
 
-        schemes::HalfGatesGarbler p(input_file.c_str(), output_file.c_str(), socket);
+        schemes::HalfGatesGarbler p(garbler_input_file.c_str(), output_file.c_str(), socket);
         start = std::chrono::steady_clock::now();
         engine::SingleCoreEngine executor(prog_file.c_str(), "garbler_swapfile", p);
         executor.execute_program();
     } else {
         socket = platform::network_accept(port.c_str());
 
-        schemes::HalfGatesEvaluator p(input_file.c_str(), socket);
+        schemes::HalfGatesEvaluator p(evaluator_input_file.c_str(), socket);
         start = std::chrono::steady_clock::now();
         engine::SingleCoreEngine executor(prog_file.c_str(), "evaluator_swapfile", p);
         executor.execute_program();

@@ -413,7 +413,7 @@ namespace mage::engine {
             this->execute_finish_swap_out(phys);
             return PackedPhysInstruction::size(OpCode::FinishSwapOut);
         case OpCode::Input:
-            this->protocol.input(&this->memory[phys.header.output], phys.no_args.width, phys.header.flags != FlagEvaluatorInput);
+            this->protocol.input(&this->memory[phys.header.output], phys.no_args.width, (phys.header.flags & FlagEvaluatorInput) == 0);
             return PackedPhysInstruction::size(OpCode::Input);
         case OpCode::Output:
             this->protocol.output(&this->memory[phys.header.output], phys.no_args.width);

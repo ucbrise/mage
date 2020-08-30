@@ -55,8 +55,8 @@ void create_aspirin_circuit(DefaultProgram& p, int input_size_per_party) {
 
     for (int i = 0; i != input_array_length; i++) {
         inputs.emplace_back(p);
-        inputs[i].patient_id_concat_timestamp.mark_input(Party::GARBLER);
-        inputs[i].diagnosis.mark_input(Party::GARBLER);
+        inputs[i].patient_id_concat_timestamp.mark_input(i < input_size_per_party ? Party::Garbler : Party::Evaluator);
+        inputs[i].diagnosis.mark_input(i < input_size_per_party ? Party::Garbler : Party::Evaluator);
     }
 
     // Verify the input first.

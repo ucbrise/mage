@@ -36,6 +36,7 @@
 #include "crypto/mitccrh.hpp"
 #include "crypto/prg.hpp"
 #include "crypto/prp.hpp"
+#include "crypto/ot/base.hpp"
 #include "util/binaryfile.hpp"
 
 namespace mage::schemes {
@@ -76,12 +77,18 @@ namespace mage::schemes {
                 this->shared_prg.random_block(data, length);
                 for (unsigned int i = 0; i != length; i++) {
                     std::uint8_t bit = this->input_reader.read1();
-                     if (bit != 0) {
-                         data[i] = crypto::xorBlocks(data[i], this->delta);
-                     }
+                    if (bit != 0) {
+                        data[i] = crypto::xorBlocks(data[i], this->delta);
+                    }
                 }
             } else {
-                // TODO: if party == evaluator, use OT to send label
+                this->prg.random_block(data, length);
+                std::vector<std::pair<crypto::block, crypto::block>> pairs(length);
+                for (unsigned int i = 0; i != length; i++) {
+                    pairs[i].first = data[i];
+                    pairs[i].second = crypto::xorBlocks(data[i], this->delta);
+                }
+                crypto::ot::base_sender(this->ot_group, this->conn_reader, this->conn_writer, pairs);
             }
         }
 
@@ -220,6 +227,8 @@ namespace mage::schemes {
         crypto::PRP prp;
         crypto::PRG prg;
         crypto::PRG shared_prg;
+
+        crypto::DDHGroup ot_group;
     };
 
     class HalfGatesEvaluator {
@@ -243,6 +252,13 @@ namespace mage::schemes {
                 this->shared_prg.random_block(data, length);
             } else {
                 // Use OT to get label corresponding to bit.
+                std::vector<bool> choices;
+                choices.reserve(length);
+                for (unsigned int i = 0; i != length; i++) {
+                    std::uint8_t bit = this->input_reader.read1();
+                    choices.push_back(bit != 0);
+                }
+                crypto::ot::base_chooser(this->ot_group, this->conn_reader, this->conn_writer, choices, data);
             }
         }
 
@@ -350,6 +366,8 @@ namespace mage::schemes {
 
         crypto::PRP prp;
         crypto::PRG shared_prg;
+
+        crypto::DDHGroup ot_group;
     };
 }
 

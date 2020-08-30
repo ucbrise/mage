@@ -37,8 +37,8 @@ namespace mage::dsl {
     using Bit = Integer<1>;
 
     enum class Party : std::uint32_t {
-        GARBLER = 0,
-        EVALUATOR = 1,
+        Garbler = 0,
+        Evaluator = 1,
     };
 
     template <BitWidth bits>
@@ -79,7 +79,7 @@ namespace mage::dsl {
             Instruction& instr = this->p->instruction();
             instr.header.operation = OpCode::Input;
             instr.header.width = bits;
-            instr.header.flags = (party == Party::GARBLER) ? 0 : FlagEvaluatorInput;
+            instr.header.flags = (party == Party::Garbler) ? 0 : FlagEvaluatorInput;
             this->v = this->p->commit_instruction(bits);
         }
 
