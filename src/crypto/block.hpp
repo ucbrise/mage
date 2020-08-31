@@ -19,6 +19,8 @@
 namespace mage::crypto {
     using block = __m128i;
 
+    constexpr const std::uint32_t block_num_bits = 128;
+
     inline block block_load_unaligned(const block* from) {
         return _mm_loadu_si128(from);
     }
@@ -39,7 +41,7 @@ namespace mage::crypto {
         return _mm_setzero_si128();
     }
     inline block one_block() {
-        return makeBlock(0xFFFFFFFFFFFFFFFFULL, 0xFFFFFFFFFFFFFFFFULL);
+        return _mm_cmpeq_epi32(zero_block(), zero_block());
     }
 
     __attribute__((target("sse2")))

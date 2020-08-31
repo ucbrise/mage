@@ -19,6 +19,9 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#ifndef MAGE_CRYPTO_HASH_HPP_
+#define MAGE_CRYPTO_HASH_HPP_
+
 #include <cstddef>
 #include <cstdint>
 #include <openssl/sha.h>
@@ -29,3 +32,5 @@ namespace mage::crypto {
     void hash(const void* src, std::size_t src_length, std::uint8_t* into);
     block hash_to_block(const void* src, std::size_t src_length);
 }
+
+#endif

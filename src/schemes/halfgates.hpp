@@ -88,7 +88,7 @@ namespace mage::schemes {
                     pairs[i].first = data[i];
                     pairs[i].second = crypto::xorBlocks(data[i], this->delta);
                 }
-                crypto::ot::base_sender(this->ot_group, this->conn_reader, this->conn_writer, pairs);
+                crypto::ot::base_send(this->ot_group, this->conn_reader, this->conn_writer, pairs.data(), length);
             }
         }
 
@@ -252,13 +252,13 @@ namespace mage::schemes {
                 this->shared_prg.random_block(data, length);
             } else {
                 // Use OT to get label corresponding to bit.
-                std::vector<bool> choices;
-                choices.reserve(length);
+                bool* choices = new bool[length];
                 for (unsigned int i = 0; i != length; i++) {
                     std::uint8_t bit = this->input_reader.read1();
-                    choices.push_back(bit != 0);
+                    choices[i] = (bit != 0);
                 }
-                crypto::ot::base_chooser(this->ot_group, this->conn_reader, this->conn_writer, choices, data);
+                crypto::ot::base_choose(this->ot_group, this->conn_reader, this->conn_writer, choices, data, length);
+                delete[] choices;
             }
         }
 

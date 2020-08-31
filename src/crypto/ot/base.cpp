@@ -69,14 +69,13 @@ namespace mage::crypto::ot {
         DDHGroupElement pk0;
     };
 
-    void base_sender(const DDHGroup& g, util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out, const std::vector<std::pair<block, block>>& choices) {
+    void base_send(const DDHGroup& g, util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out, const std::pair<block, block>* choices, std::size_t num_choices) {
         DDHGroupElement c(g);
         c.set_generator();
         send_group_element(network_out, c);
 
         network_out.flush();
 
-        std::size_t num_choices = choices.size();
         std::vector<BaseOTSenderDecision> decisions;
         decisions.reserve(num_choices);
         for (std::size_t i = 0; i != num_choices; i++) {
@@ -105,9 +104,7 @@ namespace mage::crypto::ot {
         network_out.flush();
     }
 
-    void base_chooser(const DDHGroup& g, util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out, std::vector<bool> choices, block* results) {
-        std::size_t num_choices = choices.size();
-
+    void base_choose(const DDHGroup& g, util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out, const bool* choices, block* results, std::size_t num_choices) {
         DDHGroupElement c(g);
         receive_group_element(network_in, c);
 

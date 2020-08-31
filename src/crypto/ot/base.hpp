@@ -19,6 +19,9 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#ifndef MAGE_CRYPTO_OT_BASE_HPP_
+#define MAGE_CRYPTO_OT_BASE_HPP_
+
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -27,10 +30,13 @@
 #include "crypto/block.hpp"
 #include "crypto/group.hpp"
 #include "crypto/hash.hpp"
+#include "crypto/prg.hpp"
 #include "util/filebuffer.hpp"
 
 namespace mage::crypto::ot {
     /* Basic oblivious transfer, on top of which we can implement OT extension. */
-    void base_sender(const DDHGroup& g, util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out, const std::vector<std::pair<block, block>>& choices);
-    void base_chooser(const DDHGroup& g, util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out, std::vector<bool> choices, block* results);
+    void base_send(const DDHGroup& g, util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out, const std::pair<block, block>* choices, std::size_t num_choices);
+    void base_choose(const DDHGroup& g, util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out, const bool* choices, block* results, std::size_t num_choices);
 }
+
+#endif
