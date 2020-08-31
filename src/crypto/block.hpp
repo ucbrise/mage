@@ -6,9 +6,6 @@
 #ifndef MAGE_CRYPTO_BLOCK_HPP_
 #define MAGE_CRYPTO_BLOCK_HPP_
 
-// #include <stdio.h>
-// #include <stdlib.h>
-// #include <string.h>
 #include <cassert>
 #include <cstdint>
 #include <xmmintrin.h>

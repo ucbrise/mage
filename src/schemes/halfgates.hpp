@@ -37,6 +37,7 @@
 #include "crypto/prg.hpp"
 #include "crypto/prp.hpp"
 #include "crypto/ot/base.hpp"
+#include "crypto/ot/extension.hpp"
 #include "util/binaryfile.hpp"
 
 namespace mage::schemes {
@@ -58,6 +59,8 @@ namespace mage::schemes {
             this->conn_writer.write<Wire>() = input_seed;
             this->shared_prg.set_seed(input_seed);
             this->conn_writer.flush();
+
+            this->ot_sender.initialize(this->conn_reader, this->conn_writer);
         }
 
         // HACK: assume all output goes to the garbler
@@ -87,8 +90,10 @@ namespace mage::schemes {
                 for (unsigned int i = 0; i != length; i++) {
                     pairs[i].first = data[i];
                     pairs[i].second = crypto::xorBlocks(data[i], this->delta);
+                    // std::cout << *reinterpret_cast<std::uint64_t*>(&pairs[i].first) << " OR " << *reinterpret_cast<std::uint64_t*>(&pairs[i].second) << std::endl;
                 }
-                crypto::ot::base_send(this->ot_group, this->conn_reader, this->conn_writer, pairs.data(), length);
+                // crypto::ot::base_send(this->ot_group, this->conn_reader, this->conn_writer, pairs.data(), length);
+                this->ot_sender.send(this->conn_reader, this->conn_writer, pairs.data(), length);
             }
         }
 
@@ -228,7 +233,8 @@ namespace mage::schemes {
         crypto::PRG prg;
         crypto::PRG shared_prg;
 
-        crypto::DDHGroup ot_group;
+        // crypto::DDHGroup ot_group;
+        crypto::ot::ExtensionSender ot_sender;
     };
 
     class HalfGatesEvaluator {
@@ -244,6 +250,8 @@ namespace mage::schemes {
 
             crypto::block input_seed = this->conn_reader.read<crypto::block>();
             this->shared_prg.set_seed(input_seed);
+
+            this->ot_chooser.initialize(this->conn_reader, this->conn_writer);
         }
 
         // HACK: assume all input comes from the garbler
@@ -251,13 +259,17 @@ namespace mage::schemes {
             if (garbler) {
                 this->shared_prg.random_block(data, length);
             } else {
-                // Use OT to get label corresponding to bit.
+                /* Use OT to get label corresponding to bit. */
                 bool* choices = new bool[length];
                 for (unsigned int i = 0; i != length; i++) {
                     std::uint8_t bit = this->input_reader.read1();
                     choices[i] = (bit != 0);
                 }
-                crypto::ot::base_choose(this->ot_group, this->conn_reader, this->conn_writer, choices, data, length);
+                // crypto::ot::base_choose(this->ot_group, this->conn_reader, this->conn_writer, choices, data, length);
+                this->ot_chooser.choose(this->conn_reader, this->conn_writer, choices, data, length);
+                // for (unsigned int i = 0; i != length; i++) {
+                //     std::cout << "Asked for choice " << choices[i] << ", got " << *reinterpret_cast<std::uint64_t*>(&data[i]) << std::endl;
+                // }
                 delete[] choices;
             }
         }
@@ -367,7 +379,8 @@ namespace mage::schemes {
         crypto::PRP prp;
         crypto::PRG shared_prg;
 
-        crypto::DDHGroup ot_group;
+        // crypto::DDHGroup ot_group;
+        crypto::ot::ExtensionChooser ot_chooser;
     };
 }
 

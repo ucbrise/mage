@@ -22,6 +22,7 @@
 #ifndef MAGE_CRYPTO_HASH_HPP_
 #define MAGE_CRYPTO_HASH_HPP_
 
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <openssl/sha.h>
@@ -31,6 +32,40 @@ namespace mage::crypto {
     constexpr const std::uint16_t hash_length = SHA256_DIGEST_LENGTH;
     void hash(const void* src, std::size_t src_length, std::uint8_t* into);
     block hash_to_block(const void* src, std::size_t src_length);
+
+    class Hasher {
+    public:
+        static constexpr const std::uint32_t output_length = SHA256_DIGEST_LENGTH;
+
+        Hasher() : active(true) {
+            SHA256_Init(&this->ctx);
+        }
+
+        Hasher(const void* src, std::size_t src_length) : Hasher() {
+            this->update(src, src_length);
+        }
+
+        void update(const void* src, std::size_t src_length) {
+            assert(this->active);
+            SHA256_Update(&this->ctx, src, src_length);
+        }
+
+        void output(std::uint8_t* into) {
+            assert(this->active);
+            this->active = false;
+            SHA256_Final(into, &this->ctx);
+        }
+
+        block output_block() {
+            std::uint8_t into[hash_length] __attribute__((aligned(sizeof(block))));
+            this->output(into);
+            return *reinterpret_cast<block*>(&into[0]);
+        }
+
+    private:
+        SHA256_CTX ctx;
+        bool active;
+    };
 }
 
 #endif
