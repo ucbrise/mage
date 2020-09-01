@@ -31,11 +31,11 @@
 #include "util/filebuffer.hpp"
 
 namespace mage::crypto::ot {
-    ExtensionSender::ExtensionSender() : initialized(false) {
+    ExtensionSender::ExtensionSender() : state(ExtensionState::Uninitialized) {
     }
 
     void ExtensionSender::initialize(util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out) {
-        assert(!this->initialized);
+        assert(this->state == ExtensionState::Uninitialized);
 
         PRG prg;
         prg.random_block(&this->s);
@@ -54,24 +54,21 @@ namespace mage::crypto::ot {
             this->prgs[i].set_seed(k[i]);
         }
 
-        this->initialized = true;
+        this->state = ExtensionState::Ready;
     }
 
-    void ExtensionSender::send(util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out, const std::pair<block, block>* choices, std::size_t num_choices) {
-        assert(this->initialized);
+    void ExtensionSender::prepare_send(util::BufferedFileReader<false>& network_in, std::size_t num_choices, block* q) {
+        assert(this->state == ExtensionState::Ready);
 
         /* The variable m in the paper is num_choices. */
         std::size_t num_row_blocks = (num_choices + block_num_bits - 1) / block_num_bits;
-
         std::size_t num_blocks = num_row_blocks * extension_kappa;
-        block q[2 * num_blocks];
-        block* qT = &q[num_blocks];
+        /* q and qT are uninitialied arrays of num_blocks blocks. */
 
         void* from = network_in.start_read(sizeof(block) * num_blocks);
         block* u = reinterpret_cast<block*>(from);
         unsigned __int128 integer_s = *reinterpret_cast<unsigned __int128*>(&this->s);
-        std::size_t k = 0;
-        for (std::size_t i = 0; i != num_blocks; i += num_row_blocks) {
+        for (std::size_t i = 0, k = 0; i != num_blocks; (i += num_row_blocks), k++) {
             this->prgs[k].random_block(&q[i], num_row_blocks);
             if (((integer_s >> i) & 0x1) != 0x0) {
                 for (std::size_t j = 0; j != num_row_blocks; j++) {
@@ -79,39 +76,56 @@ namespace mage::crypto::ot {
                     q[i + j] = xorBlocks(x, q[i + j]);
                 }
             }
-            k++;
         }
         network_in.finish_read(sizeof(block) * num_blocks);
 
-        sse_trans(reinterpret_cast<std::uint8_t*>(&qT[0]), reinterpret_cast<std::uint8_t*>(q), num_row_blocks * block_num_bits, extension_kappa);
+        this->state = ExtensionState::Prepared;
+    }
 
+    void ExtensionSender::finish_send(util::BufferedFileWriter<false>& network_out, const std::pair<block, block>* choices, std::size_t num_choices, const block* qT) {
+        assert(this->state == ExtensionState::Prepared);
+
+        network_out.flush(); // guarantees that y will be aligned
         void* into = network_out.start_write(2 * sizeof(block) * num_choices);
         block* y = static_cast<block*>(into);
         for (std::uint32_t j = 0; j != num_choices; j++) { // iterating over rows (columns of transpose)
-            block* qj = &qT[j];
+            const block* qj = &qT[j];
             {
                 Hasher h(&j, sizeof(j)); // TODO: marshal this
                 h.update(qj, sizeof(block));
-                block yj0 = xorBlocks(choices[j].first, h.output_block());
-                block_store_unaligned(yj0, &y[j << 1]);
+                y[j << 1] = xorBlocks(choices[j].first, h.output_block());
             }
             {
                 Hasher h(&j, sizeof(j)); // TODO: marshal this
                 block temp = xorBlocks(block_load_unaligned(qj), this->s);
                 h.update(&temp, sizeof(block));
-                block yj1 = xorBlocks(choices[j].second, h.output_block());
-                block_store_unaligned(yj1, &y[(j << 1) | 0x1]);
+                y[(j << 1) | 0x1] = xorBlocks(choices[j].second, h.output_block());
             }
         }
         network_out.finish_write(2 * sizeof(block) * num_choices);
         network_out.flush();
+
+        this->state = ExtensionState::Ready;
     }
 
-    ExtensionChooser::ExtensionChooser() : initialized(false) {
+    void ExtensionSender::send(util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out, const std::pair<block, block>* choices, std::size_t num_choices) {
+        std::size_t num_row_blocks = (num_choices + block_num_bits - 1) / block_num_bits;
+        std::size_t num_blocks = num_row_blocks * extension_kappa;
+
+        block buffer[2 * num_blocks];
+        block* q = &buffer[0];
+        block* qT = &buffer[num_blocks];
+
+        this->prepare_send(network_in, num_choices, q);
+        sse_trans(reinterpret_cast<std::uint8_t*>(qT), reinterpret_cast<std::uint8_t*>(q), num_row_blocks * block_num_bits, extension_kappa);
+        this->finish_send(network_out, choices, num_choices, qT);
+    }
+
+    ExtensionChooser::ExtensionChooser() : state(ExtensionState::Uninitialized) {
     }
 
     void ExtensionChooser::initialize(util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out) {
-        assert(!this->initialized);
+        assert(this->state == ExtensionState::Uninitialized);
 
         PRG prg;
         std::array<std::pair<block, block>, extension_kappa> k;
@@ -128,20 +142,21 @@ namespace mage::crypto::ot {
             this->prgs[i].g1.set_seed(k[i].second);
         }
 
-        this->initialized = true;
+        this->state = ExtensionState::Ready;
     }
 
-    void ExtensionChooser::choose(util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out, const bool* choices, block* results, std::size_t num_choices) {
-        assert(this->initialized);
+    void ExtensionChooser::prepare_choose(util::BufferedFileWriter<false>& network_out, const bool* choices, std::size_t num_choices, block* t) {
+        assert(this->state == ExtensionState::Ready);
 
         /* The variable m in the paper is num_choices. */
         std::size_t num_row_blocks = (num_choices + block_num_bits - 1) / block_num_bits;
-
         std::size_t num_blocks = num_row_blocks * extension_kappa;
-        block t[3 * num_blocks];
-        block* u = &t[num_blocks];
-        std::size_t k = 0;
-        for (std::size_t i = 0; i != num_blocks; i += num_row_blocks) { // iterating over columns
+        /* q and qT are uninitialied arrays of num_blocks blocks. */
+
+        network_out.flush(); // This guarantees that u will be aligned
+        void* into = network_out.start_write(sizeof(block) * num_blocks);
+        block* u = static_cast<block*>(into);
+        for (std::size_t i = 0, k = 0; i != num_blocks; (i += num_row_blocks), k++) { // iterating over columns
             this->prgs[k].g0.random_block(&t[i], num_row_blocks);
             this->prgs[k].g1.random_block(&u[i], num_row_blocks);
             for (std::size_t j = 0; j != num_row_blocks; j++) { // iterating over segments of a single column
@@ -155,15 +170,15 @@ namespace mage::crypto::ot {
                 }
                 u[i + j] = xorBlocks(u[i + j], *reinterpret_cast<block*>(&integer_r));
             }
-            k++;
         }
-        void* into = network_out.start_write(sizeof(block) * num_blocks);
-        std::copy(reinterpret_cast<std::uint8_t*>(&u[0]), reinterpret_cast<std::uint8_t*>(&u[0]) + sizeof(block) * num_blocks, static_cast<std::uint8_t*>(into));
         network_out.finish_write(sizeof(block) * num_blocks);
         network_out.flush();
 
-        block* tT = &t[2 * num_blocks];
-        sse_trans(reinterpret_cast<std::uint8_t*>(&tT[0]), reinterpret_cast<std::uint8_t*>(t), num_row_blocks * block_num_bits, extension_kappa);
+        this->state = ExtensionState::Prepared;
+    }
+
+    void ExtensionChooser::finish_choose(util::BufferedFileReader<false>& network_in, const bool* choices, block* results, std::size_t num_choices, const block* tT) {
+        assert(this->state == ExtensionState::Prepared);
 
         void* from = network_in.start_read(2 * sizeof(block) * num_choices);
         block* y = static_cast<block*>(from);
@@ -174,5 +189,20 @@ namespace mage::crypto::ot {
             results[j] = xorBlocks(yj, h.output_block());
         }
         network_in.finish_read(2 * sizeof(block) * num_choices);
+
+        this->state = ExtensionState::Ready;
+    }
+
+    void ExtensionChooser::choose(util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out, const bool* choices, block* results, std::size_t num_choices) {
+        std::size_t num_row_blocks = (num_choices + block_num_bits - 1) / block_num_bits;
+        std::size_t num_blocks = num_row_blocks * extension_kappa;
+
+        block buffer[2 * num_blocks];
+        block* t = &buffer[0];
+        block* tT = &buffer[num_blocks];
+
+        this->prepare_choose(network_out, choices, num_choices, t);
+        sse_trans(reinterpret_cast<std::uint8_t*>(tT), reinterpret_cast<std::uint8_t*>(t), num_row_blocks * block_num_bits, extension_kappa);
+        this->finish_choose(network_in, choices, results, num_choices, tT);
     }
 }

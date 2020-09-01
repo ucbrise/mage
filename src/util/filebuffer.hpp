@@ -94,6 +94,7 @@ namespace mage::util {
             }
         }
 
+        /* After calling this, the buffer provided on write will be aligned. */
         void flush() {
             if (this->use_stats) {
                 auto start = std::chrono::steady_clock::now();
