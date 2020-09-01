@@ -87,14 +87,23 @@ namespace mage::util {
         }
 
         std::uint8_t read1() {
-            if ((this->total_num_bits & 0x7) == 0) {
-                this->current_byte = this->start_read<std::uint8_t>();
-                this->finish_read(sizeof(std::uint8_t));
+            std::uint8_t current_bit = static_cast<std::uint8_t>(this->total_num_bits) & 0x7;
+            if (current_bit == 0) {
+                this->current_byte = this->read<std::uint8_t>();
             }
-            std::uint8_t bit = this->current_byte & 0x1;
-            this->current_byte >>= 1;
+            std::uint8_t bit = (this->current_byte >> current_bit) & 0x1;
             this->total_num_bits++;
             return bit;
+        }
+
+        void read_block(std::uint8_t* bytes, std::size_t num_bytes) {
+            std::uint8_t current_bit = static_cast<std::uint8_t>(this->total_num_bits) & 0x7;
+            for (std::uint32_t i = 0; i != num_bytes; i++) {
+                bytes[i] = (this->current_byte >> (8 - current_bit));
+                this->current_byte = this->read<std::uint8_t>();
+                bytes[i] |= (this->current_byte << current_bit);
+            }
+            this->total_num_bits += (num_bytes << 3);
         }
 
     private:
