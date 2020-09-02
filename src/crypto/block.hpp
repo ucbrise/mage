@@ -26,6 +26,10 @@ namespace mage::crypto {
         _mm_storeu_si128(to, data);
     }
 
+    inline bool block_bit(const block& x, std::uint8_t index) {
+        return ((_mm_extract_epi16(x, index >> 4) >> (index & 0xf)) & 0x1) != 0x0;
+    }
+
     inline bool getLSB(const block & x) {
         return (*((char*)&x)&1) == 1;
     }

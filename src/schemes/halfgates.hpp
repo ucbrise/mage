@@ -260,17 +260,29 @@ namespace mage::schemes {
                 this->shared_prg.random_block(data, length);
             } else {
                 /* Use OT to get label corresponding to bit. */
-                bool* choices = new bool[length];
-                for (unsigned int i = 0; i != length; i++) {
-                    std::uint8_t bit = this->input_reader.read1();
-                    choices[i] = (bit != 0);
-                }
+                // bool* choices = new bool[length];
+                // for (unsigned int i = 0; i != length; i++) {
+                //     std::uint8_t bit = this->input_reader.read1();
+                //     choices[i] = (bit != 0);
+                // }
                 // crypto::ot::base_choose(this->ot_group, this->conn_reader, this->conn_writer, choices, data, length);
+                std::size_t num_blocks = (length + crypto::block_num_bits - 1) / crypto::block_num_bits;
+                crypto::block choices[num_blocks];
+                choices[num_blocks - 1] = crypto::zero_block();
+                this->input_reader.read_bits(reinterpret_cast<std::uint8_t*>(&choices[0]), length);
+                // for (std::size_t i = 0; i != num_blocks; i++) { // this abomination works
+                //     choices[i] = crypto::zero_block();
+                //     unsigned __int128* x = reinterpret_cast<unsigned __int128*>(&choices[i]);
+                //     for (std::size_t j = 0; j != crypto::block_num_bits && i * crypto::block_num_bits + j != length; j++) {
+                //         std::uint8_t bit = this->input_reader.read1();
+                //         *x |= (((unsigned __int128) bit) << j);
+                //     }
+                // }
                 this->ot_chooser.choose(this->conn_reader, this->conn_writer, choices, data, length);
                 // for (unsigned int i = 0; i != length; i++) {
                 //     std::cout << "Asked for choice " << choices[i] << ", got " << *reinterpret_cast<std::uint64_t*>(&data[i]) << std::endl;
                 // }
-                delete[] choices;
+                // delete[] choices;
             }
         }
 

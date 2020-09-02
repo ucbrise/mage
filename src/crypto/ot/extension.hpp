@@ -75,11 +75,11 @@ namespace mage::crypto::ot {
         ExtensionChooser();
         void initialize(util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out);
 
-        void choose(util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out, const bool* choices, block* results, std::size_t num_choices);
+        void choose(util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out, const block* choices, block* results, std::size_t num_choices);
 
     private:
-        void prepare_choose(util::BufferedFileWriter<false>& network_out, const bool* choices, std::size_t num_choices, block* t);
-        void finish_choose(util::BufferedFileReader<false>& network_in, const bool* choices, block* results, std::size_t num_choices, const block* tT);
+        void prepare_choose(util::BufferedFileWriter<false>& network_out, const block* choices, std::size_t num_choices, block* t);
+        void finish_choose(util::BufferedFileReader<false>& network_in, const block* choices, block* results, std::size_t num_choices, const block* tT);
 
         std::array<ExtChooserPRGs, extension_kappa> prgs;
 

@@ -70,7 +70,7 @@ namespace mage::crypto::ot {
         unsigned __int128 integer_s = *reinterpret_cast<unsigned __int128*>(&this->s);
         for (std::size_t i = 0, k = 0; i != num_blocks; (i += num_row_blocks), k++) {
             this->prgs[k].random_block(&q[i], num_row_blocks);
-            if (((integer_s >> i) & 0x1) != 0x0) {
+            if (block_bit(this->s, i)) {
                 for (std::size_t j = 0; j != num_row_blocks; j++) {
                     block x = block_load_unaligned(&u[i + j]);
                     q[i + j] = xorBlocks(x, q[i + j]);
@@ -145,7 +145,7 @@ namespace mage::crypto::ot {
         this->state = ExtensionState::Ready;
     }
 
-    void ExtensionChooser::prepare_choose(util::BufferedFileWriter<false>& network_out, const bool* choices, std::size_t num_choices, block* t) {
+    void ExtensionChooser::prepare_choose(util::BufferedFileWriter<false>& network_out, const block* choices, std::size_t num_choices, block* t) {
         assert(this->state == ExtensionState::Ready);
 
         /* The variable m in the paper is num_choices. */
@@ -161,14 +161,14 @@ namespace mage::crypto::ot {
             this->prgs[k].g1.random_block(&u[i], num_row_blocks);
             for (std::size_t j = 0; j != num_row_blocks; j++) { // iterating over segments of a single column
                 u[i + j] = xorBlocks(u[i + j], t[i + j]);
-                unsigned __int128 integer_r = 0;
-                for (int a = 0; a != block_num_bits; a++) {
-                    if (choices[block_num_bits * j + a]) {
-                        unsigned __int128 one = 1;
-                        integer_r |= (one << a);
-                    }
-                }
-                u[i + j] = xorBlocks(u[i + j], *reinterpret_cast<block*>(&integer_r));
+                // unsigned __int128 integer_r = 0;
+                // for (int a = 0; a != block_num_bits; a++) {
+                //     if (choices[block_num_bits * j + a]) {
+                //         unsigned __int128 one = 1;
+                //         integer_r |= (one << a);
+                //     }
+                // }
+                u[i + j] = xorBlocks(u[i + j], choices[j]);
             }
         }
         network_out.finish_write(sizeof(block) * num_blocks);
@@ -177,14 +177,14 @@ namespace mage::crypto::ot {
         this->state = ExtensionState::Prepared;
     }
 
-    void ExtensionChooser::finish_choose(util::BufferedFileReader<false>& network_in, const bool* choices, block* results, std::size_t num_choices, const block* tT) {
+    void ExtensionChooser::finish_choose(util::BufferedFileReader<false>& network_in, const block* choices, block* results, std::size_t num_choices, const block* tT) {
         assert(this->state == ExtensionState::Prepared);
 
         void* from = network_in.start_read(2 * sizeof(block) * num_choices);
         block* y = static_cast<block*>(from);
         for (std::uint32_t j = 0; j != num_choices; j++) {
             Hasher h(&j, sizeof(j)); // TODO: marshal this
-            block yj = choices[j] ? y[(j << 1) + 1] : y[j << 1];
+            block yj = block_bit(choices[j / block_num_bits], j % block_num_bits) ? y[(j << 1) + 1] : y[j << 1];
             h.update(&tT[j], sizeof(block));
             results[j] = xorBlocks(yj, h.output_block());
         }
@@ -193,7 +193,7 @@ namespace mage::crypto::ot {
         this->state = ExtensionState::Ready;
     }
 
-    void ExtensionChooser::choose(util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out, const bool* choices, block* results, std::size_t num_choices) {
+    void ExtensionChooser::choose(util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out, const block* choices, block* results, std::size_t num_choices) {
         std::size_t num_row_blocks = (num_choices + block_num_bits - 1) / block_num_bits;
         std::size_t num_blocks = num_row_blocks * extension_kappa;
 

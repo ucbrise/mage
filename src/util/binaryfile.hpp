@@ -19,11 +19,12 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include <cstdint>
-#include "util/filebuffer.hpp"
-
 #ifndef MAGE_UTIL_BINARYFILE_HPP_
 #define MAGE_UTIL_BINARYFILE_HPP_
+
+#include <cstdint>
+#include <algorithm>
+#include "util/filebuffer.hpp"
 
 namespace mage::util {
     class BinaryFileWriter : private BufferedFileWriter<false> {
@@ -83,31 +84,56 @@ namespace mage::util {
 
     class BinaryFileReader : private BufferedFileReader<false> {
     public:
-        BinaryFileReader(const char* input_file) : BufferedFileReader<false>(input_file), total_num_bits(0), current_byte(0) {
+        BinaryFileReader(const char* input_file) : BufferedFileReader<false>(input_file), current_bit(0), current_byte(0) {
         }
 
         std::uint8_t read1() {
-            std::uint8_t current_bit = static_cast<std::uint8_t>(this->total_num_bits) & 0x7;
-            if (current_bit == 0) {
+            if (this->current_bit == 0) {
                 this->current_byte = this->read<std::uint8_t>();
             }
-            std::uint8_t bit = (this->current_byte >> current_bit) & 0x1;
-            this->total_num_bits++;
+            std::uint8_t bit = (this->current_byte >> this->current_bit) & 0x1;
+            this->current_bit = (this->current_bit + 1) & 0x7;
             return bit;
         }
 
-        void read_block(std::uint8_t* bytes, std::size_t num_bytes) {
-            std::uint8_t current_bit = static_cast<std::uint8_t>(this->total_num_bits) & 0x7;
-            for (std::uint32_t i = 0; i != num_bytes; i++) {
-                bytes[i] = (this->current_byte >> (8 - current_bit));
-                this->current_byte = this->read<std::uint8_t>();
-                bytes[i] |= (this->current_byte << current_bit);
+        void read_bytes(std::uint8_t* bytes, std::size_t num_bytes) {
+            if (this->current_bit == 0) {
+                void* from = this->start_read(num_bytes);
+                std::uint8_t* from_bytes = static_cast<std::uint8_t*>(from);
+                std::copy(from_bytes, from_bytes + num_bytes, bytes);
+                this->finish_read(num_bytes);
+            } else {
+                for (std::uint32_t i = 0; i != num_bytes; i++) {
+                    bytes[i] = (this->current_byte >> this->current_bit);
+                    this->current_byte = this->read<std::uint8_t>();
+                    bytes[i] |= (this->current_byte << (8 - this->current_bit));
+                }
             }
-            this->total_num_bits += (num_bytes << 3);
+        }
+
+        void read_bits(std::uint8_t* bytes, std::size_t num_bits) {
+            std::size_t num_bytes = num_bits >> 3;
+            this->read_bytes(bytes, num_bytes);
+            std::uint8_t leftover_bits = (num_bits & 0x7);
+            if (leftover_bits != 0) {
+                /*
+                 * In many cases, this logic copies more bits than necessary,
+                 * but that's OK and cheaper to do.
+                 */
+                if (this->current_bit == 0) {
+                    this->current_byte = this->read<std::uint8_t>();
+                }
+                bytes[num_bytes] = (this->current_byte >> this->current_bit);
+                if (leftover_bits > (8 - this->current_bit)) {
+                    this->current_byte = this->read<std::uint8_t>();
+                    bytes[num_bytes] |= (this->current_byte << (8 - this->current_bit));
+                }
+                this->current_bit = (this->current_bit + leftover_bits) & 0x7;
+            }
         }
 
     private:
-        std::uint64_t total_num_bits;
+        std::uint8_t current_bit;
         std::uint8_t current_byte;
     };
 }
