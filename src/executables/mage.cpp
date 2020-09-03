@@ -25,9 +25,9 @@
 #include <string>
 #include "engine/engine.hpp"
 #include "engine/singlecore.hpp"
+#include "engine/halfgates.hpp"
+#include "engine/plaintext.hpp"
 #include "platform/network.hpp"
-#include "schemes/halfgates.hpp"
-#include "schemes/plaintext.hpp"
 
 using namespace mage;
 
@@ -72,7 +72,7 @@ int main(int argc, char** argv) {
     std::chrono::time_point<std::chrono::steady_clock> end;
 
     if (plaintext) {
-        schemes::PlaintextEvaluator p(garbler_input_file.c_str(), evaluator_input_file.c_str(), output_file.c_str());
+        engine::PlaintextEvaluationEngine p(garbler_input_file.c_str(), evaluator_input_file.c_str(), output_file.c_str());
         start = std::chrono::steady_clock::now();
         engine::SingleCoreEngine executor(prog_file.c_str(), "swapfile", p); // can use, e.g., "/dev/nvme0n1p7" if you have permission
         executor.execute_program();
@@ -101,14 +101,14 @@ int main(int argc, char** argv) {
     if (garble) {
         socket = platform::network_connect(host.c_str(), port.c_str());
 
-        schemes::HalfGatesGarbler p(garbler_input_file.c_str(), output_file.c_str(), socket);
+        engine::HalfGatesGarblingEngine p(garbler_input_file.c_str(), output_file.c_str(), socket);
         start = std::chrono::steady_clock::now();
         engine::SingleCoreEngine executor(prog_file.c_str(), "garbler_swapfile", p);
         executor.execute_program();
     } else {
         socket = platform::network_accept(port.c_str());
 
-        schemes::HalfGatesEvaluator p(evaluator_input_file.c_str(), socket);
+        engine::HalfGatesEvaluationEngine p(evaluator_input_file.c_str(), socket);
         start = std::chrono::steady_clock::now();
         engine::SingleCoreEngine executor(prog_file.c_str(), "evaluator_swapfile", p);
         executor.execute_program();

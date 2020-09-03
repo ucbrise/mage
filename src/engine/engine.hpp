@@ -35,12 +35,12 @@
 #include "util/stats.hpp"
 
 namespace mage::engine {
-    template <typename Protocol>
+    template <typename ProtEngine>
     class Engine {
         static const constexpr int aio_max_events = 2048;
         static const constexpr int aio_process_batch_size = 64;
     public:
-        Engine(Protocol& prot) : protocol(prot), memory(nullptr), memory_size(0), swap_in("SWAP-IN (ns)", true), swap_out("SWAP-OUT (ns)", true), swap_blocked("SWAP_BLOCKED (ns)", true), aio_ctx(0) {
+        Engine(ProtEngine& prot) : protocol(prot), memory(nullptr), memory_size(0), swap_in("SWAP-IN (ns)", true), swap_out("SWAP-OUT (ns)", true), swap_blocked("SWAP_BLOCKED (ns)", true), aio_ctx(0) {
         }
 
         void init(PageShift shift, std::uint64_t num_pages, std::uint64_t swap_pages, std::uint32_t concurrent_swaps, std::string swapfile) {
@@ -51,9 +51,9 @@ namespace mage::engine {
                 std::abort();
             }
 
-            this->memory_size = pg_addr(num_pages, shift) * sizeof(typename Protocol::Wire);
-            this->memory = platform::allocate_resident_memory<typename Protocol::Wire>(this->memory_size);
-            std::uint64_t required_size = pg_addr(swap_pages, shift) * sizeof(typename Protocol::Wire);
+            this->memory_size = pg_addr(num_pages, shift) * sizeof(typename ProtEngine::Wire);
+            this->memory = platform::allocate_resident_memory<typename ProtEngine::Wire>(this->memory_size);
+            std::uint64_t required_size = pg_addr(swap_pages, shift) * sizeof(typename ProtEngine::Wire);
             if (swapfile.rfind("/dev/", 0) != std::string::npos) {
                 std::uint64_t length;
                 this->swapfd = platform::open_file(swapfile.c_str(), &length, true);
@@ -104,8 +104,8 @@ namespace mage::engine {
         util::StreamStats swap_blocked;
 
     private:
-        Protocol& protocol;
-        typename Protocol::Wire* memory;
+        ProtEngine& protocol;
+        typename ProtEngine::Wire* memory;
         PageShift page_shift;
         std::size_t memory_size;
         int swapfd;

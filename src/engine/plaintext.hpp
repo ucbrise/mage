@@ -19,19 +19,19 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef MAGE_SCHEMES_PLAINTEXT_HPP_
-#define MAGE_SCHEMES_PLAINTEXT_HPP_
+#ifndef MAGE_ENGINE_PLAINTEXT_HPP_
+#define MAGE_ENGINE_PLAINTEXT_HPP_
 
 #include <iostream>
 #include <string>
 #include "util/binaryfile.hpp"
 
-namespace mage::schemes {
-    class PlaintextEvaluator {
+namespace mage::engine {
+    class PlaintextEvaluationEngine {
     public:
         using Wire = unsigned __int128;
 
-        PlaintextEvaluator(std::string garbler_input_file, std::string evaluator_input_file, std::string output_file)
+        PlaintextEvaluationEngine(std::string garbler_input_file, std::string evaluator_input_file, std::string output_file)
             : garbler_input_reader(garbler_input_file.c_str()), evaluator_input_reader(evaluator_input_file.c_str()), output_writer(output_file.c_str()) {
         }
 

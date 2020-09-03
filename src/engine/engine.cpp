@@ -29,14 +29,14 @@
 #include "addr.hpp"
 #include "instruction.hpp"
 #include "opcode.hpp"
+#include "engine/halfgates.hpp"
+#include "engine/plaintext.hpp"
 #include "platform/filesystem.hpp"
-#include "schemes/plaintext.hpp"
-#include "schemes/halfgates.hpp"
 
 namespace mage::engine {
 
-    template <typename Protocol>
-    void Engine<Protocol>::execute_issue_swap_in(const PackedPhysInstruction& phys) {
+    template <typename ProtEngine>
+    void Engine<ProtEngine>::execute_issue_swap_in(const PackedPhysInstruction& phys) {
         StoragePageNumber saddr = pg_addr(phys.swap.storage, this->page_shift);
         PhysPageNumber paddr = pg_addr(phys.header.output, this->page_shift);
 
@@ -44,20 +44,20 @@ namespace mage::engine {
         assert(this->in_flight_swaps.find(phys.header.output) == this->in_flight_swaps.end());
         struct iocb& op = this->in_flight_swaps[phys.header.output];
         struct iocb* op_ptr = &op;
-        io_prep_pread(op_ptr, this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename Protocol::Wire), saddr * sizeof(typename Protocol::Wire));
+        io_prep_pread(op_ptr, this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename ProtEngine::Wire), saddr * sizeof(typename ProtEngine::Wire));
         op_ptr->data = &this->memory[paddr];
         int rv = io_submit(this->aio_ctx, 1, &op_ptr);
         if (rv != 1) {
             std::cerr << "io_submit: " << std::strerror(-rv) << std::endl;
             std::abort();
         }
-        // platform::read_from_file_at(this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename Protocol::Wire), saddr * sizeof(typename Protocol::Wire));
+        // platform::read_from_file_at(this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename ProtEngine::Wire), saddr * sizeof(typename ProtEngine::Wire));
         auto end = std::chrono::steady_clock::now();
         this->swap_in.event(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count());
     }
 
-    template <typename Protocol>
-    void Engine<Protocol>::execute_issue_swap_out(const PackedPhysInstruction& phys) {
+    template <typename ProtEngine>
+    void Engine<ProtEngine>::execute_issue_swap_out(const PackedPhysInstruction& phys) {
         PhysPageNumber paddr = pg_addr(phys.header.output, this->page_shift);
         StoragePageNumber saddr = pg_addr(phys.swap.storage, this->page_shift);
 
@@ -65,28 +65,28 @@ namespace mage::engine {
         assert(this->in_flight_swaps.find(phys.header.output) == this->in_flight_swaps.end());
         struct iocb& op = this->in_flight_swaps[phys.header.output];
         struct iocb* op_ptr = &op;
-        io_prep_pwrite(op_ptr, this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename Protocol::Wire), saddr * sizeof(typename Protocol::Wire));
+        io_prep_pwrite(op_ptr, this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename ProtEngine::Wire), saddr * sizeof(typename ProtEngine::Wire));
         op_ptr->data = &this->memory[paddr];
         int rv = io_submit(this->aio_ctx, 1, &op_ptr);
         if (rv != 1) {
             std::cerr << "io_submit: " << std::strerror(-rv) << std::endl;
             std::abort();
         }
-        //platform::write_to_file_at(this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename Protocol::Wire), saddr * sizeof(typename Protocol::Wire));
+        //platform::write_to_file_at(this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename ProtEngine::Wire), saddr * sizeof(typename ProtEngine::Wire));
         auto end = std::chrono::steady_clock::now();
         this->swap_out.event(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count());
     }
 
-    template <typename Protocol>
-    void Engine<Protocol>::execute_copy_swap(const PackedPhysInstruction& phys) {
+    template <typename ProtEngine>
+    void Engine<ProtEngine>::execute_copy_swap(const PackedPhysInstruction& phys) {
         PhysPageNumber to_paddr = pg_addr(phys.header.output, this->page_shift);
         PhysPageNumber from_paddr = pg_addr(phys.swap.storage, this->page_shift);
 
         std::copy(&this->memory[from_paddr], &this->memory[from_paddr + pg_size(this->page_shift)], &this->memory[to_paddr]);
     }
 
-    template <typename Protocol>
-    void Engine<Protocol>::wait_for_finish_swap(PhysPageNumber ppn) {
+    template <typename ProtEngine>
+    void Engine<ProtEngine>::wait_for_finish_swap(PhysPageNumber ppn) {
         auto iter = this->in_flight_swaps.find(ppn);
         if (iter == this->in_flight_swaps.end()) {
             return;
@@ -104,7 +104,7 @@ namespace mage::engine {
             }
             for (int i = 0; i != rv; i++) {
                 struct io_event& event = events[i];
-                typename Protocol::Wire* page_start = reinterpret_cast<typename Protocol::Wire*>(event.data);
+                typename ProtEngine::Wire* page_start = reinterpret_cast<typename ProtEngine::Wire*>(event.data);
                 assert(page_start != nullptr);
                 PhysPageNumber found_ppn = pg_num(page_start - this->memory, this->page_shift);
 
@@ -125,19 +125,19 @@ namespace mage::engine {
         this->swap_blocked.event(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count());
     }
 
-    template <typename Protocol>
-    void Engine<Protocol>::execute_finish_swap_in(const PackedPhysInstruction& phys) {
+    template <typename ProtEngine>
+    void Engine<ProtEngine>::execute_finish_swap_in(const PackedPhysInstruction& phys) {
         this->wait_for_finish_swap(phys.header.output);
     }
 
-    template <typename Protocol>
-    void Engine<Protocol>::execute_finish_swap_out(const PackedPhysInstruction& phys) {
+    template <typename ProtEngine>
+    void Engine<ProtEngine>::execute_finish_swap_out(const PackedPhysInstruction& phys) {
         this->wait_for_finish_swap(phys.header.output);
     }
 
-    template <typename Protocol>
-    void Engine<Protocol>::execute_public_constant(const PackedPhysInstruction& phys) {
-        typename Protocol::Wire* output = &this->memory[phys.header.output];
+    template <typename ProtEngine>
+    void Engine<ProtEngine>::execute_public_constant(const PackedPhysInstruction& phys) {
+        typename ProtEngine::Wire* output = &this->memory[phys.header.output];
         BitWidth width = phys.constant.width;
         std::uint64_t constant = phys.constant.constant;
 
@@ -151,18 +151,18 @@ namespace mage::engine {
         }
     }
 
-    template <typename Protocol>
-    void Engine<Protocol>::execute_int_add(const PackedPhysInstruction& phys) {
-        typename Protocol::Wire* output = &this->memory[phys.header.output];
-        typename Protocol::Wire* input1 = &this->memory[phys.two_args.input1];
-        typename Protocol::Wire* input2 = &this->memory[phys.two_args.input2];
+    template <typename ProtEngine>
+    void Engine<ProtEngine>::execute_int_add(const PackedPhysInstruction& phys) {
+        typename ProtEngine::Wire* output = &this->memory[phys.header.output];
+        typename ProtEngine::Wire* input1 = &this->memory[phys.two_args.input1];
+        typename ProtEngine::Wire* input2 = &this->memory[phys.two_args.input2];
         BitWidth width = phys.two_args.width;
 
-        typename Protocol::Wire temp1;
-        typename Protocol::Wire temp2;
-        typename Protocol::Wire temp3;
+        typename ProtEngine::Wire temp1;
+        typename ProtEngine::Wire temp2;
+        typename ProtEngine::Wire temp3;
 
-        typename Protocol::Wire carry;
+        typename ProtEngine::Wire carry;
         this->protocol.zero(carry);
         this->protocol.op_copy(temp1, input1[0]);
         this->protocol.op_copy(temp2, input2[0]);
@@ -178,13 +178,13 @@ namespace mage::engine {
         }
     }
 
-    template <typename Protocol>
-    void Engine<Protocol>::execute_int_increment(const PackedPhysInstruction& phys) {
-        typename Protocol::Wire* output = &this->memory[phys.header.output];
-        typename Protocol::Wire* input = &this->memory[phys.one_arg.input1];
+    template <typename ProtEngine>
+    void Engine<ProtEngine>::execute_int_increment(const PackedPhysInstruction& phys) {
+        typename ProtEngine::Wire* output = &this->memory[phys.header.output];
+        typename ProtEngine::Wire* input = &this->memory[phys.one_arg.input1];
         BitWidth width = phys.one_arg.width;
 
-        typename Protocol::Wire carry;
+        typename ProtEngine::Wire carry;
         this->protocol.op_not(output[0], input[0]);
         this->protocol.op_copy(carry, input[0]);
         if (width == 1) {
@@ -198,18 +198,18 @@ namespace mage::engine {
         // skip computing the final output carry
     }
 
-    template <typename Protocol>
-    void Engine<Protocol>::execute_int_sub(const PackedPhysInstruction& phys) {
-        typename Protocol::Wire* output = &this->memory[phys.header.output];
-        typename Protocol::Wire* input1 = &this->memory[phys.two_args.input1];
-        typename Protocol::Wire* input2 = &this->memory[phys.two_args.input2];
+    template <typename ProtEngine>
+    void Engine<ProtEngine>::execute_int_sub(const PackedPhysInstruction& phys) {
+        typename ProtEngine::Wire* output = &this->memory[phys.header.output];
+        typename ProtEngine::Wire* input1 = &this->memory[phys.two_args.input1];
+        typename ProtEngine::Wire* input2 = &this->memory[phys.two_args.input2];
         BitWidth width = phys.two_args.width;
 
-        typename Protocol::Wire temp1;
-        typename Protocol::Wire temp2;
-        typename Protocol::Wire temp3;
+        typename ProtEngine::Wire temp1;
+        typename ProtEngine::Wire temp2;
+        typename ProtEngine::Wire temp3;
 
-        typename Protocol::Wire borrow;
+        typename ProtEngine::Wire borrow;
         this->protocol.zero(borrow);
         this->protocol.op_copy(temp1, input1[0]);
         this->protocol.op_copy(temp2, input2[0]);
@@ -225,13 +225,13 @@ namespace mage::engine {
         }
     }
 
-    template <typename Protocol>
-    void Engine<Protocol>::execute_int_decrement(const PackedPhysInstruction& phys) {
-        typename Protocol::Wire* output = &this->memory[phys.header.output];
-        typename Protocol::Wire* input = &this->memory[phys.one_arg.input1];
+    template <typename ProtEngine>
+    void Engine<ProtEngine>::execute_int_decrement(const PackedPhysInstruction& phys) {
+        typename ProtEngine::Wire* output = &this->memory[phys.header.output];
+        typename ProtEngine::Wire* input = &this->memory[phys.one_arg.input1];
         BitWidth width = phys.one_arg.width;
 
-        typename Protocol::Wire borrow;
+        typename ProtEngine::Wire borrow;
         this->protocol.op_not(borrow, input[0]);
         this->protocol.op_copy(output[0], borrow);
         if (width == 1) {
@@ -246,18 +246,18 @@ namespace mage::engine {
     }
 
     /* Based on https://github.com/samee/obliv-c/blob/obliv-c/src/ext/oblivc/obliv_bits.c */
-    template <typename Protocol>
-    void Engine<Protocol>::execute_int_less(const PackedPhysInstruction& phys) {
-        typename Protocol::Wire* output = &this->memory[phys.header.output];
-        typename Protocol::Wire* input1 = &this->memory[phys.two_args.input1];
-        typename Protocol::Wire* input2 = &this->memory[phys.two_args.input2];
+    template <typename ProtEngine>
+    void Engine<ProtEngine>::execute_int_less(const PackedPhysInstruction& phys) {
+        typename ProtEngine::Wire* output = &this->memory[phys.header.output];
+        typename ProtEngine::Wire* input1 = &this->memory[phys.two_args.input1];
+        typename ProtEngine::Wire* input2 = &this->memory[phys.two_args.input2];
         BitWidth width = phys.two_args.width;
 
-        typename Protocol::Wire result;
+        typename ProtEngine::Wire result;
 
-        typename Protocol::Wire temp1;
-        typename Protocol::Wire temp2;
-        typename Protocol::Wire temp3;
+        typename ProtEngine::Wire temp1;
+        typename ProtEngine::Wire temp2;
+        typename ProtEngine::Wire temp3;
 
         this->protocol.op_xor(temp1, input1[0], input2[0]);
         this->protocol.op_and(result, temp1, input2[0]);
@@ -271,17 +271,17 @@ namespace mage::engine {
         this->protocol.op_copy(*output, result);
     }
 
-    template <typename Protocol>
-    void Engine<Protocol>::execute_equal(const PackedPhysInstruction& phys) {
-        typename Protocol::Wire* output = &this->memory[phys.header.output];
-        typename Protocol::Wire* input1 = &this->memory[phys.two_args.input1];
-        typename Protocol::Wire* input2 = &this->memory[phys.two_args.input2];
+    template <typename ProtEngine>
+    void Engine<ProtEngine>::execute_equal(const PackedPhysInstruction& phys) {
+        typename ProtEngine::Wire* output = &this->memory[phys.header.output];
+        typename ProtEngine::Wire* input1 = &this->memory[phys.two_args.input1];
+        typename ProtEngine::Wire* input2 = &this->memory[phys.two_args.input2];
         BitWidth width = phys.two_args.width;
 
-        typename Protocol::Wire result;
+        typename ProtEngine::Wire result;
         this->protocol.op_xnor(result, input1[0], input2[0]);
 
-        typename Protocol::Wire temp;
+        typename ProtEngine::Wire temp;
         for (BitWidth i = 1; i != width; i++) {
             this->protocol.op_xnor(temp, input1[i], input2[i]);
             this->protocol.op_and(result, result, temp);
@@ -289,16 +289,16 @@ namespace mage::engine {
         this->protocol.op_copy(*output, result);
     }
 
-    template <typename Protocol>
-    void Engine<Protocol>::execute_is_zero(const PackedPhysInstruction& phys) {
-        typename Protocol::Wire* output = &this->memory[phys.header.output];
-        typename Protocol::Wire* input = &this->memory[phys.one_arg.input1];
+    template <typename ProtEngine>
+    void Engine<ProtEngine>::execute_is_zero(const PackedPhysInstruction& phys) {
+        typename ProtEngine::Wire* output = &this->memory[phys.header.output];
+        typename ProtEngine::Wire* input = &this->memory[phys.one_arg.input1];
         BitWidth width = phys.one_arg.width;
 
-        typename Protocol::Wire result;
+        typename ProtEngine::Wire result;
         this->protocol.op_copy(result, input[0]);
 
-        typename Protocol::Wire temp;
+        typename ProtEngine::Wire temp;
         for (BitWidth i = 0; i != width; i++) {
             this->protocol.op_not(temp, input[i]);
             this->protocol.op_and(result, result, temp);
@@ -306,16 +306,16 @@ namespace mage::engine {
         this->protocol.op_copy(*output, result);
     }
 
-    template <typename Protocol>
-    void Engine<Protocol>::execute_non_zero(const PackedPhysInstruction& phys) {
-        typename Protocol::Wire* output = &this->memory[phys.header.output];
-        typename Protocol::Wire* input = &this->memory[phys.one_arg.input1];
+    template <typename ProtEngine>
+    void Engine<ProtEngine>::execute_non_zero(const PackedPhysInstruction& phys) {
+        typename ProtEngine::Wire* output = &this->memory[phys.header.output];
+        typename ProtEngine::Wire* input = &this->memory[phys.one_arg.input1];
         BitWidth width = phys.one_arg.width;
 
-        typename Protocol::Wire result;
+        typename ProtEngine::Wire result;
         this->protocol.op_copy(result, input[0]);
 
-        typename Protocol::Wire temp;
+        typename ProtEngine::Wire temp;
         for (BitWidth i = 0; i != width; i++) {
             this->protocol.op_not(temp, input[i]);
             this->protocol.op_and(result, result, temp);
@@ -323,10 +323,10 @@ namespace mage::engine {
         this->protocol.op_not(*output, result);
     }
 
-    template <typename Protocol>
-    void Engine<Protocol>::execute_bit_not(const PackedPhysInstruction& phys) {
-        typename Protocol::Wire* output = &this->memory[phys.header.output];
-        typename Protocol::Wire* input = &this->memory[phys.one_arg.input1];
+    template <typename ProtEngine>
+    void Engine<ProtEngine>::execute_bit_not(const PackedPhysInstruction& phys) {
+        typename ProtEngine::Wire* output = &this->memory[phys.header.output];
+        typename ProtEngine::Wire* input = &this->memory[phys.one_arg.input1];
         BitWidth width = phys.one_arg.width;
 
         for (BitWidth i = 0; i != width; i++) {
@@ -334,11 +334,11 @@ namespace mage::engine {
         }
     }
 
-    template <typename Protocol>
-    void Engine<Protocol>::execute_bit_and(const PackedPhysInstruction& phys) {
-        typename Protocol::Wire* output = &this->memory[phys.header.output];
-        typename Protocol::Wire* input1 = &this->memory[phys.two_args.input1];
-        typename Protocol::Wire* input2 = &this->memory[phys.two_args.input2];
+    template <typename ProtEngine>
+    void Engine<ProtEngine>::execute_bit_and(const PackedPhysInstruction& phys) {
+        typename ProtEngine::Wire* output = &this->memory[phys.header.output];
+        typename ProtEngine::Wire* input1 = &this->memory[phys.two_args.input1];
+        typename ProtEngine::Wire* input2 = &this->memory[phys.two_args.input2];
         BitWidth width = phys.two_args.width;
 
         for (BitWidth i = 0; i != width; i++) {
@@ -346,15 +346,15 @@ namespace mage::engine {
         }
     }
 
-    template <typename Protocol>
-    void Engine<Protocol>::execute_bit_or(const PackedPhysInstruction& phys) {
-        typename Protocol::Wire* output = &this->memory[phys.header.output];
-        typename Protocol::Wire* input1 = &this->memory[phys.two_args.input1];
-        typename Protocol::Wire* input2 = &this->memory[phys.two_args.input2];
+    template <typename ProtEngine>
+    void Engine<ProtEngine>::execute_bit_or(const PackedPhysInstruction& phys) {
+        typename ProtEngine::Wire* output = &this->memory[phys.header.output];
+        typename ProtEngine::Wire* input1 = &this->memory[phys.two_args.input1];
+        typename ProtEngine::Wire* input2 = &this->memory[phys.two_args.input2];
         BitWidth width = phys.two_args.width;
 
-        typename Protocol::Wire temp1;
-        typename Protocol::Wire temp2;
+        typename ProtEngine::Wire temp1;
+        typename ProtEngine::Wire temp2;
         for (BitWidth i = 0; i != width; i++) {
             this->protocol.op_xor(temp1, input1[i], input2[i]);
             this->protocol.op_and(temp2, input1[i], input2[i]);
@@ -362,11 +362,11 @@ namespace mage::engine {
         }
     }
 
-    template <typename Protocol>
-    void Engine<Protocol>::execute_bit_xor(const PackedPhysInstruction& phys) {
-        typename Protocol::Wire* output = &this->memory[phys.header.output];
-        typename Protocol::Wire* input1 = &this->memory[phys.two_args.input1];
-        typename Protocol::Wire* input2 = &this->memory[phys.two_args.input2];
+    template <typename ProtEngine>
+    void Engine<ProtEngine>::execute_bit_xor(const PackedPhysInstruction& phys) {
+        typename ProtEngine::Wire* output = &this->memory[phys.header.output];
+        typename ProtEngine::Wire* input1 = &this->memory[phys.two_args.input1];
+        typename ProtEngine::Wire* input2 = &this->memory[phys.two_args.input2];
         BitWidth width = phys.two_args.width;
 
         for (BitWidth i = 0; i != width; i++) {
@@ -374,19 +374,19 @@ namespace mage::engine {
         }
     }
 
-    template <typename Protocol>
-    void Engine<Protocol>::execute_value_select(const PackedPhysInstruction& phys) {
-        typename Protocol::Wire* output = &this->memory[phys.header.output];
-        typename Protocol::Wire* input1 = &this->memory[phys.three_args.input1];
-        typename Protocol::Wire* input2 = &this->memory[phys.three_args.input2];
-        typename Protocol::Wire* input3 = &this->memory[phys.three_args.input3];
+    template <typename ProtEngine>
+    void Engine<ProtEngine>::execute_value_select(const PackedPhysInstruction& phys) {
+        typename ProtEngine::Wire* output = &this->memory[phys.header.output];
+        typename ProtEngine::Wire* input1 = &this->memory[phys.three_args.input1];
+        typename ProtEngine::Wire* input2 = &this->memory[phys.three_args.input2];
+        typename ProtEngine::Wire* input3 = &this->memory[phys.three_args.input3];
         BitWidth width = phys.three_args.width;
 
-        typename Protocol::Wire selector;
+        typename ProtEngine::Wire selector;
         this->protocol.op_copy(selector, *input3);
 
-        typename Protocol::Wire different;
-        typename Protocol::Wire temp;
+        typename ProtEngine::Wire different;
+        typename ProtEngine::Wire temp;
         for (BitWidth i = 0; i != width; i++) {
             this->protocol.op_xor(different, input1[i], input2[i]);
             this->protocol.op_and(temp, different, selector);
@@ -394,8 +394,8 @@ namespace mage::engine {
         }
     }
 
-    template <typename Protocol>
-    std::size_t Engine<Protocol>::execute_instruction(const PackedPhysInstruction& phys) {
+    template <typename ProtEngine>
+    std::size_t Engine<ProtEngine>::execute_instruction(const PackedPhysInstruction& phys) {
         switch (phys.header.operation) {
         case OpCode::IssueSwapIn:
             this->execute_issue_swap_in(phys);
@@ -466,7 +466,7 @@ namespace mage::engine {
     }
 
     /* Explicitly instantiate Engine template for each protocol. */
-    template class Engine<schemes::PlaintextEvaluator>;
-    template class Engine<schemes::HalfGatesGarbler>;
-    template class Engine<schemes::HalfGatesEvaluator>;
+    template class Engine<PlaintextEvaluationEngine>;
+    template class Engine<HalfGatesGarblingEngine>;
+    template class Engine<HalfGatesEvaluationEngine>;
 }

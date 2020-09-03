@@ -30,86 +30,62 @@
 
 #include <cstdint>
 #include <string>
-#include <vector>
 #include "crypto/aes.hpp"
 #include "crypto/block.hpp"
 #include "crypto/mitccrh.hpp"
 #include "crypto/prg.hpp"
 #include "crypto/prp.hpp"
-#include "crypto/ot/base.hpp"
-#include "crypto/ot/extension.hpp"
-#include "util/binaryfile.hpp"
 
 namespace mage::schemes {
     class HalfGatesGarbler {
     public:
         using Wire = crypto::block;
 
-        HalfGatesGarbler(std::string input_file, std::string output_file, int conn_fd)
-            : global_id(0), input_reader(input_file.c_str()), output_writer(output_file.c_str()), conn_reader(conn_fd), conn_writer(conn_fd) {
-            this->conn_writer.enable_stats("GATE-SEND (ns)");
+        HalfGatesGarbler() : global_id(0) {
+        }
 
+        crypto::block initialize() {
             crypto::PRG tmp;
             tmp.random_block(&this->seed);
             Wire a;
-            this->set_delta(a);
+            this->set_delta(a); // Is this a bug? a appears uninitialized.
 
-            Wire input_seed;
+            crypto::block input_seed;
             this->prg.random_block(&input_seed);
-            this->conn_writer.write<Wire>() = input_seed;
             this->shared_prg.set_seed(input_seed);
-            this->conn_writer.flush();
 
-            this->ot_sender.initialize(this->conn_reader, this->conn_writer);
+            return input_seed;
         }
 
-        // HACK: assume all output goes to the garbler
-        ~HalfGatesGarbler() {
-            this->conn_writer.flush(); // otherwise we may deadlock
-            for (std::uint64_t i = 0; i != this->output_label_lsbs.size(); i++) {
-                bool evaluator_lsb = this->conn_reader.read<bool>();
-                bool result = (this->output_label_lsbs[i] != evaluator_lsb);
-                std::uint8_t output_bit = result ? 0x1 : 0x0;
-                this->output_writer.write1(output_bit);
+        void input_garbler(Wire* data, unsigned int length, const bool* input_bits) {
+            this->shared_prg.random_block(data, length);
+            for (unsigned int i = 0; i != length; i++) {
+                if (input_bits[i]) {
+                    data[i] = crypto::xorBlocks(data[i], this->delta);
+                }
             }
         }
 
-        // HACK: assume all input comes from the garbler
-        void input(Wire* data, unsigned int length, bool garbler) {
-            if (garbler) {
-                this->shared_prg.random_block(data, length);
-                for (unsigned int i = 0; i != length; i++) {
-                    std::uint8_t bit = this->input_reader.read1();
-                    if (bit != 0) {
-                        data[i] = crypto::xorBlocks(data[i], this->delta);
-                    }
-                }
-            } else {
-                this->prg.random_block(data, length);
-                std::vector<std::pair<crypto::block, crypto::block>> pairs(length);
-                for (unsigned int i = 0; i != length; i++) {
-                    pairs[i].first = data[i];
-                    pairs[i].second = crypto::xorBlocks(data[i], this->delta);
-                    // std::cout << *reinterpret_cast<std::uint64_t*>(&pairs[i].first) << " OR " << *reinterpret_cast<std::uint64_t*>(&pairs[i].second) << std::endl;
-                }
-                // crypto::ot::base_send(this->ot_group, this->conn_reader, this->conn_writer, pairs.data(), length);
-                this->ot_sender.send(this->conn_reader, this->conn_writer, pairs.data(), length);
+        void input_evaluator(Wire* data, unsigned int length, std::pair<Wire, Wire>* ot_pairs) {
+            this->prg.random_block(data, length);
+            for (unsigned int i = 0; i != length; i++) {
+                ot_pairs[i].first = data[i];
+                ot_pairs[i].second = crypto::xorBlocks(data[i], this->delta);
+                // std::cout << *reinterpret_cast<std::uint64_t*>(&pairs[i].first) << " OR " << *reinterpret_cast<std::uint64_t*>(&pairs[i].second) << std::endl;
             }
         }
 
         // HACK: assume all output goes to the garbler
-        void output(const Wire* data, unsigned int length) {
+        void output(std::uint8_t* into, const Wire* data, unsigned int length) {
             for (unsigned int i = 0; i != length; i++) {
                 bool lsb = crypto::getLSB(data[i]);
-                this->output_label_lsbs.push_back(lsb);
+                into[i] = lsb ? 0x1 : 0x0;
             }
         }
 
-        void op_and(Wire& output, const Wire& input1, const Wire& input2) {
+        void op_and(crypto::block* table, Wire& output, const Wire& input1, const Wire& input2) {
             crypto::block out1;
-            crypto::block* table = reinterpret_cast<crypto::block*>(this->conn_writer.start_write(2 * sizeof(crypto::block)));
             garble_gate_garble_halfgates(input1, crypto::xorBlocks(input1, this->delta), input2, crypto::xorBlocks(input2, this->delta), &output, &out1, this->delta, table, this->global_id++, &this->prp.aes);
-            this->conn_writer.finish_write(2 * sizeof(crypto::block));
         }
 
         void op_xor(Wire& output, const Wire& input1, const Wire& input2) {
@@ -218,12 +194,6 @@ namespace mage::schemes {
             *out1 = crypto::xorBlocks(*out0, delta);
         }
 
-        util::BinaryFileReader input_reader;
-        util::BinaryFileWriter output_writer;
-        util::BufferedFileReader<false> conn_reader;
-        util::BufferedFileWriter<false> conn_writer;
-        std::vector<bool> output_label_lsbs;
-
         std::int64_t global_id;
         Wire delta;
         Wire seed;
@@ -232,72 +202,36 @@ namespace mage::schemes {
         crypto::PRP prp;
         crypto::PRG prg;
         crypto::PRG shared_prg;
-
-        // crypto::DDHGroup ot_group;
-        crypto::ot::ExtensionSender ot_sender;
     };
 
     class HalfGatesEvaluator {
     public:
         using Wire = crypto::block;
 
-        HalfGatesEvaluator(std::string input_file, int conn_fd)
-            : global_id(0), input_reader(input_file.c_str()), conn_reader(conn_fd), conn_writer(conn_fd) {
-            this->conn_reader.enable_stats("GATE-RECV (ns)");
+        HalfGatesEvaluator() : global_id(0) {
+        }
 
+        void initialize(crypto::block input_seed) {
             crypto::PRG tmp(crypto::fix_key);
             tmp.random_block(this->public_constants, 2);
 
-            crypto::block input_seed = this->conn_reader.read<crypto::block>();
             this->shared_prg.set_seed(input_seed);
-
-            this->ot_chooser.initialize(this->conn_reader, this->conn_writer);
         }
 
-        // HACK: assume all input comes from the garbler
-        void input(Wire* data, unsigned int length, bool garbler) {
-            if (garbler) {
-                this->shared_prg.random_block(data, length);
-            } else {
-                /* Use OT to get label corresponding to bit. */
-                // bool* choices = new bool[length];
-                // for (unsigned int i = 0; i != length; i++) {
-                //     std::uint8_t bit = this->input_reader.read1();
-                //     choices[i] = (bit != 0);
-                // }
-                // crypto::ot::base_choose(this->ot_group, this->conn_reader, this->conn_writer, choices, data, length);
-                std::size_t num_blocks = (length + crypto::block_num_bits - 1) / crypto::block_num_bits;
-                crypto::block choices[num_blocks];
-                choices[num_blocks - 1] = crypto::zero_block();
-                this->input_reader.read_bits(reinterpret_cast<std::uint8_t*>(&choices[0]), length);
-                // for (std::size_t i = 0; i != num_blocks; i++) { // this abomination works
-                //     choices[i] = crypto::zero_block();
-                //     unsigned __int128* x = reinterpret_cast<unsigned __int128*>(&choices[i]);
-                //     for (std::size_t j = 0; j != crypto::block_num_bits && i * crypto::block_num_bits + j != length; j++) {
-                //         std::uint8_t bit = this->input_reader.read1();
-                //         *x |= (((unsigned __int128) bit) << j);
-                //     }
-                // }
-                this->ot_chooser.choose(this->conn_reader, this->conn_writer, choices, data, length);
-                // for (unsigned int i = 0; i != length; i++) {
-                //     std::cout << "Asked for choice " << choices[i] << ", got " << *reinterpret_cast<std::uint64_t*>(&data[i]) << std::endl;
-                // }
-                // delete[] choices;
-            }
+        void input_garbler(Wire* data, unsigned int length) {
+            this->shared_prg.random_block(data, length);
         }
 
         // HACK: assume all output goes to the garbler
-        void output(const Wire* data, unsigned int length) {
+        void output(std::uint8_t* into, const Wire* data, unsigned int length) {
             for (unsigned int i = 0; i != length; i++) {
                 bool lsb = crypto::getLSB(data[i]);
-                this->conn_writer.write<bool>() = lsb;
+                into[i] = lsb ? 0x1 : 0x0;
             }
         }
 
-        void op_and(Wire& output, const Wire& input1, const Wire& input2) {
-            crypto::block* table = reinterpret_cast<crypto::block*>(this->conn_reader.start_read(2 * sizeof(crypto::block)));
+        void op_and(crypto::block* table, Wire& output, const Wire& input1, const Wire& input2) {
             garble_gate_eval_halfgates(input1, input2, &output, table, this->global_id++, &this->prp.aes);
-            this->conn_reader.finish_read(2 * sizeof(crypto::block));
         }
 
         void op_xor(Wire& output, const Wire& input1, const Wire& input2) {
@@ -381,18 +315,11 @@ namespace mage::schemes {
             *out = W;
         }
 
-        util::BinaryFileReader input_reader;
-        util::BufferedFileReader<false> conn_reader;
-        util::BufferedFileWriter<false> conn_writer;
-
         std::int64_t global_id;
         Wire public_constants[2];
 
         crypto::PRP prp;
         crypto::PRG shared_prg;
-
-        // crypto::DDHGroup ot_group;
-        crypto::ot::ExtensionChooser ot_chooser;
     };
 }
 
