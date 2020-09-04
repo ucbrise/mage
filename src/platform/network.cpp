@@ -19,6 +19,7 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <cstddef>
 #include <cstdio>
 #include <cstdint>
 #include <arpa/inet.h>
@@ -30,7 +31,7 @@
 #include <iostream>
 
 namespace mage::platform {
-    int network_accept(const char* port) {
+    void network_accept(const char* port, int* into, std::uint32_t count) {
         struct addrinfo hints = { 0 };
         hints.ai_flags = AI_PASSIVE;
         hints.ai_family = AF_INET;
@@ -61,21 +62,21 @@ namespace mage::platform {
             std::abort();
         }
 
-        int connection_socket = accept(server_socket, NULL, NULL);
-        if (connection_socket == -1) {
-            std::perror("network_accept -> accept");
-            std::abort();
+        for (std::uint32_t i = 0; i != count; i++) {
+            into[i] = accept(server_socket, NULL, NULL);
+            if (into[i] == -1) {
+                std::perror("network_accept -> accept");
+                std::abort();
+            }
         }
 
         if (close(server_socket) == -1) {
             std::perror("network_accept -> close");
             std::abort();
         }
-
-        return connection_socket;
     }
 
-    int network_connect(const char* host, const char* port) {
+    void network_connect(const char* host, const char* port, int* into, std::uint32_t count) {
         struct addrinfo hints = { 0 };
         hints.ai_family = AF_INET;
         hints.ai_socktype = SOCK_STREAM;
@@ -87,20 +88,20 @@ namespace mage::platform {
             std::abort();
         }
 
-        int connection_socket = socket(info->ai_family, info->ai_socktype, info->ai_protocol);
-        if (connection_socket == -1) {
-            std::perror("network_connect -> socket");
-            std::abort();
-        }
+        for (std::uint32_t i = 0; i != count; i++) {
+            into[i] = socket(info->ai_family, info->ai_socktype, info->ai_protocol);
+            if (into[i] == -1) {
+                std::perror("network_connect -> socket");
+                std::abort();
+            }
 
-        if (connect(connection_socket, info->ai_addr, info->ai_addrlen) == -1) {
-            std::perror("network_connect -> connect");
-            std::abort();
+            if (connect(into[i], info->ai_addr, info->ai_addrlen) == -1) {
+                std::perror("network_connect -> connect");
+                std::abort();
+            }
         }
 
         freeaddrinfo(info);
-
-        return connection_socket;
     }
 
     void network_close(int socket) {

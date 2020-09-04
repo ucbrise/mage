@@ -84,6 +84,25 @@ namespace mage::platform {
         return fd;
     }
 
+    std::uint64_t length_file(int fd) {
+        off_t pos = lseek(fd, 0, SEEK_CUR);
+        if (pos == (off_t) -1) {
+            std::perror("length_file -> lseek");
+            std::abort();
+        }
+        off_t end = lseek(fd, 0, SEEK_END);
+        if (end == (off_t) -1) {
+            std::perror("length_file -> lseek");
+            std::abort();
+        }
+        off_t rv = lseek(fd, pos, SEEK_SET);
+        if (rv == (off_t) -1) {
+            std::perror("length_file -> lseek");
+            std::abort();
+        }
+        return end;
+    }
+
     void write_to_file(int fd, const void* buffer, std::size_t length) {
         const std::uint8_t* data = reinterpret_cast<const std::uint8_t*>(buffer);
         std::size_t processed = 0;

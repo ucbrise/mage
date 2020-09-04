@@ -24,6 +24,7 @@
 
 #include <cstdint>
 #include <algorithm>
+#include "platform/filesystem.hpp"
 #include "util/filebuffer.hpp"
 
 namespace mage::util {
@@ -84,7 +85,11 @@ namespace mage::util {
 
     class BinaryFileReader : private BufferedFileReader<false> {
     public:
-        BinaryFileReader(const char* input_file) : BufferedFileReader<false>(input_file), current_bit(0), current_byte(0) {
+        BinaryFileReader(const char* input_file, std::size_t buffer_size = 1 << 18) : BufferedFileReader<false>(input_file, buffer_size), current_bit(0), current_byte(0) {
+        }
+
+        std::uint64_t get_file_length() const {
+            return platform::length_file(this->fd);
         }
 
         std::uint8_t read1() {

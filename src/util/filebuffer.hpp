@@ -41,19 +41,39 @@ namespace mage::util {
     template <bool backwards_readable = false>
     class BufferedFileWriter {
     public:
+        BufferedFileWriter(std::size_t buffer_size = 1 << 18)
+            : fd(-1), owns_fd(false), use_stats(false), position(0), buffer(buffer_size, true) {
+        }
+        
         BufferedFileWriter(const char* filename, std::size_t buffer_size = 1 << 18)
             : owns_fd(true), use_stats(false), position(0), buffer(buffer_size, true) {
             this->fd = platform::create_file(filename, 0);
         }
 
         BufferedFileWriter(int file_descriptor, std::size_t buffer_size = 1 << 18)
-            : fd(file_descriptor), owns_fd(false), use_stats(false), position(0), buffer(buffer_size, true) {
+            : BufferedFileWriter(buffer_size) {
+            this->fd = file_descriptor;
+        }
+
+        void set_file_descriptor(int file_descriptor, bool owns_fd) {
+            this->fd = file_descriptor;
+            this->owns_fd = owns_fd;
+        }
+
+        int relinquish_file_descriptor() {
+            this->flush();
+            int old_fd = this->fd;
+            this->fd = -1;
+            this->owns_fd = false;
+            return old_fd;
         }
 
         virtual ~BufferedFileWriter() {
-            this->flush();
-            if (this->owns_fd) {
-                platform::close_file(this->fd);
+            if (this->fd != -1) {
+                this->flush();
+                if (this->owns_fd) {
+                    platform::close_file(this->fd);
+                }
             }
         }
 
@@ -127,13 +147,30 @@ namespace mage::util {
     template <bool backwards_readable>
     class BufferedFileReader {
     public:
+        BufferedFileReader(std::size_t buffer_size = 1 << 18)
+            : fd(-1), owns_fd(false), use_stats(false), position(0), buffer(buffer_size, true), active_size(0) {
+        }
+
         BufferedFileReader(const char* filename, std::size_t buffer_size = 1 << 18)
             : owns_fd(true), use_stats(false), position(0), buffer(buffer_size, true), active_size(0) {
             this->fd = platform::open_file(filename, nullptr);
         }
 
         BufferedFileReader(int file_descriptor, std::size_t buffer_size = 1 << 18)
-            : fd(file_descriptor), owns_fd(false), use_stats(false), position(0), buffer(buffer_size, true), active_size(0) {
+            : BufferedFileReader(buffer_size) {
+            this->fd = file_descriptor;
+        }
+
+        void set_file_descriptor(int file_descriptor, bool owns_fd) {
+            this->fd = file_descriptor;
+            this->owns_fd = owns_fd;
+        }
+
+        int relinquish_file_descriptor() {
+            int old_fd = this->fd;
+            this->fd = -1;
+            this->owns_fd = false;
+            return old_fd;
         }
 
         virtual ~BufferedFileReader() {
@@ -223,7 +260,7 @@ namespace mage::util {
         }
 
         BufferedReverseFileReader(int file_descriptor, std::size_t buffer_size = 1 << 18)
-            : fd(file_descriptor), owns_fd(false), position(0), buffer(buffer_size, true) {
+            : fd(file_descriptor), owns_fd(false), length_left(UINT64_MAX), position(0), buffer(buffer_size, true) {
         }
 
         virtual ~BufferedReverseFileReader() {

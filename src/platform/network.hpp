@@ -22,11 +22,12 @@
 #ifndef MAGE_PLATFORM_NETWORK_HPP_
 #define MAGE_PLATFORM_NETWORK_HPP_
 
+#include <cstddef>
 #include <cstdint>
 
 namespace mage::platform {
-    int network_accept(const char* port);
-    int network_connect(const char* host, const char* port);
+    void network_accept(const char* port, int* into, std::uint32_t count = 1);
+    void network_connect(const char* host, const char* port, int* into, std::uint32_t count = 1);
     void network_close(int socket);
 }
 

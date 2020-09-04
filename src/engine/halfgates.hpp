@@ -22,26 +22,41 @@
 #ifndef MAGE_ENGINE_HALFGATES_HPP_
 #define MAGE_ENGINE_HALFGATES_HPP_
 
+#include <cstddef>
 #include <cstdint>
+#include <array>
+#include <chrono>
+#include <memory>
 #include <string>
+#include <thread>
 #include "crypto/block.hpp"
 #include "crypto/ot/extension.hpp"
+#include "platform/network.hpp"
 #include "schemes/halfgates.hpp"
 #include "util/binaryfile.hpp"
+#include "util/userpipe.hpp"
 
 namespace mage::engine {
+    constexpr const std::size_t num_connections = 2;
+
     class HalfGatesGarblingEngine {
     public:
         using Wire = schemes::HalfGatesGarbler::Wire;
 
-        HalfGatesGarblingEngine(std::string input_file, std::string output_file, int conn_fd)
-            : input_reader(input_file.c_str()), output_writer(output_file.c_str()), conn_reader(conn_fd), conn_writer(conn_fd) {
+        HalfGatesGarblingEngine(const char* input_file, const char* output_file, const char* evaluator_host, const char* evaluator_port)
+            : input_reader(input_file), output_writer(output_file), evaluator_input_labels(12) {
+            platform::network_connect(evaluator_host, evaluator_port, this->sockets.data(), num_connections);
+            this->conn_reader.set_file_descriptor(this->sockets[0], false);
+            this->conn_writer.set_file_descriptor(this->sockets[0], false);
+            this->ot_conn_reader.set_file_descriptor(this->sockets[1], false);
+            this->ot_conn_writer.set_file_descriptor(this->sockets[1], false);
+
+            this->start_input_daemon();
+
             this->conn_writer.enable_stats("GATE-SEND (ns)");
             crypto::block input_seed = this->garbler.initialize();
             this->conn_writer.write<Wire>() = input_seed;
             this->conn_writer.flush();
-
-            this->ot_sender.initialize(this->conn_reader, this->conn_writer);
         }
 
         ~HalfGatesGarblingEngine() {
@@ -49,6 +64,14 @@ namespace mage::engine {
             for (std::uint64_t i = 0; i != this->output_label_lsbs.size(); i++) {
                 std::uint8_t evaluator_lsb = this->conn_reader.read<std::uint8_t>();
                 this->output_writer.write1(this->output_label_lsbs[i] ^ evaluator_lsb);
+            }
+            this->conn_reader.relinquish_file_descriptor();
+            this->conn_writer.relinquish_file_descriptor();
+            this->input_daemon.join();
+            this->ot_conn_reader.relinquish_file_descriptor();
+            this->ot_conn_writer.relinquish_file_descriptor();
+            for (std::size_t i = 0; i != num_connections; i++) {
+                platform::network_close(this->sockets[i]);
             }
         }
 
@@ -61,10 +84,7 @@ namespace mage::engine {
                 }
                 this->garbler.input_garbler(data, length, input_bits);
             } else {
-                std::pair<Wire, Wire> ot_pairs[length];
-                this->garbler.input_evaluator(data, length, ot_pairs);
-                // crypto::ot::base_send(this->ot_group, this->conn_reader, this->conn_writer, ot_pairs, length);
-                this->ot_sender.send(this->conn_reader, this->conn_writer, ot_pairs, length);
+                this->evaluator_input_labels.read_contiguous(data, length);
             }
         }
 
@@ -106,60 +126,59 @@ namespace mage::engine {
         }
 
     private:
+        void start_input_daemon();
+
         schemes::HalfGatesGarbler garbler;
 
         util::BinaryFileReader input_reader;
         util::BinaryFileWriter output_writer;
+        std::array<int, num_connections> sockets;
         util::BufferedFileReader<false> conn_reader;
         util::BufferedFileWriter<false> conn_writer;
         std::vector<std::uint8_t> output_label_lsbs;
 
-        // crypto::DDHGroup ot_group;
+        std::thread input_daemon;
+        util::BufferedFileReader<false> ot_conn_reader;
+        util::BufferedFileWriter<false> ot_conn_writer;
         crypto::ot::ExtensionSender ot_sender;
+        util::UserPipe<crypto::block> evaluator_input_labels;
     };
 
     class HalfGatesEvaluationEngine {
     public:
         using Wire = schemes::HalfGatesEvaluator::Wire;
 
-        HalfGatesEvaluationEngine(std::string input_file, int conn_fd)
-            : input_reader(input_file.c_str()), conn_reader(conn_fd), conn_writer(conn_fd) {
-            this->conn_reader.enable_stats("GATE-RECV (ns)");
+        HalfGatesEvaluationEngine(const char* input_file, const char* evaluator_port)
+            : input_reader(input_file), evaluator_input_labels(12) {
+            platform::network_accept(evaluator_port, this->sockets.data(), num_connections);
+            this->conn_reader.set_file_descriptor(this->sockets[0], false);
+            this->conn_writer.set_file_descriptor(this->sockets[0], false);
+            this->ot_conn_reader.set_file_descriptor(this->sockets[1], false);
+            this->ot_conn_writer.set_file_descriptor(this->sockets[1], false);
+            
+            this->start_input_daemon();
 
+            this->conn_reader.enable_stats("GATE-RECV (ns)");
             crypto::block input_seed = this->conn_reader.read<crypto::block>();
             this->evaluator.initialize(input_seed);
+        }
 
-            this->ot_chooser.initialize(this->conn_reader, this->conn_writer);
+        ~HalfGatesEvaluationEngine() {
+            this->conn_reader.relinquish_file_descriptor();
+            this->conn_writer.relinquish_file_descriptor();
+            this->input_daemon.join();
+            this->ot_conn_reader.relinquish_file_descriptor();
+            this->ot_conn_writer.relinquish_file_descriptor();
+            for (std::size_t i = 0; i != num_connections; i++) {
+                platform::network_close(this->sockets[i]);
+            }
         }
 
         void input(Wire* data, unsigned int length, bool garbler) {
             if (garbler) {
                 this->evaluator.input_garbler(data, length);
             } else {
-                /* Use OT to get label corresponding to bit. */
-                // bool* choices = new bool[length];
-                // for (unsigned int i = 0; i != length; i++) {
-                //     std::uint8_t bit = this->input_reader.read1();
-                //     choices[i] = (bit != 0);
-                // }
-                // crypto::ot::base_choose(this->ot_group, this->conn_reader, this->conn_writer, choices, data, length);
-                std::size_t num_blocks = (length + crypto::block_num_bits - 1) / crypto::block_num_bits;
-                crypto::block choices[num_blocks];
-                choices[num_blocks - 1] = crypto::zero_block();
-                this->input_reader.read_bits(reinterpret_cast<std::uint8_t*>(&choices[0]), length);
-                // for (std::size_t i = 0; i != num_blocks; i++) { // this abomination works
-                //     choices[i] = crypto::zero_block();
-                //     unsigned __int128* x = reinterpret_cast<unsigned __int128*>(&choices[i]);
-                //     for (std::size_t j = 0; j != crypto::block_num_bits && i * crypto::block_num_bits + j != length; j++) {
-                //         std::uint8_t bit = this->input_reader.read1();
-                //         *x |= (((unsigned __int128) bit) << j);
-                //     }
-                // }
-                this->ot_chooser.choose(this->conn_reader, this->conn_writer, choices, data, length);
-                // for (unsigned int i = 0; i != length; i++) {
-                //     std::cout << "Asked for choice " << choices[i] << ", got " << *reinterpret_cast<std::uint64_t*>(&data[i]) << std::endl;
-                // }
-                // delete[] choices;
+                this->evaluator_input_labels.read_contiguous(data, length);
             }
         }
 
@@ -200,13 +219,20 @@ namespace mage::engine {
         }
 
     private:
+        void start_input_daemon();
+
         schemes::HalfGatesEvaluator evaluator;
         util::BinaryFileReader input_reader;
+        std::array<int, num_connections> sockets;
         util::BufferedFileReader<false> conn_reader;
         util::BufferedFileWriter<false> conn_writer;
 
-        // crypto::DDHGroup ot_group;
+        /* For the input daemon. */
+        std::thread input_daemon;
+        util::BufferedFileReader<false> ot_conn_reader;
+        util::BufferedFileWriter<false> ot_conn_writer;
         crypto::ot::ExtensionChooser ot_chooser;
+        util::UserPipe<crypto::block> evaluator_input_labels;
     };
 }
 

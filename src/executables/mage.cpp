@@ -95,20 +95,14 @@ int main(int argc, char** argv) {
         host.erase(colon_index);
     }
 
-    /* Create the network connection. */
-
-    int socket;
+    /* Perform the computation. */
     if (garble) {
-        socket = platform::network_connect(host.c_str(), port.c_str());
-
-        engine::HalfGatesGarblingEngine p(garbler_input_file.c_str(), output_file.c_str(), socket);
+        engine::HalfGatesGarblingEngine p(garbler_input_file.c_str(), output_file.c_str(), host.c_str(), port.c_str());
         start = std::chrono::steady_clock::now();
         engine::SingleCoreEngine executor(prog_file.c_str(), "garbler_swapfile", p);
         executor.execute_program();
     } else {
-        socket = platform::network_accept(port.c_str());
-
-        engine::HalfGatesEvaluationEngine p(evaluator_input_file.c_str(), socket);
+        engine::HalfGatesEvaluationEngine p(evaluator_input_file.c_str(), port.c_str());
         start = std::chrono::steady_clock::now();
         engine::SingleCoreEngine executor(prog_file.c_str(), "evaluator_swapfile", p);
         executor.execute_program();
@@ -117,6 +111,4 @@ int main(int argc, char** argv) {
 
     std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     std::cout << ms.count() << " ms" << std::endl;
-
-    platform::network_close(socket);
 }
