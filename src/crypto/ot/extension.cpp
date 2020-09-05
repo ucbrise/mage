@@ -31,11 +31,11 @@
 #include "util/filebuffer.hpp"
 
 namespace mage::crypto::ot {
-    ExtensionSender::ExtensionSender() : state(ExtensionState::Uninitialized) {
+    ExtensionSender::ExtensionSender() : initialized(false) {
     }
 
     void ExtensionSender::initialize(util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out) {
-        assert(this->state == ExtensionState::Uninitialized);
+        assert(!this->initialized);
 
         PRG prg;
         prg.random_block(&this->s);
@@ -54,40 +54,32 @@ namespace mage::crypto::ot {
             this->prgs[i].set_seed(k[i]);
         }
 
-        this->state = ExtensionState::Ready;
+        this->initialized = true;
     }
 
-    void ExtensionSender::prepare_send(util::BufferedFileReader<false>& network_in, std::size_t num_choices, block* q) {
-        assert(this->state == ExtensionState::Ready);
+    void ExtensionSender::prepare_send(std::size_t num_choices, const block* u, block* q) {
+        assert(this->initialized);
 
         /* The variable m in the paper is num_choices. */
         std::size_t num_row_blocks = (num_choices + block_num_bits - 1) / block_num_bits;
         std::size_t num_blocks = num_row_blocks * extension_kappa;
         /* q and qT are uninitialied arrays of num_blocks blocks. */
 
-        void* from = network_in.start_read(sizeof(block) * num_blocks);
-        block* u = reinterpret_cast<block*>(from);
         unsigned __int128 integer_s = *reinterpret_cast<unsigned __int128*>(&this->s);
-        for (std::size_t i = 0, k = 0; i != num_blocks; (i += num_row_blocks), k++) {
-            this->prgs[k].random_block(&q[i], num_row_blocks);
+        for (std::size_t i_col_start = 0, i = 0; i_col_start != num_blocks; (i_col_start += num_row_blocks), i++) {
+            this->prgs[i].random_block(&q[i_col_start], num_row_blocks);
             if (block_bit(this->s, i)) {
                 for (std::size_t j = 0; j != num_row_blocks; j++) {
-                    block x = block_load_unaligned(&u[i + j]);
-                    q[i + j] = xorBlocks(x, q[i + j]);
+                    block x = block_load_unaligned(&u[i_col_start + j]);
+                    q[i_col_start + j] = xorBlocks(x, q[i_col_start + j]);
                 }
             }
         }
-        network_in.finish_read(sizeof(block) * num_blocks);
-
-        this->state = ExtensionState::Prepared;
     }
 
-    void ExtensionSender::finish_send(util::BufferedFileWriter<false>& network_out, const std::pair<block, block>* choices, std::size_t num_choices, const block* qT) {
-        assert(this->state == ExtensionState::Prepared);
+    void ExtensionSender::finish_send(const std::pair<block, block>* choices, std::size_t num_choices, block* y, const block* qT) {
+        assert(this->initialized);
 
-        network_out.flush(); // guarantees that y will be aligned
-        void* into = network_out.start_write(2 * sizeof(block) * num_choices);
-        block* y = static_cast<block*>(into);
         for (std::uint32_t j = 0; j != num_choices; j++) { // iterating over rows (columns of transpose)
             const block* qj = &qT[j];
             {
@@ -102,13 +94,16 @@ namespace mage::crypto::ot {
                 y[(j << 1) | 0x1] = xorBlocks(choices[j].second, h.output_block());
             }
         }
-        network_out.finish_write(2 * sizeof(block) * num_choices);
-        network_out.flush();
-
-        this->state = ExtensionState::Ready;
     }
 
     void ExtensionSender::send(util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out, const std::pair<block, block>* choices, std::size_t num_choices) {
+        assert(num_choices != 0); // see_trans does not work for zero-size matrices
+
+        /*
+         * We store bit matrices in column-major order, where each column's
+         * bits are packed into blocks. The number of blocks in each column
+         * is num_row_blocks.
+         */
         std::size_t num_row_blocks = (num_choices + block_num_bits - 1) / block_num_bits;
         std::size_t num_blocks = num_row_blocks * extension_kappa;
 
@@ -116,16 +111,30 @@ namespace mage::crypto::ot {
         block* q = &buffer[0];
         block* qT = &buffer[num_blocks];
 
-        this->prepare_send(network_in, num_choices, q);
-        sse_trans(reinterpret_cast<std::uint8_t*>(qT), reinterpret_cast<std::uint8_t*>(q), num_row_blocks * block_num_bits, extension_kappa);
-        this->finish_send(network_out, choices, num_choices, qT);
+        void* from = network_in.start_read(sizeof(block) * num_blocks);
+        block* u = reinterpret_cast<block*>(from);
+        this->prepare_send(num_choices, u, q);
+        network_in.finish_read(sizeof(block) * num_blocks);
+
+        /*
+         * Tricky: we switch the number of rows and columns when calling this
+         * function, because it expects the matrix to be in row-major order.
+         */
+        sse_trans(reinterpret_cast<std::uint8_t*>(qT), reinterpret_cast<std::uint8_t*>(q), extension_kappa, num_row_blocks * block_num_bits);
+
+        network_out.flush(); // guarantees that y will be aligned
+        void* into = network_out.start_write(2 * sizeof(block) * num_choices);
+        block* y = static_cast<block*>(into);
+        this->finish_send(choices, num_choices, y, qT);
+        network_out.finish_write(2 * sizeof(block) * num_choices);
+        network_out.flush();
     }
 
-    ExtensionChooser::ExtensionChooser() : state(ExtensionState::Uninitialized) {
+    ExtensionChooser::ExtensionChooser() : initialized(false) {
     }
 
     void ExtensionChooser::initialize(util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out) {
-        assert(this->state == ExtensionState::Uninitialized);
+        assert(!this->initialized);
 
         PRG prg;
         std::array<std::pair<block, block>, extension_kappa> k;
@@ -142,25 +151,22 @@ namespace mage::crypto::ot {
             this->prgs[i].g1.set_seed(k[i].second);
         }
 
-        this->state = ExtensionState::Ready;
+        this->initialized = true;
     }
 
-    void ExtensionChooser::prepare_choose(util::BufferedFileWriter<false>& network_out, const block* choices, std::size_t num_choices, block* t) {
-        assert(this->state == ExtensionState::Ready);
+    void ExtensionChooser::prepare_choose(const block* choices, std::size_t num_choices, block* u, block* t) {
+        assert(this->initialized);
 
         /* The variable m in the paper is num_choices. */
         std::size_t num_row_blocks = (num_choices + block_num_bits - 1) / block_num_bits;
         std::size_t num_blocks = num_row_blocks * extension_kappa;
         /* q and qT are uninitialied arrays of num_blocks blocks. */
 
-        network_out.flush(); // This guarantees that u will be aligned
-        void* into = network_out.start_write(sizeof(block) * num_blocks);
-        block* u = static_cast<block*>(into);
-        for (std::size_t i = 0, k = 0; i != num_blocks; (i += num_row_blocks), k++) { // iterating over columns
-            this->prgs[k].g0.random_block(&t[i], num_row_blocks);
-            this->prgs[k].g1.random_block(&u[i], num_row_blocks);
+        for (std::size_t i_col_start = 0, i = 0; i_col_start != num_blocks; (i_col_start += num_row_blocks), i++) { // iterating over columns
+            this->prgs[i].g0.random_block(&t[i_col_start], num_row_blocks);
+            this->prgs[i].g1.random_block(&u[i_col_start], num_row_blocks);
             for (std::size_t j = 0; j != num_row_blocks; j++) { // iterating over segments of a single column
-                u[i + j] = xorBlocks(u[i + j], t[i + j]);
+                u[i_col_start + j] = xorBlocks(u[i_col_start + j], t[i_col_start + j]);
                 // unsigned __int128 integer_r = 0;
                 // for (int a = 0; a != block_num_bits; a++) {
                 //     if (choices[block_num_bits * j + a]) {
@@ -168,32 +174,30 @@ namespace mage::crypto::ot {
                 //         integer_r |= (one << a);
                 //     }
                 // }
-                u[i + j] = xorBlocks(u[i + j], choices[j]);
+                u[i_col_start + j] = xorBlocks(u[i_col_start + j], choices[j]);
             }
         }
-        network_out.finish_write(sizeof(block) * num_blocks);
-        network_out.flush();
-
-        this->state = ExtensionState::Prepared;
     }
 
-    void ExtensionChooser::finish_choose(util::BufferedFileReader<false>& network_in, const block* choices, block* results, std::size_t num_choices, const block* tT) {
-        assert(this->state == ExtensionState::Prepared);
+    void ExtensionChooser::finish_choose(const block* choices, block* results, std::size_t num_choices, const block* y, const block* tT) {
+        assert(this->initialized);
 
-        void* from = network_in.start_read(2 * sizeof(block) * num_choices);
-        block* y = static_cast<block*>(from);
         for (std::uint32_t j = 0; j != num_choices; j++) {
             Hasher h(&j, sizeof(j)); // TODO: marshal this
             block yj = block_bit(choices[j / block_num_bits], j % block_num_bits) ? y[(j << 1) + 1] : y[j << 1];
             h.update(&tT[j], sizeof(block));
             results[j] = xorBlocks(yj, h.output_block());
         }
-        network_in.finish_read(2 * sizeof(block) * num_choices);
-
-        this->state = ExtensionState::Ready;
     }
 
     void ExtensionChooser::choose(util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out, const block* choices, block* results, std::size_t num_choices) {
+        assert(num_choices != 0); // sse_trans does not work for zero-size matrices
+
+        /*
+         * We store bit matrices in column-major order, where each column's
+         * bits are packed into blocks. The number of blocks in each column
+         * is num_row_blocks.
+         */
         std::size_t num_row_blocks = (num_choices + block_num_bits - 1) / block_num_bits;
         std::size_t num_blocks = num_row_blocks * extension_kappa;
 
@@ -201,8 +205,22 @@ namespace mage::crypto::ot {
         block* t = &buffer[0];
         block* tT = &buffer[num_blocks];
 
-        this->prepare_choose(network_out, choices, num_choices, t);
-        sse_trans(reinterpret_cast<std::uint8_t*>(tT), reinterpret_cast<std::uint8_t*>(t), num_row_blocks * block_num_bits, extension_kappa);
-        this->finish_choose(network_in, choices, results, num_choices, tT);
+        network_out.flush(); // This guarantees that u will be aligned
+        void* into = network_out.start_write(sizeof(block) * num_blocks);
+        block* u = static_cast<block*>(into);
+        this->prepare_choose(choices, num_choices, u, t);
+        network_out.finish_write(sizeof(block) * num_blocks);
+        network_out.flush();
+
+        /*
+         * Tricky: we switch the number of rows and columns when calling this
+         * function, because it expects the matrix to be in row-major order.
+         */
+        sse_trans(reinterpret_cast<std::uint8_t*>(tT), reinterpret_cast<std::uint8_t*>(t), extension_kappa, num_row_blocks * block_num_bits);
+
+        void* from = network_in.start_read(2 * sizeof(block) * num_choices);
+        block* y = static_cast<block*>(from);
+        this->finish_choose(choices, results, num_choices, y, tT);
+        network_in.finish_read(2 * sizeof(block) * num_choices);
     }
 }

@@ -25,7 +25,7 @@
 #include <cstddef>
 #include <condition_variable>
 #include <mutex>
-#include "util/circularbuffer.hpp"
+#include "util/circbuffer.hpp"
 
 namespace mage::util {
     template <typename T>

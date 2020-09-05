@@ -27,7 +27,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "util/circularbuffer.hpp"
+#include "util/circbuffer.hpp"
 
 namespace bdata = boost::unit_test::data;
 using mage::util::CircularBuffer;
@@ -36,21 +36,21 @@ constexpr const std::size_t circbuf_capacity_shift = 6;
 constexpr const std::size_t circbuf_capacity = 1 << circbuf_capacity_shift;
 constexpr const std::uint64_t num_iterations = 100;
 
-BOOST_DATA_TEST_CASE(test_circbuffer_wrap, bdata::xrange(circbuf_capacity)) {
+BOOST_DATA_TEST_CASE(test_circbuffer_wrap, bdata::xrange(circbuf_capacity), step_size) {
     CircularBuffer<std::uint64_t> cb(circbuf_capacity_shift);
 
     std::uint64_t counter = 0;
     for (std::uint64_t i = 0; i != num_iterations; i++) {
-        std::vector<std::uint64_t> x(sample);
-        for (std::uint64_t i = 0; i != sample; i++) {
+        std::vector<std::uint64_t> x(step_size);
+        for (std::uint64_t i = 0; i != step_size; i++) {
             x[i] = i;
         }
-        cb.write_unchecked(x.data(), sample);
+        cb.write_unchecked(x.data(), step_size);
 
-        std::vector<std::uint64_t> y(sample);
-        cb.read_unchecked(y.data(), sample);
+        std::vector<std::uint64_t> y(step_size);
+        cb.read_unchecked(y.data(), step_size);
 
-        BOOST_REQUIRE(x.size() == sample);
+        BOOST_REQUIRE(x.size() == step_size);
         BOOST_REQUIRE(x.size() == y.size());
         for (std::uint64_t k = 0; k != x.size(); k++) {
             BOOST_CHECK_MESSAGE(x[k] == y[k], "x[" << k << "] is " << x[k] << ", but y[" << k << "] is " << y[k]);

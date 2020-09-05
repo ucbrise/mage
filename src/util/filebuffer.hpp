@@ -44,7 +44,7 @@ namespace mage::util {
         BufferedFileWriter(std::size_t buffer_size = 1 << 18)
             : fd(-1), owns_fd(false), use_stats(false), position(0), buffer(buffer_size, true) {
         }
-        
+
         BufferedFileWriter(const char* filename, std::size_t buffer_size = 1 << 18)
             : owns_fd(true), use_stats(false), position(0), buffer(buffer_size, true) {
             this->fd = platform::create_file(filename, 0);
@@ -52,7 +52,7 @@ namespace mage::util {
 
         BufferedFileWriter(int file_descriptor, std::size_t buffer_size = 1 << 18)
             : BufferedFileWriter(buffer_size) {
-            this->fd = file_descriptor;
+            this->set_file_descriptor(file_descriptor, false);
         }
 
         void set_file_descriptor(int file_descriptor, bool owns_fd) {
@@ -158,7 +158,7 @@ namespace mage::util {
 
         BufferedFileReader(int file_descriptor, std::size_t buffer_size = 1 << 18)
             : BufferedFileReader(buffer_size) {
-            this->fd = file_descriptor;
+            this->set_file_descriptor(file_descriptor, false);
         }
 
         void set_file_descriptor(int file_descriptor, bool owns_fd) {

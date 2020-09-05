@@ -29,7 +29,7 @@
 #include "util/filebuffer.hpp"
 
 namespace mage::engine {
-    const constexpr std::uint64_t max_batch_size = 128;
+    const constexpr std::uint64_t max_batch_size = 4 * crypto::block_num_bits;
 
     void HalfGatesGarblingEngine::start_input_daemon() {
         this->input_daemon = std::thread([=]() {

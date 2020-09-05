@@ -110,4 +110,18 @@ namespace mage::platform {
             std::abort();
         }
     }
+
+    void pipe_open(int* into) {
+        if (pipe(into) != 0) {
+            std::perror("pipe_open -> pipe");
+            std::abort();
+        }
+    }
+
+    void pipe_close(int fd) {
+        if (close(fd) != 0) {
+            std::perror("pipe_close -> close");
+            std::abort();
+        }
+    }
 }

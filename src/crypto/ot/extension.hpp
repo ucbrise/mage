@@ -42,12 +42,6 @@ namespace mage::crypto::ot {
     /* Kappa is the symmetric security parameter. */
     constexpr const std::uint8_t extension_kappa = block_num_bits;
 
-    enum class ExtensionState : std::uint8_t {
-        Uninitialized,
-        Ready,
-        Prepared
-    };
-
     class ExtensionSender {
     public:
         ExtensionSender();
@@ -56,13 +50,13 @@ namespace mage::crypto::ot {
         void send(util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out, const std::pair<block, block>* choices, std::size_t num_choices);
 
     private:
-        void prepare_send(util::BufferedFileReader<false>& network_in, std::size_t num_choices, block* q);
-        void finish_send(util::BufferedFileWriter<false>& network_out, const std::pair<block, block>* choices, std::size_t num_choices, const block* qT);
+        void prepare_send(std::size_t num_choices, const block* u, block* q);
+        void finish_send(const std::pair<block, block>* choices, std::size_t num_choices, block* y, const block* qT);
 
         std::array<PRG, extension_kappa> prgs;
         block s;
 
-        ExtensionState state;
+        bool initialized;
     };
 
     struct ExtChooserPRGs {
@@ -78,12 +72,12 @@ namespace mage::crypto::ot {
         void choose(util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out, const block* choices, block* results, std::size_t num_choices);
 
     private:
-        void prepare_choose(util::BufferedFileWriter<false>& network_out, const block* choices, std::size_t num_choices, block* t);
-        void finish_choose(util::BufferedFileReader<false>& network_in, const block* choices, block* results, std::size_t num_choices, const block* tT);
+        void prepare_choose(const block* choices, std::size_t num_choices, block* u, block* t);
+        void finish_choose(const block* choices, block* results, std::size_t num_choices, const block* y, const block* tT);
 
         std::array<ExtChooserPRGs, extension_kappa> prgs;
 
-        ExtensionState state;
+        bool initialized;
     };
 }
 

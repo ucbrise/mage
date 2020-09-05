@@ -19,8 +19,8 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef MAGE_UTIL_CIRCULARBUFFER_HPP_
-#define MAGE_UTIL_CIRCULARBUFFER_HPP_
+#ifndef MAGE_UTIL_CIRCBUFFER_HPP_
+#define MAGE_UTIL_CIRCBUFFER_HPP_
 
 #include <cstddef>
 #include <algorithm>

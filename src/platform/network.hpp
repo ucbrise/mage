@@ -29,6 +29,9 @@ namespace mage::platform {
     void network_accept(const char* port, int* into, std::uint32_t count = 1);
     void network_connect(const char* host, const char* port, int* into, std::uint32_t count = 1);
     void network_close(int socket);
+
+    void pipe_open(int* into);
+    void pipe_close(int fd);
 }
 
 #endif
