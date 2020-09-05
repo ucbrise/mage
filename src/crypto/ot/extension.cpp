@@ -41,9 +41,8 @@ namespace mage::crypto::ot {
         prg.random_block(&this->s);
 
         std::array<bool, extension_kappa> s_array;
-        unsigned __int128 integer_s = *reinterpret_cast<unsigned __int128*>(&this->s);
         for (int i = 0; i != extension_kappa; i++) {
-            s_array[i] = ((integer_s >> i) & 0x1) != 0x0;
+            s_array[i] = block_bit(this->s, i);
         }
 
         DDHGroup g;
@@ -65,7 +64,6 @@ namespace mage::crypto::ot {
         std::size_t num_blocks = num_row_blocks * extension_kappa;
         /* q and qT are uninitialied arrays of num_blocks blocks. */
 
-        unsigned __int128 integer_s = *reinterpret_cast<unsigned __int128*>(&this->s);
         for (std::size_t i_col_start = 0, i = 0; i_col_start != num_blocks; (i_col_start += num_row_blocks), i++) {
             this->prgs[i].random_block(&q[i_col_start], num_row_blocks);
             if (block_bit(this->s, i)) {
@@ -107,9 +105,8 @@ namespace mage::crypto::ot {
         std::size_t num_row_blocks = (num_choices + block_num_bits - 1) / block_num_bits;
         std::size_t num_blocks = num_row_blocks * extension_kappa;
 
-        block buffer[2 * num_blocks];
-        block* q = &buffer[0];
-        block* qT = &buffer[num_blocks];
+        block q[num_blocks];
+        block qT[num_blocks];
 
         void* from = network_in.start_read(sizeof(block) * num_blocks);
         block* u = reinterpret_cast<block*>(from);
@@ -184,8 +181,13 @@ namespace mage::crypto::ot {
 
         for (std::uint32_t j = 0; j != num_choices; j++) {
             Hasher h(&j, sizeof(j)); // TODO: marshal this
-            block yj = block_bit(choices[j / block_num_bits], j % block_num_bits) ? y[(j << 1) + 1] : y[j << 1];
             h.update(&tT[j], sizeof(block));
+            block yj;
+            if (block_bit(choices[j / block_num_bits], j % block_num_bits)) {
+                yj = y[(j << 1) + 1];
+            } else {
+                yj = y[j << 1];
+            }
             results[j] = xorBlocks(yj, h.output_block());
         }
     }
@@ -201,9 +203,8 @@ namespace mage::crypto::ot {
         std::size_t num_row_blocks = (num_choices + block_num_bits - 1) / block_num_bits;
         std::size_t num_blocks = num_row_blocks * extension_kappa;
 
-        block buffer[2 * num_blocks];
-        block* t = &buffer[0];
-        block* tT = &buffer[num_blocks];
+        block t[num_blocks];
+        block tT[num_blocks];
 
         network_out.flush(); // This guarantees that u will be aligned
         void* into = network_out.start_write(sizeof(block) * num_blocks);

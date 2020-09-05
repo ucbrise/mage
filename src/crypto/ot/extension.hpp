@@ -49,7 +49,7 @@ namespace mage::crypto::ot {
 
         void send(util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out, const std::pair<block, block>* choices, std::size_t num_choices);
 
-    private:
+    protected:
         void prepare_send(std::size_t num_choices, const block* u, block* q);
         void finish_send(const std::pair<block, block>* choices, std::size_t num_choices, block* y, const block* qT);
 
@@ -71,7 +71,7 @@ namespace mage::crypto::ot {
 
         void choose(util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out, const block* choices, block* results, std::size_t num_choices);
 
-    private:
+    protected:
         void prepare_choose(const block* choices, std::size_t num_choices, block* u, block* t);
         void finish_choose(const block* choices, block* results, std::size_t num_choices, const block* y, const block* tT);
 

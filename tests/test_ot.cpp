@@ -27,28 +27,35 @@
 
 #include <cstdlib>
 #include <algorithm>
+#include <functional>
 #include <thread>
 #include <utility>
 #include "crypto/block.hpp"
+#include "crypto/ot/base.hpp"
 #include "crypto/ot/extension.hpp"
+#include "crypto/ot/correlated.hpp"
 #include "platform/network.hpp"
 
 namespace bdata = boost::unit_test::data;
 using namespace mage;
 
-void test_ot(std::uint64_t batch_size, bool use_base) {
-    int pipe_descriptors[2];
-    platform::pipe_open(pipe_descriptors);
+struct TestNetwork {
+    TestNetwork() {
+        int pipe_descriptors[2];
+        platform::pipe_open(pipe_descriptors);
+        chooser_in.set_file_descriptor(pipe_descriptors[0], true);
+        sender_out.set_file_descriptor(pipe_descriptors[1], true);
+        platform::pipe_open(pipe_descriptors);
+        sender_in.set_file_descriptor(pipe_descriptors[0], true);
+        chooser_out.set_file_descriptor(pipe_descriptors[1], true);
+    }
     util::BufferedFileReader<false> chooser_in;
-    chooser_in.set_file_descriptor(pipe_descriptors[0], true);
-    util::BufferedFileWriter<false> sender_out;
-    sender_out.set_file_descriptor(pipe_descriptors[1], true);
-    platform::pipe_open(pipe_descriptors);
-    util::BufferedFileReader<false> sender_in;
-    sender_in.set_file_descriptor(pipe_descriptors[0], true);
     util::BufferedFileWriter<false> chooser_out;
-    chooser_out.set_file_descriptor(pipe_descriptors[1], true);
+    util::BufferedFileReader<false> sender_in;
+    util::BufferedFileWriter<false> sender_out;
+};
 
+void test_ot(std::uint64_t batch_size, std::function<void(boost::container::vector<bool>&, std::vector<crypto::block>&)> run_ot) {
     // std::vector<bool> is optimized to a bit vector, so unfortunately, I have to do this manually
     boost::container::vector<bool> bits(batch_size);
     for (int i = 0; i != batch_size; i++) {
@@ -67,53 +74,109 @@ void test_ot(std::uint64_t batch_size, bool use_base) {
         }
     }
 
-    std::vector<std::pair<crypto::block, crypto::block>> choices(batch_size);
-    for (std::uint64_t i = 0; i != batch_size; i++) {
-        std::pair<crypto::block, crypto::block>& p = choices[i];
-        *reinterpret_cast<__int128*>(&p.first) = rand();
-        *reinterpret_cast<__int128*>(&p.second) = rand();
-    }
+    run_ot(bits, dense_bits);
+}
 
-    std::vector<crypto::block> results(batch_size);
+BOOST_DATA_TEST_CASE(test_ot_base_single, bdata::xrange(1, 257), batch_size) {
+    TestNetwork net;
+    test_ot(batch_size, [&](boost::container::vector<bool>& bits, std::vector<crypto::block>& dense_bits) {
+        std::vector<std::pair<crypto::block, crypto::block>> choices(batch_size);
+        for (std::uint64_t i = 0; i != batch_size; i++) {
+            std::pair<crypto::block, crypto::block>& p = choices[i];
+            *reinterpret_cast<__int128*>(&p.first) = rand();
+            *reinterpret_cast<__int128*>(&p.second) = rand();
+        }
 
-    std::thread t1([&]() {
-        if (use_base) {
+        std::vector<crypto::block> results(batch_size);
+
+        std::thread t1([&]() {
             crypto::DDHGroup g;
-            crypto::ot::base_send(g, sender_in, sender_out, choices.data(), batch_size);
-        } else {
+            crypto::ot::base_send(g, net.sender_in, net.sender_out, choices.data(), batch_size);
+        });
+
+        std::thread t2([&]() {
+            crypto::DDHGroup g;
+            crypto::ot::base_choose(g, net.chooser_in, net.chooser_out, bits.data(), results.data(), batch_size);
+        });
+
+        t1.join();
+        t2.join();
+
+        for (std::uint64_t i = 0; i != batch_size; i++) {
+            __int128& first = *reinterpret_cast<__int128*>(&choices[i].first);
+            __int128& second = *reinterpret_cast<__int128*>(&choices[i].second);
+            __int128& result = *reinterpret_cast<__int128*>(&results[i]);
+            __int128& expected = bits[i] ? second : first;
+            BOOST_CHECK_MESSAGE(result == expected, "For i = " << i << ", choices were (" << ((int) first) << ", " << ((int) second) << ") and bit was " << bits[i] << " but got " << ((int) result));
+        }
+    });
+}
+
+BOOST_DATA_TEST_CASE(test_ot_extension_single, bdata::xrange(1, 257) + bdata::xrange(383, 1407, 128) + bdata::xrange(384, 1408, 128) + bdata::xrange(385, 1409, 128), batch_size) {
+    TestNetwork net;
+    test_ot(batch_size, [&](boost::container::vector<bool>& bits, std::vector<crypto::block>& dense_bits) {
+        std::vector<std::pair<crypto::block, crypto::block>> choices(batch_size);
+        for (std::uint64_t i = 0; i != batch_size; i++) {
+            std::pair<crypto::block, crypto::block>& p = choices[i];
+            *reinterpret_cast<__int128*>(&p.first) = rand();
+            *reinterpret_cast<__int128*>(&p.second) = rand();
+        }
+
+        std::vector<crypto::block> results(batch_size);
+
+        std::thread t1([&]() {
             crypto::ot::ExtensionSender ot_sender;
-            ot_sender.initialize(sender_in, sender_out);
-            ot_sender.send(sender_in, sender_out, choices.data(), batch_size);
-        }
-    });
+            ot_sender.initialize(net.sender_in, net.sender_out);
+            ot_sender.send(net.sender_in, net.sender_out, choices.data(), batch_size);
+        });
 
-    std::thread t2([&]() {
-        if (use_base) {
-            crypto::DDHGroup g;
-            crypto::ot::base_choose(g, chooser_in, chooser_out, bits.data(), results.data(), batch_size);
-        } else {
+        std::thread t2([&]() {
             crypto::ot::ExtensionChooser ot_chooser;
-            ot_chooser.initialize(chooser_in, chooser_out);
-            ot_chooser.choose(chooser_in, chooser_out, dense_bits.data(), results.data(), batch_size);
+            ot_chooser.initialize(net.chooser_in, net.chooser_out);
+            ot_chooser.choose(net.chooser_in, net.chooser_out, dense_bits.data(), results.data(), batch_size);
+        });
+
+        t1.join();
+        t2.join();
+
+        for (std::uint64_t i = 0; i != batch_size; i++) {
+            __int128& first = *reinterpret_cast<__int128*>(&choices[i].first);
+            __int128& second = *reinterpret_cast<__int128*>(&choices[i].second);
+            __int128& result = *reinterpret_cast<__int128*>(&results[i]);
+            __int128& expected = bits[i] ? second : first;
+            BOOST_CHECK_MESSAGE(result == expected, "For i = " << i << ", choices were (" << ((int) first) << ", " << ((int) second) << ") and bit was " << bits[i] << " but got " << ((int) result));
         }
     });
-
-    t1.join();
-    t2.join();
-
-    for (std::uint64_t i = 0; i != batch_size; i++) {
-        __int128& first = *reinterpret_cast<__int128*>(&choices[i].first);
-        __int128& second = *reinterpret_cast<__int128*>(&choices[i].second);
-        __int128& result = *reinterpret_cast<__int128*>(&results[i]);
-        __int128& expected = bits[i] ? second : first;
-        BOOST_CHECK_MESSAGE(result == expected, "For i = " << i << ", choices were (" << ((int) first) << ", " << ((int) second) << ") and bit was " << bits[i] << " but got " << ((int) result));
-    }
 }
 
-BOOST_DATA_TEST_CASE(test_ot_base_single, bdata::xrange(1, 257) + bdata::xrange(383, 1407, 128) + bdata::xrange(384, 1408, 128) + bdata::xrange(385, 1409, 128), batch_size) {
-    test_ot(batch_size, true);
-}
+BOOST_DATA_TEST_CASE(test_ot_correlated_extension_single, bdata::xrange(1, 257) + bdata::xrange(383, 1407, 128) + bdata::xrange(384, 1408, 128) + bdata::xrange(385, 1409, 128), batch_size) {
+    TestNetwork net;
+    test_ot(batch_size, [&](boost::container::vector<bool>& bits, std::vector<crypto::block>& dense_bits) {
+        std::vector<crypto::block> first_choices(batch_size);
+        std::vector<crypto::block> results(batch_size);
+        crypto::block delta = crypto::makeBlock(rand(), rand());
 
-BOOST_DATA_TEST_CASE(test_ot_extension_single, bdata::xrange(1, 257), batch_size) {
-    test_ot(batch_size, false);
+        std::thread t1([&]() {
+            crypto::ot::CorrelatedExtensionSender ot_sender;
+            ot_sender.initialize(net.sender_in, net.sender_out);
+            ot_sender.send(net.sender_in, net.sender_out, delta, first_choices.data(), batch_size);
+        });
+
+        std::thread t2([&]() {
+            crypto::ot::CorrelatedExtensionChooser ot_chooser;
+            ot_chooser.initialize(net.chooser_in, net.chooser_out);
+            ot_chooser.choose(net.chooser_in, net.chooser_out, dense_bits.data(), results.data(), batch_size);
+        });
+
+        t1.join();
+        t2.join();
+
+        for (std::uint64_t i = 0; i != batch_size; i++) {
+            __int128 first = *reinterpret_cast<__int128*>(&first_choices[i]);
+            __int128 second = first ^ *reinterpret_cast<__int128*>(&delta);
+            __int128& result = *reinterpret_cast<__int128*>(&results[i]);
+            __int128 expected = bits[i] ? second : first;
+            BOOST_CHECK_MESSAGE(result == expected, "For i = " << i << ", choices were (" << ((int) first) << ", " << ((int) second) << ") and bit was " << bits[i] << " but got " << ((int) result));
+        }
+    });
 }
