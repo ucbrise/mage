@@ -112,6 +112,10 @@ namespace mage::schemes {
             output = this->public_constants[0];
         }
 
+        crypto::block get_delta() const {
+            return this->delta;
+        }
+
     private:
         void set_delta(const Wire& x) {
             this->delta = crypto::make_delta(x);

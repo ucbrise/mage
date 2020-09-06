@@ -30,7 +30,6 @@
 #include <string>
 #include <thread>
 #include "crypto/block.hpp"
-#include "crypto/ot/extension.hpp"
 #include "platform/network.hpp"
 #include "schemes/halfgates.hpp"
 #include "util/binaryfile.hpp"
@@ -140,7 +139,6 @@ namespace mage::engine {
         std::thread input_daemon;
         util::BufferedFileReader<false> ot_conn_reader;
         util::BufferedFileWriter<false> ot_conn_writer;
-        crypto::ot::ExtensionSender ot_sender;
         util::UserPipe<crypto::block> evaluator_input_labels;
     };
 
@@ -155,7 +153,7 @@ namespace mage::engine {
             this->conn_writer.set_file_descriptor(this->sockets[0], false);
             this->ot_conn_reader.set_file_descriptor(this->sockets[1], false);
             this->ot_conn_writer.set_file_descriptor(this->sockets[1], false);
-            
+
             this->start_input_daemon();
 
             this->conn_reader.enable_stats("GATE-RECV (ns)");
@@ -231,7 +229,6 @@ namespace mage::engine {
         std::thread input_daemon;
         util::BufferedFileReader<false> ot_conn_reader;
         util::BufferedFileWriter<false> ot_conn_writer;
-        crypto::ot::ExtensionChooser ot_chooser;
         util::UserPipe<crypto::block> evaluator_input_labels;
     };
 }
