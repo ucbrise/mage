@@ -29,8 +29,6 @@
 #include "util/filebuffer.hpp"
 
 namespace mage::engine {
-    const constexpr std::uint64_t max_batch_size = 4 * crypto::block_num_bits;
-
     void HalfGatesGarblingEngine::start_input_daemon() {
         this->input_daemon = std::thread([=]() {
             crypto::ot::CorrelatedExtensionSender ot_sender;
@@ -39,10 +37,10 @@ namespace mage::engine {
             ot_sender.initialize(this->ot_conn_reader, this->ot_conn_writer);
 
             std::uint64_t num_bits = num_bytes << 3;
-            static_assert((max_batch_size & 0x7) == 0);
+            static_assert((halfgates_max_batch_size & 0x7) == 0);
             assert((num_bits & 0x7) == 0);
-            for (std::uint64_t i = 0; i < num_bits; i += max_batch_size) {
-                std::uint64_t batch_size = std::min(max_batch_size, num_bits - i);
+            for (std::uint64_t i = 0; i < num_bits; i += halfgates_max_batch_size) {
+                std::uint64_t batch_size = std::min(halfgates_max_batch_size, num_bits - i);
                 // std::pair<crypto::block, crypto::block>* ot_pairs = new std::pair<crypto::block, crypto::block>[batch_size];
                 // {
                 //     Wire* batch = new Wire[batch_size];
@@ -53,9 +51,9 @@ namespace mage::engine {
                 // ot_sender.send(this->ot_conn_reader, this->ot_conn_writer, ot_pairs, batch_size);
                 // delete[] ot_pairs;
 
-                Wire batch[batch_size];
-                ot_sender.send(this->ot_conn_reader, this->ot_conn_writer, this->garbler.get_delta(), batch, batch_size);
-                this->evaluator_input_labels.write_contiguous(batch, batch_size);
+                std::array<crypto::block, halfgates_max_batch_size>& batch = this->evaluator_input_labels.start_write_single_in_place();
+                ot_sender.send(this->ot_conn_reader, this->ot_conn_writer, this->garbler.get_delta(), batch.data(), batch_size);
+                this->evaluator_input_labels.finish_write_single_in_place();
             }
         });
     }
@@ -70,22 +68,20 @@ namespace mage::engine {
             ot_chooser.initialize(this->ot_conn_reader, this->ot_conn_writer);
 
             std::uint64_t num_bits = num_bytes << 3;
-            static_assert((max_batch_size & 0x7) == 0);
+            static_assert((halfgates_max_batch_size & 0x7) == 0);
             assert((num_bits & 0x7) == 0);
-            for (std::uint64_t i = 0; i < num_bits; i += max_batch_size) {
-                std::uint64_t batch_size = std::min(max_batch_size, num_bits - i);
+            for (std::uint64_t i = 0; i < num_bits; i += halfgates_max_batch_size) {
+                std::uint64_t batch_size = std::min(halfgates_max_batch_size, num_bits - i);
                 std::uint64_t num_blocks = (batch_size + crypto::block_num_bits - 1) / crypto::block_num_bits;
                 assert((batch_size & 0x7) == 0);
 
-                crypto::block arr[num_blocks + batch_size];
-
-                crypto::block* choices = &arr[0];
+                crypto::block choices[num_blocks];
                 choices[num_blocks - 1] = crypto::zero_block();
                 this->input_reader.read_bytes(reinterpret_cast<std::uint8_t*>(&choices[0]), batch_size >> 3);
 
-                crypto::block* batch = &arr[num_blocks];
-                ot_chooser.choose(this->ot_conn_reader, this->ot_conn_writer, choices, batch, batch_size);
-                this->evaluator_input_labels.write_contiguous(batch, batch_size);
+                std::array<crypto::block, halfgates_max_batch_size>& batch = this->evaluator_input_labels.start_write_single_in_place();
+                ot_chooser.choose(this->ot_conn_reader, this->ot_conn_writer, choices, batch.data(), batch_size);
+                this->evaluator_input_labels.finish_write_single_in_place();
             }
         });
     }

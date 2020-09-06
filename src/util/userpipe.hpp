@@ -52,6 +52,45 @@ namespace mage::util {
             this->added.notify_all();
         }
 
+        /*
+         * In-place API potentially allows you to omit some copying, but is
+         * harder to use. In particular, multiple readers can't concurrently
+         * read in place; you'll need to provide external synchronization to
+         * serialize that. Similarly, multiple writers can't concurrently write
+         * in place. For the single-reader/single-writer cases, however, this
+         * should not be too difficult to use.
+         */
+
+        T& start_read_single_in_place() {
+            std::unique_lock<std::mutex> lock(this->mutex);
+            while (this->get_space_occupied() == 0) {
+                this->added.wait(lock);
+            }
+            return this->start_read_single_unchecked();
+        }
+
+        void finish_read_single_in_place() {
+            std::lock_guard<std::mutex> lock(this->mutex);
+            assert(this->get_space_occupied() != 0);
+            this->finish_read_single();
+            this->removed.notify_all();
+        }
+
+        T& start_write_single_in_place() {
+            std::unique_lock<std::mutex> lock(this->mutex);
+            while (this->get_space_unoccupied() == 0) {
+                this->removed.wait(lock);
+            }
+            return this->start_write_single_unchecked();
+        }
+
+        void finish_write_single_in_place() {
+            std::lock_guard<std::mutex> lock(this->mutex);
+            assert(this->get_space_unoccupied() != 0);
+            this->finish_write_single();
+            this->added.notify_all();
+        }
+
     private:
         std::mutex mutex;
         std::condition_variable added;

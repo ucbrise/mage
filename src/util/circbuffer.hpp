@@ -98,6 +98,42 @@ namespace mage::util {
             return count;
         }
 
+        T& start_write_single_unchecked() {
+            T* buffer = this->data.mapping();
+            return buffer[this->write_index];
+        }
+
+        bool start_write_single_checked(T** target) {
+            if (this->get_space_unoccupied() == 0) {
+                return false;
+            }
+            *target = &this->start_write_single_unchecked();
+            return true;
+        }
+
+        void finish_write_single() {
+            this->write_index = (this->write_index + 1) & (this->capacity - 1);
+            this->length++;
+        }
+
+        T& start_read_single_unchecked() {
+            T* buffer = this->data.mapping();
+            return buffer[this->read_index];
+        }
+
+        bool start_read_single_checked(T** target) {
+            if (this->get_space_occupied() == 0) {
+                return false;
+            }
+            *target = &this->start_read_single_unchecked();
+            return true;
+        }
+
+        void finish_read_single() {
+            this->read_index = (this->read_index + 1) & (this->capacity - 1);
+            this->length--;
+        }
+
     private:
         platform::MappedFile<T> data;
         std::size_t read_index;

@@ -24,8 +24,10 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <algorithm>
 #include <array>
 #include <chrono>
+#include <iostream>
 #include <memory>
 #include <string>
 #include <thread>
@@ -36,15 +38,43 @@
 #include "util/userpipe.hpp"
 
 namespace mage::engine {
-    constexpr const std::size_t num_connections = 2;
+    const constexpr std::uint64_t halfgates_max_batch_size = 4 * crypto::block_num_bits;
+    constexpr const std::size_t halfgates_num_connections = 2;
+
+    template <typename T, std::size_t batch_size>
+    class InputBatchPipe : public util::UserPipe<std::array<T, batch_size>> {
+    public:
+        InputBatchPipe(std::size_t capacity_shift)
+            : util::UserPipe<std::array<T, batch_size>>(capacity_shift), index_into_batch(0) {
+        }
+
+        void read_elements(T* into, std::size_t count) {
+            std::size_t read_so_far = 0;
+            while (read_so_far != count) {
+                std::array<T, batch_size>& latest = this->start_read_single_in_place();
+                T* batch_data = latest.data();
+                std::size_t to_read = std::min(batch_size - this->index_into_batch, count - read_so_far);
+                std::copy(&batch_data[this->index_into_batch], &batch_data[this->index_into_batch + to_read], &into[read_so_far]);
+                read_so_far += to_read;
+                this->index_into_batch += to_read;
+                if (this->index_into_batch == batch_size) {
+                    this->index_into_batch = 0;
+                    this->finish_read_single_in_place();
+                }
+            }
+        }
+
+    private:
+        std::size_t index_into_batch;
+    };
 
     class HalfGatesGarblingEngine {
     public:
         using Wire = schemes::HalfGatesGarbler::Wire;
 
         HalfGatesGarblingEngine(const char* input_file, const char* output_file, const char* evaluator_host, const char* evaluator_port)
-            : input_reader(input_file), output_writer(output_file), evaluator_input_labels(12) {
-            platform::network_connect(evaluator_host, evaluator_port, this->sockets.data(), num_connections);
+            : input_reader(input_file), output_writer(output_file), evaluator_input_labels(2) {
+            platform::network_connect(evaluator_host, evaluator_port, this->sockets.data(), halfgates_num_connections);
             this->conn_reader.set_file_descriptor(this->sockets[0], false);
             this->conn_writer.set_file_descriptor(this->sockets[0], false);
             this->ot_conn_reader.set_file_descriptor(this->sockets[1], false);
@@ -69,7 +99,7 @@ namespace mage::engine {
             this->input_daemon.join();
             this->ot_conn_reader.relinquish_file_descriptor();
             this->ot_conn_writer.relinquish_file_descriptor();
-            for (std::size_t i = 0; i != num_connections; i++) {
+            for (std::size_t i = 0; i != halfgates_num_connections; i++) {
                 platform::network_close(this->sockets[i]);
             }
         }
@@ -83,7 +113,7 @@ namespace mage::engine {
                 }
                 this->garbler.input_garbler(data, length, input_bits);
             } else {
-                this->evaluator_input_labels.read_contiguous(data, length);
+                this->evaluator_input_labels.read_elements(data, length);
             }
         }
 
@@ -131,7 +161,7 @@ namespace mage::engine {
 
         util::BinaryFileReader input_reader;
         util::BinaryFileWriter output_writer;
-        std::array<int, num_connections> sockets;
+        std::array<int, halfgates_num_connections> sockets;
         util::BufferedFileReader<false> conn_reader;
         util::BufferedFileWriter<false> conn_writer;
         std::vector<std::uint8_t> output_label_lsbs;
@@ -139,7 +169,7 @@ namespace mage::engine {
         std::thread input_daemon;
         util::BufferedFileReader<false> ot_conn_reader;
         util::BufferedFileWriter<false> ot_conn_writer;
-        util::UserPipe<crypto::block> evaluator_input_labels;
+        InputBatchPipe<crypto::block, halfgates_max_batch_size> evaluator_input_labels;
     };
 
     class HalfGatesEvaluationEngine {
@@ -147,8 +177,8 @@ namespace mage::engine {
         using Wire = schemes::HalfGatesEvaluator::Wire;
 
         HalfGatesEvaluationEngine(const char* input_file, const char* evaluator_port)
-            : input_reader(input_file), evaluator_input_labels(12) {
-            platform::network_accept(evaluator_port, this->sockets.data(), num_connections);
+            : input_reader(input_file), evaluator_input_labels(2) {
+            platform::network_accept(evaluator_port, this->sockets.data(), halfgates_num_connections);
             this->conn_reader.set_file_descriptor(this->sockets[0], false);
             this->conn_writer.set_file_descriptor(this->sockets[0], false);
             this->ot_conn_reader.set_file_descriptor(this->sockets[1], false);
@@ -167,7 +197,7 @@ namespace mage::engine {
             this->input_daemon.join();
             this->ot_conn_reader.relinquish_file_descriptor();
             this->ot_conn_writer.relinquish_file_descriptor();
-            for (std::size_t i = 0; i != num_connections; i++) {
+            for (std::size_t i = 0; i != halfgates_num_connections; i++) {
                 platform::network_close(this->sockets[i]);
             }
         }
@@ -176,7 +206,7 @@ namespace mage::engine {
             if (garbler) {
                 this->evaluator.input_garbler(data, length);
             } else {
-                this->evaluator_input_labels.read_contiguous(data, length);
+                this->evaluator_input_labels.read_elements(data, length);
             }
         }
 
@@ -221,7 +251,7 @@ namespace mage::engine {
 
         schemes::HalfGatesEvaluator evaluator;
         util::BinaryFileReader input_reader;
-        std::array<int, num_connections> sockets;
+        std::array<int, halfgates_num_connections> sockets;
         util::BufferedFileReader<false> conn_reader;
         util::BufferedFileWriter<false> conn_writer;
 
@@ -229,7 +259,7 @@ namespace mage::engine {
         std::thread input_daemon;
         util::BufferedFileReader<false> ot_conn_reader;
         util::BufferedFileWriter<false> ot_conn_writer;
-        util::UserPipe<crypto::block> evaluator_input_labels;
+        InputBatchPipe<crypto::block, halfgates_max_batch_size> evaluator_input_labels;
     };
 }
 
