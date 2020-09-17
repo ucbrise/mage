@@ -29,43 +29,43 @@
 #include <cstdint>
 
 namespace mage::dsl {
-    using memprog::DefaultProgram;
+    using memprog::Program;
 
-    template <BitWidth bits>
+    template <BitWidth bits, typename Placer, Program<Placer>** p>
     class Integer;
 
-    using Bit = Integer<1>;
+    template<typename Placer, Program<Placer>** p>
+    using Bit = Integer<1, Placer, p>;
 
     enum class Party : std::uint32_t {
         Garbler = 0,
         Evaluator = 1,
     };
 
-    template <BitWidth bits>
+    template <BitWidth bits, typename Placer, Program<Placer>** p>
     class Integer {
-        template <BitWidth other_bits>
+        template <BitWidth other_bits, typename OtherPlacer, Program<OtherPlacer>** other_p>
         friend class Integer;
 
         static_assert(bits > 0);
 
     public:
-        Integer(DefaultProgram& program = *DefaultProgram::get_current_working_program()) : v(invalid_vaddr), p(&program), sliced(false) {
+        Integer() : v(invalid_vaddr), sliced(false) {
         }
 
-        Integer(std::uint32_t public_constant, DefaultProgram& program = *DefaultProgram::get_current_working_program()) : p(&program), sliced(false) {
-            Instruction& instr = this->p->instruction();
+        Integer(std::uint32_t public_constant) : sliced(false) {
+            Instruction& instr = (*p)->instruction();
             instr.header.operation = OpCode::PublicConstant;
             instr.header.width = bits;
             instr.header.flags = 0;
             instr.constant.constant = public_constant;
-            this->v = this->p->commit_instruction(bits);
+            this->v = (*p)->commit_instruction(bits);
         }
 
-        Integer(const Integer<bits>& other) = delete;
+        Integer(const Integer<bits, Placer, p>& other) = delete;
 
-        Integer(Integer<bits>&& other) : v(other.v), p(other.p), sliced(other.sliced) {
+        Integer(Integer<bits, Placer, p>&& other) : v(other.v), sliced(other.sliced) {
             other.v = invalid_vaddr;
-            other.p = nullptr;
             other.sliced = false;
         }
 
@@ -76,127 +76,125 @@ namespace mage::dsl {
         void mark_input(enum Party party) {
             this->recycle();
 
-            Instruction& instr = this->p->instruction();
+            Instruction& instr = (*p)->instruction();
             instr.header.operation = OpCode::Input;
             instr.header.width = bits;
             instr.header.flags = (party == Party::Garbler) ? 0 : FlagEvaluatorInput;
-            this->v = this->p->commit_instruction(bits);
+            this->v = (*p)->commit_instruction(bits);
         }
 
         void mark_output() {
-            Instruction& instr = this->p->instruction();
+            Instruction& instr = (*p)->instruction();
             instr.header.operation = OpCode::Output;
             instr.header.width = bits;
             instr.header.flags = 0;
             instr.header.output = this->v;
-            this->p->commit_instruction(0);
+            (*p)->commit_instruction(0);
         }
 
-        Integer<bits>& operator =(const Integer<bits>& other) = delete;
+        Integer<bits, Placer, p>& operator =(const Integer<bits, Placer, p>& other) = delete;
 
-        Integer<bits>& operator =(Integer<bits>&& other) {
+        Integer<bits, Placer, p>& operator =(Integer<bits, Placer, p>&& other) {
             this->recycle();
 
             this->v = other.v;
-            this->p = other.p;
             this->sliced = other.sliced;
 
             other.v = invalid_vaddr;
-            other.p = nullptr;
             other.sliced = false;
 
             return *this;
         }
 
-        Integer<bits> operator +(const Integer<bits>& other) const {
-            return Integer<bits>(OpCode::IntAdd, *this, other);
+        Integer<bits, Placer, p> operator +(const Integer<bits, Placer, p>& other) const {
+            return Integer<bits, Placer, p>(OpCode::IntAdd, *this, other);
         }
 
-        Integer<bits> increment() {
-            return Integer<bits>(OpCode::IntIncrement, *this);
+        Integer<bits, Placer, p> increment() {
+            return Integer<bits, Placer, p>(OpCode::IntIncrement, *this);
         }
 
-        Integer<bits>& operator ++() {
+        Integer<bits, Placer, p>& operator ++() {
             *this = this->increment();
             return this;
         }
 
-        Integer<bits> operator ++(int) {
-            Integer<bits> old = *this;
+        Integer<bits, Placer, p> operator ++(int) {
+            Integer<bits, Placer, p> old = *this;
             *this = this->increment();
             return old;
         }
 
-        Integer<bits> operator -(const Integer<bits>& other) const {
-            return Integer<bits>(OpCode::IntSub, *this, other);
+        Integer<bits, Placer, p> operator -(const Integer<bits, Placer, p>& other) const {
+            return Integer<bits, Placer, p>(OpCode::IntSub, *this, other);
         }
 
-        Integer<bits> decrement() {
-            return Integer<bits>(OpCode::IntDecrement, *this);
+        Integer<bits, Placer, p> decrement() {
+            return Integer<bits, Placer, p>(OpCode::IntDecrement, *this);
         }
 
-        Integer<bits>& operator --() {
+        Integer<bits, Placer, p>& operator --() {
             *this = this->decrement();
             return this;
         }
 
-        Integer<bits> operator --(int) {
-            Integer<bits> old = *this;
+        Integer<bits, Placer, p> operator --(int) {
+            Integer<bits, Placer, p> old = *this;
             *this = this->decrement();
             return old;
         }
 
-        Bit operator <(const Integer<bits>& other) const {
-            return Bit(OpCode::IntLess, *this, other);
+        Bit<Placer, p> operator <(const Integer<bits, Placer, p>& other) const {
+            return Bit<Placer, p>(OpCode::IntLess, *this, other);
         }
 
-        Bit operator >(const Integer<bits>& other) const {
+        Bit<Placer, p> operator >(const Integer<bits, Placer, p>& other) const {
             return other < *this;
         }
 
-        Bit operator <=(const Integer<bits>& other) const {
+        Bit<Placer, p> operator <=(const Integer<bits, Placer, p>& other) const {
             return ~(other < *this);
         }
 
-        Bit operator >=(const Integer<bits>& other) const {
+        Bit<Placer, p> operator >=(const Integer<bits, Placer, p>& other) const {
             return ~((*this) < other);
         }
 
-        Bit operator ==(const Integer<bits>& other) const {
-            return Bit(OpCode::Equal, *this, other);
+        Bit<Placer, p> operator ==(const Integer<bits, Placer, p>& other) const {
+            return Bit<Placer, p>(OpCode::Equal, *this, other);
         }
 
-        Bit operator !() const {
-            return Bit(OpCode::IsZero, *this);
+        Bit<Placer, p> operator !() const {
+            return Bit<Placer, p>(OpCode::IsZero, *this);
         }
 
-        Bit nonzero() const {
-            return Bit(OpCode::NonZero, *this);
+        Bit<Placer, p> nonzero() const {
+            return Bit<Placer, p>(OpCode::NonZero, *this);
         }
 
-        Integer<bits> operator ~() const {
-            return Integer<bits>(OpCode::BitNOT, *this);
+        Integer<bits, Placer, p> operator ~() const {
+            return Integer<bits, Placer, p>(OpCode::BitNOT, *this);
         }
 
-        Integer<bits> operator &(const Integer<bits>& other) const {
-            return Integer<bits>(OpCode::BitAND, *this, other);
+        Integer<bits, Placer, p> operator &(const Integer<bits, Placer, p>& other) const {
+            return Integer<bits, Placer, p>(OpCode::BitAND, *this, other);
         }
 
-        Integer<bits> operator |(const Integer<bits>& other) const {
-            return Integer<bits>(OpCode::BitOR, *this, other);
+        Integer<bits, Placer, p> operator |(const Integer<bits, Placer, p>& other) const {
+            return Integer<bits, Placer, p>(OpCode::BitOR, *this, other);
         }
 
-        Integer<bits> operator ^(const Integer<bits>& other) const {
-            return Integer<bits>(OpCode::BitXOR, *this, other);
+        Integer<bits, Placer, p> operator ^(const Integer<bits, Placer, p>& other) const {
+            return Integer<bits, Placer, p>(OpCode::BitXOR, *this, other);
         }
 
         template <BitWidth length>
-        Integer<length> slice(BitWidth start) const {
+        Integer<length, Placer, p> slice(BitWidth start) const {
             assert(start + length <= bits);
-            return Integer<length>(this->v, start, this->p);
+            return Integer<length, Placer, p>(this->v, start);
         }
 
-        Bit operator [](BitWidth i) const {
+        Bit<Placer, p> operator [](BitWidth i) const {
             return this->slice<1>(i);
         }
 
@@ -204,19 +202,19 @@ namespace mage::dsl {
             return bits;
         }
 
-        static Integer<bits> select(const Bit& selector, const Integer<bits>& arg0, const Integer<bits>& arg1) {
-            return Integer<bits>(OpCode::ValueSelect, arg0, arg1, selector);
+        static Integer<bits, Placer, p> select(const Bit<Placer, p>& selector, const Integer<bits, Placer, p>& arg0, const Integer<bits, Placer, p>& arg1) {
+            return Integer<bits, Placer, p>(OpCode::ValueSelect, arg0, arg1, selector);
         }
 
-        static void swap_if(const Bit& predicate, Integer<bits>& arg0, Integer<bits>& arg1) {
+        static void swap_if(const Bit<Placer, p>& predicate, Integer<bits, Placer, p>& arg0, Integer<bits, Placer, p>& arg1) {
             assert(arg0.valid() && arg1.valid());
-            Integer<bits> mask = Integer<bits>::select(predicate, arg0, arg1) ^ arg1;
+            Integer<bits, Placer, p> mask = Integer<bits, Placer, p>::select(predicate, arg0, arg1) ^ arg1;
             arg0 = arg0 ^ mask;
             arg1 = arg1 ^ mask;
         }
 
-        static void comparator(Integer<bits>& arg0, Integer<bits>& arg1) {
-            Integer<bits>::swap_if(arg0 > arg1, arg0, arg1);
+        static void comparator(Integer<bits, Placer, p>& arg0, Integer<bits, Placer, p>& arg1) {
+            Integer<bits, Placer, p>::swap_if(arg0 > arg1, arg0, arg1);
         }
 
         bool valid() const {
@@ -229,57 +227,49 @@ namespace mage::dsl {
                 this->sliced = false;
                 this->v = invalid_vaddr;
             } else if (this->v != invalid_vaddr) {
-                this->p->recycle(this->v, bits);
+                (*p)->recycle(this->v, bits);
                 this->v = invalid_vaddr;
             }
         }
 
         template <BitWidth arg0_bits>
-        Integer(OpCode operation, const Integer<arg0_bits>& arg0) : p(arg0.p), sliced(false) {
-            Instruction& instr = this->p->instruction();
+        Integer(OpCode operation, const Integer<arg0_bits, Placer, p>& arg0) : sliced(false) {
+            Instruction& instr = (*p)->instruction();
             instr.header.operation = operation;
             instr.header.width = arg0_bits;
             instr.header.flags = 0;
             instr.one_arg.input1 = arg0.v;
-            this->v = this->p->commit_instruction(bits);
+            this->v = (*p)->commit_instruction(bits);
         }
 
         template <BitWidth arg_bits>
-        Integer(OpCode operation, const Integer<arg_bits>& arg0, const Integer<arg_bits>& arg1) : p(arg0.p), sliced(false) {
-            assert(arg0.p == arg1.p);
-
-            Instruction& instr = this->p->instruction();
+        Integer(OpCode operation, const Integer<arg_bits, Placer, p>& arg0, const Integer<arg_bits, Placer, p>& arg1) : sliced(false) {
+            Instruction& instr = (*p)->instruction();
             instr.header.operation = operation;
             instr.header.width = arg_bits;
             instr.header.flags = 0;
             instr.two_args.input1 = arg0.v;
             instr.two_args.input2 = arg1.v;
-            this->v = this->p->commit_instruction(bits);
+            this->v = (*p)->commit_instruction(bits);
         }
 
         template <BitWidth arg2_bits>
-        Integer(OpCode operation, const Integer<bits>& arg0, const Integer<bits>& arg1, const Integer<arg2_bits>& arg2) : p(arg0.p), sliced(false) {
-            assert(arg0.p == arg1.p);
-            assert(arg0.p == arg2.p);
-
-            Instruction& instr = this->p->instruction();
+        Integer(OpCode operation, const Integer<bits, Placer, p>& arg0, const Integer<bits, Placer, p>& arg1, const Integer<arg2_bits, Placer, p>& arg2) : sliced(false) {
+            Instruction& instr = (*p)->instruction();
             instr.header.operation = operation;
             instr.header.width = bits;
             instr.header.flags = 0;
             instr.three_args.input1 = arg0.v;
             instr.three_args.input2 = arg1.v;
             instr.three_args.input3 = arg2.v;
-            this->v = this->p->commit_instruction(bits);
+            this->v = (*p)->commit_instruction(bits);
         }
 
-        Integer(VirtAddr alias_v, BitWidth offset, DefaultProgram* program) : v(alias_v + offset), p(program), sliced(true) {
+        Integer(VirtAddr alias_v, BitWidth offset) : v(alias_v + offset), sliced(true) {
         }
 
         /* Address of the underlying data. */
         VirtAddr v;
-
-        /* Program that this integer is part of. */
-        DefaultProgram* p;
 
         /* Is the address sliced? */
         bool sliced;

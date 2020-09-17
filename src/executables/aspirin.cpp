@@ -30,14 +30,18 @@
 #include <iostream>
 #include <string>
 
-using namespace mage::dsl;
 using mage::BitWidth;
+using mage::dsl::Party;
+
+mage::memprog::DefaultProgram* p;
+
+template <BitWidth bits>
+using Integer = mage::dsl::Integer<bits, mage::memprog::BinnedPlacer, &p>;
+
+using Bit = Integer<1>;
 
 template <BitWidth bits>
 struct Input {
-    Input(DefaultProgram& p) : patient_id_concat_timestamp(p), diagnosis(p) {
-    }
-
     Integer<bits> patient_id_concat_timestamp;
     Bit diagnosis; // or aspirin prescription
 
@@ -49,18 +53,18 @@ struct Input {
 };
 
 template <BitWidth patient_id_bits = 32, BitWidth timestamp_bits = 32, BitWidth result_bits = 32>
-void create_aspirin_circuit(DefaultProgram& p, int input_size_per_party) {
+void create_aspirin_circuit(int input_size_per_party) {
     int input_array_length = input_size_per_party * 2;
     std::vector<Input<patient_id_bits + timestamp_bits>> inputs;
 
     for (int i = 0; i != input_array_length; i++) {
-        inputs.emplace_back(p);
+        inputs.emplace_back();
         inputs[i].patient_id_concat_timestamp.mark_input(i < input_size_per_party ? Party::Garbler : Party::Evaluator);
         inputs[i].diagnosis.mark_input(i < input_size_per_party ? Party::Garbler : Party::Evaluator);
     }
 
     // Verify the input first.
-    Bit order(1, p);
+    Bit order(1);
     for (int i = 0; i < input_size_per_party - 1; i++) {
         Bit lte = inputs[i].patient_id_concat_timestamp <= inputs[i+1].patient_id_concat_timestamp;
         order = order & lte;
@@ -72,16 +76,16 @@ void create_aspirin_circuit(DefaultProgram& p, int input_size_per_party) {
 	order.mark_output();
 
     // Merge the two arrays, sorted ascending by patient_id_concat_timestamp
-    bitonic_sorter(inputs.data(), input_array_length);
+    mage::dsl::bitonic_sorter(inputs.data(), input_array_length);
 
     // Now, for each input, check if it and the next input have the same patient, but the first is a diagnosis and the second isn't.
-    Integer<result_bits> total(0, p);
+    Integer<result_bits> total(0);
     for (int i = 0; i < input_array_length - 1; i++) {
         Bit add = inputs[i].diagnosis & ~inputs[i+1].diagnosis;
         Integer<patient_id_bits> patient_id_i = inputs[i].patient_id_concat_timestamp.template slice<patient_id_bits>(timestamp_bits);
         Integer<patient_id_bits> patient_id_ip1 = inputs[i+1].patient_id_concat_timestamp.template slice<patient_id_bits>(timestamp_bits);
         add = add & (patient_id_i == patient_id_ip1);
-        Integer next = total.increment();
+        Integer<result_bits> next = total.increment();
         total = Integer<result_bits>::select(add, next, total);
     }
 
@@ -114,7 +118,9 @@ int main(int argc, char** argv) {
     auto program_start = std::chrono::steady_clock::now();
     {
         mage::memprog::DefaultProgram program(program_filename, page_shift);
-        create_aspirin_circuit(program, input_size_per_party);
+        p = &program;
+        create_aspirin_circuit(input_size_per_party);
+        p = nullptr;
         std::cout << "Created program with " << program.num_instructions() << " instructions" << std::endl;
     }
     auto program_end = std::chrono::steady_clock::now();
