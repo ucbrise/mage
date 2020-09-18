@@ -81,10 +81,11 @@ namespace mage::engine {
 
         void execute_issue_swap_in(const PackedPhysInstruction& phys);
         void execute_issue_swap_out(const PackedPhysInstruction& phys);
-        void execute_copy_swap(const PackedPhysInstruction& phys);
         void execute_finish_swap_in(const PackedPhysInstruction& phys);
         void execute_finish_swap_out(const PackedPhysInstruction& phys);
+        void execute_copy_swap(const PackedPhysInstruction& phys);
         void execute_public_constant(const PackedPhysInstruction& phys);
+        void execute_copy(const PackedPhysInstruction& phys);
         void execute_int_add(const PackedPhysInstruction& phys);
         void execute_int_increment(const PackedPhysInstruction& phys);
         void execute_int_sub(const PackedPhysInstruction& phys);

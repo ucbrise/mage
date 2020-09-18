@@ -104,6 +104,17 @@ namespace mage::dsl {
         }
 
         template <bool other_sliced>
+        void mutate(const Integer<bits, other_sliced, Placer, p>& other) const {
+            Instruction& instr = (*p)->instruction();
+            instr.header.operation = OpCode::Copy;
+            instr.header.width = bits;
+            instr.header.flags = 0;
+            instr.header.output = this->v;
+            instr.one_arg.input1 = other.v;
+            (*p)->commit_instruction(0);
+        }
+
+        template <bool other_sliced>
         Integer<bits, false, Placer, p> operator +(const Integer<bits, other_sliced, Placer, p>& other) const {
             return Integer<bits, false, Placer, p>(OpCode::IntAdd, *this, other);
         }

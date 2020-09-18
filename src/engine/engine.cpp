@@ -152,6 +152,15 @@ namespace mage::engine {
     }
 
     template <typename ProtEngine>
+    void Engine<ProtEngine>::execute_copy(const PackedPhysInstruction& phys) {
+        typename ProtEngine::Wire* output = &this->memory[phys.header.output];
+        typename ProtEngine::Wire* input = &this->memory[phys.one_arg.input1];
+        BitWidth width = phys.one_arg.width;
+
+        std::copy(input, input + width, output);
+    }
+
+    template <typename ProtEngine>
     void Engine<ProtEngine>::execute_int_add(const PackedPhysInstruction& phys) {
         typename ProtEngine::Wire* output = &this->memory[phys.header.output];
         typename ProtEngine::Wire* input1 = &this->memory[phys.two_args.input1];
@@ -403,15 +412,21 @@ namespace mage::engine {
         case OpCode::IssueSwapOut:
             this->execute_issue_swap_out(phys);
             return PackedPhysInstruction::size(OpCode::IssueSwapOut);
-        case OpCode::CopySwap:
-            this->execute_copy_swap(phys);
-            return PackedPhysInstruction::size(OpCode::CopySwap);
         case OpCode::FinishSwapIn:
             this->execute_finish_swap_in(phys);
             return PackedPhysInstruction::size(OpCode::FinishSwapIn);
         case OpCode::FinishSwapOut:
             this->execute_finish_swap_out(phys);
             return PackedPhysInstruction::size(OpCode::FinishSwapOut);
+        case OpCode::CopySwap:
+            this->execute_copy_swap(phys);
+            return PackedPhysInstruction::size(OpCode::CopySwap);
+        case OpCode::NetworkReceive:
+            std::abort();
+        case OpCode::NetworkSend:
+            std::abort();
+        case OpCode::NetworkFlush:
+            std::abort();
         case OpCode::Input:
             this->protocol.input(&this->memory[phys.header.output], phys.no_args.width, (phys.header.flags & FlagEvaluatorInput) == 0);
             return PackedPhysInstruction::size(OpCode::Input);
@@ -421,6 +436,9 @@ namespace mage::engine {
         case OpCode::PublicConstant:
             this->execute_public_constant(phys);
             return PackedPhysInstruction::size(OpCode::PublicConstant);
+        case OpCode::Copy:
+            this->execute_copy(phys);
+            return PackedPhysInstruction::size(OpCode::Copy);
         case OpCode::IntAdd:
             this->execute_int_add(phys);
             return PackedPhysInstruction::size(OpCode::IntAdd);

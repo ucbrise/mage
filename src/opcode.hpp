@@ -35,9 +35,13 @@ namespace mage {
         FinishSwapIn,
         FinishSwapOut,
         CopySwap,
+        NetworkReceive,
+        NetworkSend,
+        NetworkFlush,
         Input, // 1 argument
         Output, // 1 argument
         PublicConstant, // 0 arguments
+        Copy, // 1 argument
         IntAdd, // 2 arguments
         IntIncrement, // 1 argument
         IntSub, // 2 arguments
@@ -67,12 +71,20 @@ namespace mage {
             return "FinishSwapOut";
         case OpCode::CopySwap:
             return "CopySwap";
+        case OpCode::NetworkReceive:
+            return "NetworkReceive";
+        case OpCode::NetworkSend:
+            return "NetworkSend";
+        case OpCode::NetworkFlush:
+            return "NetworkFlush";
         case OpCode::Input:
             return "Input";
         case OpCode::Output:
             return "Output";
         case OpCode::PublicConstant:
             return "PublicConstant";
+        case OpCode::Copy:
+            return "Copy";
         case OpCode::IntAdd:
             return "IntAdd";
         case OpCode::IntIncrement:
@@ -174,6 +186,10 @@ namespace mage {
                 this->has_output = false;
                 break;
             case OpCode::IssueSwapIn:
+                this->layout = InstructionFormat::Swap;
+                this->single_bit = false;
+                this->has_output = true;
+                break;
             case OpCode::IssueSwapOut:
             case OpCode::CopySwap:
                 this->layout = InstructionFormat::Swap;
@@ -186,8 +202,28 @@ namespace mage {
                 this->single_bit = false;
                 this->has_output = false;
                 break;
+            case OpCode::NetworkReceive:
+                this->layout = InstructionFormat::Constant;
+                this->single_bit = false;
+                this->has_output = true;
+                break;
+            case OpCode::NetworkSend:
+                this->layout = InstructionFormat::Constant;
+                this->single_bit = false;
+                this->has_output = false;
+                break;
+            case OpCode::NetworkFlush:
+                this->layout = InstructionFormat::Nothing;
+                this->single_bit = false;
+                this->has_output = false;
+                break;
             case OpCode::PublicConstant:
                 this->layout = InstructionFormat::Constant;
+                this->single_bit = false;
+                this->has_output = true;
+                break;
+            case OpCode::Copy:
+                this->layout = InstructionFormat::OneArg;
                 this->single_bit = false;
                 this->has_output = true;
                 break;
