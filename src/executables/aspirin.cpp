@@ -19,6 +19,11 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <cstdlib>
+#include <cstring>
+#include <chrono>
+#include <iostream>
+#include <string>
 #include "dsl/integer.hpp"
 #include "dsl/sort.hpp"
 #include "memprog/annotation.hpp"
@@ -26,9 +31,7 @@
 #include "memprog/replacement.hpp"
 #include "memprog/scheduling.hpp"
 #include "programfile.hpp"
-#include <chrono>
-#include <iostream>
-#include <string>
+#include "util/resourceset.hpp"
 
 using mage::BitWidth;
 using mage::dsl::Party;
@@ -105,14 +108,72 @@ std::uint64_t max_in_flight = 256;
 // std::uint64_t num_pages = 1769472;
 
 int main(int argc, char** argv) {
-    int input_size_per_party = 128;
+    int input_size_per_party;
     std::string filename = "aspirin_";
-    if (argc > 2) {
-        std::cerr << "Usage: " << argv[0] << " input_size_per_party" << std::endl;
+    if (argc == 5) {
+        mage::util::ResourceSet rs;
+        std::string err = rs.from_yaml_file(argv[1]);
+        if (!err.empty()) {
+            std::cerr << err << std::endl;
+            return 1;
+        }
+
+        const mage::util::ResourceSet::Party* p;
+        if (std::strcmp(argv[2], "garbler") == 0) {
+            if (!rs.garbler.has_value()) {
+                std::cerr << "No garbler information specified in config file" << std::endl;
+                return 1;
+            }
+            p = &rs.garbler.value();
+        } else if (std::strcmp(argv[2], "evaluator") == 0) {
+            if (!rs.evaluator.has_value()) {
+                std::cerr << "No evaluator information specified in config file" << std::endl;
+                return 1;
+            }
+            p = &rs.evaluator.value();
+        } else {
+            std::cerr << "Second argument (" << argv[2] << ") is neither garbler not evaluator" << std::endl;
+            return 1;
+        }
+
+        errno = 0;
+        unsigned long long index = std::strtoull(argv[3], nullptr, 10);
+        if (errno != 0) {
+            std::perror("Third argument (index)");
+            return 1;
+        }
+
+        if (index >= p->workers.size()) {
+            std::cerr << "No worker specified in " << argv[1] << " at index " << index << std::endl;
+            return 1;
+        }
+
+        const mage::util::ResourceSet::Worker& w = p->workers[index];
+        try {
+            page_shift = w.page_shift.value();
+            max_in_flight = w.max_in_flight_swaps.value();
+            num_pages = w.num_available_pages.value();
+        } catch (const std::bad_optional_access& boa) {
+            std::cerr << "Required memory info not available for " << argv[2] << " worker #" << argv[3] << std::endl;
+            return 1;
+        }
+
+        errno = 0;
+        input_size_per_party = std::strtoull(argv[4], nullptr, 10);
+        if (errno != 0 || input_size_per_party == 0) {
+            std::cerr << "Bad fourth argument (input size)" << std::endl;
+            return 1;
+        }
+    } else if (argc == 2) {
+        errno = 0;
+        input_size_per_party = std::strtoull(argv[1], nullptr, 10);
+        if (errno != 0 || input_size_per_party == 0) {
+            std::cerr << "Bad second argument (input size)" << std::endl;
+            return 1;
+        }
+    } else {
+        std::cerr << "Usage: " << argv[0] << "[config.yaml garbler/evaluator index] input_size_per_party" << std::endl;
         return 1;
-    }
-    if (argc == 2) {
-        input_size_per_party = atoi(argv[1]);
     }
     filename.append(std::to_string(input_size_per_party));
 
