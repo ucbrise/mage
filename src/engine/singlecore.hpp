@@ -27,15 +27,17 @@
 #include "addr.hpp"
 #include "engine/engine.hpp"
 #include "programfile.hpp"
+#include "util/resourceset.hpp"
 #include "util/stats.hpp"
 
 namespace mage::engine {
-    template <typename Protocol>
-    class SingleCoreEngine : private Engine<Protocol> {
+    template <typename ProtEngine>
+    class SingleCoreEngine : private Engine<ProtEngine> {
     public:
-        SingleCoreEngine(std::string program, std::string swapfile, Protocol& prot) : Engine<Protocol>(prot), input(program.c_str()) {
+        SingleCoreEngine(const util::ResourceSet::Party& party, WorkerID self, ProtEngine& prot, std::string program)
+            : Engine<ProtEngine>(self, prot), input(program.c_str()) {
             const ProgramFileHeader& header = this->input.get_header();
-            this->init(header.page_shift, header.num_pages, header.num_swap_pages, header.max_concurrent_swaps, swapfile);
+            this->init(party, header.page_shift, header.num_pages, header.num_swap_pages, header.max_concurrent_swaps);
             this->input.enable_stats("READ-INSTR (ns)");
         }
 

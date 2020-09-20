@@ -28,6 +28,7 @@
 #include <cstdlib>
 #include <algorithm>
 #include <chrono>
+#include <utility>
 #include "platform/filesystem.hpp"
 #include "platform/memory.hpp"
 #include "util/stats.hpp"
@@ -53,6 +54,15 @@ namespace mage::util {
         BufferedFileWriter(int file_descriptor, std::size_t buffer_size = 1 << 18)
             : BufferedFileWriter(buffer_size) {
             this->set_file_descriptor(file_descriptor, false);
+        }
+
+        BufferedFileWriter(BufferedFileWriter<backwards_readable>&& other)
+            : fd(other.fd), owns_fd(other.owns_fd), use_stats(other.use_stats),
+            position(other.position), buffer(std::move(other.buffer)) {
+            other.fd = -1;
+            other.owns_fd = false;
+            other.use_stats = false;
+            other.position = 0;
         }
 
         void set_file_descriptor(int file_descriptor, bool owns_fd) {
@@ -159,6 +169,16 @@ namespace mage::util {
         BufferedFileReader(int file_descriptor, std::size_t buffer_size = 1 << 18)
             : BufferedFileReader(buffer_size) {
             this->set_file_descriptor(file_descriptor, false);
+        }
+
+        BufferedFileReader(BufferedFileReader<backwards_readable>&& other)
+            : fd(other.fd), owns_fd(other.owns_fd), use_stats(other.use_stats), position(other.position),
+            buffer(std::move(other.buffer)), active_size(other.active_size) {
+            other.fd = -1;
+            other.owns_fd = false;
+            other.use_stats = false;
+            other.position = 0;
+            other.active_size = 0;
         }
 
         void set_file_descriptor(int file_descriptor, bool owns_fd) {

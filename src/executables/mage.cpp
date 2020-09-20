@@ -28,12 +28,47 @@
 #include "engine/halfgates.hpp"
 #include "engine/plaintext.hpp"
 #include "platform/network.hpp"
+#include "util/resourceset.hpp"
 
 using namespace mage;
 
 int main(int argc, char** argv) {
-    if (argc != 4) {
-        std::cerr << "Usage: " << argv[0] << " garble/evaluate program_name host:port" << std::endl;
+    if (argc != 5) {
+        std::cerr << "Usage: " << argv[0] << " config.yaml worker_id garble/evaluate program_name" << std::endl;
+        return 1;
+    }
+
+    /* Parse the config.yaml file. */
+
+    util::ResourceSet rs;
+    std::string err = rs.from_yaml_file(argv[1]);
+    if (!err.empty()) {
+        std::cerr << err << std::endl;
+        return 1;
+    }
+
+    /* Parse the worker ID. */
+
+    WorkerID self_id;
+    std::istringstream self_id_stream(argv[2]);
+    self_id_stream >> self_id;
+
+    /* Validate the config.yaml file for running the computation. */
+
+    if (!rs.garbler.has_value()) {
+        std::cerr << "Garbler not present in configuration file" << std::endl;
+        return 1;
+    }
+    if (!rs.evaluator.has_value()) {
+        std::cerr << "Evaluator not present in configuration file" << std::endl;
+        return 1;
+    }
+    if (rs.garbler->workers.size() != rs.evaluator->workers.size()) {
+        std::cerr << "Garbler has " << rs.garbler->workers.size() << " workers but evaluator has " << rs.evaluator->workers.size() << " workers --- must be equal" << std::endl;
+        return 1;
+    }
+    if (self_id >= rs.garbler->workers.size()) {
+        std::cerr << "Worker index is " << self_id << " but only " << rs.garbler->workers.size() << " workers are specified" << std::endl;
         return 1;
     }
 
@@ -41,20 +76,28 @@ int main(int argc, char** argv) {
 
     bool plaintext = false;
     bool garble = false;
-    if (std::strcmp(argv[1], "garble") == 0) {
+    util::ResourceSet::Party* party;
+    util::ResourceSet::Party* other_party;
+    if (std::strcmp(argv[3], "garble") == 0) {
         garble = true;
-    } else if (std::strcmp(argv[1], "evaluate") == 0) {
+        party = &(*rs.garbler);
+        other_party = &(*rs.evaluator);
+    } else if (std::strcmp(argv[3], "evaluate") == 0) {
         garble = false;
-    } else if (std::strcmp(argv[1], "plaintext") == 0) {
+        party = &(*rs.evaluator);
+        other_party = &(*rs.garbler);
+    } else if (std::strcmp(argv[3], "plaintext") == 0) {
         plaintext = true;
+        party = &(*rs.garbler);
+        other_party = &(*rs.evaluator);
     } else {
-        std::cerr << "First argument must be \"garble\" or \"evaluate\"" << std::endl;
+        std::cerr << "Third argument must be \"garble\" or \"evaluate\"" << std::endl;
         return 1;
     }
 
     /* Generate the file names. */
 
-    std::string file_base(argv[2]);
+    std::string file_base(argv[4]);
 
     std::string prog_file(file_base);
     prog_file.append(".memprog");
@@ -74,7 +117,7 @@ int main(int argc, char** argv) {
     if (plaintext) {
         engine::PlaintextEvaluationEngine p(garbler_input_file.c_str(), evaluator_input_file.c_str(), output_file.c_str());
         start = std::chrono::steady_clock::now();
-        engine::SingleCoreEngine executor(prog_file.c_str(), "swapfile", p); // can use, e.g., "/dev/nvme0n1p7" if you have permission
+        engine::SingleCoreEngine executor(*party, self_id, p, prog_file.c_str());
         executor.execute_program();
         end = std::chrono::steady_clock::now();
         std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
@@ -82,29 +125,28 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    /* Parse the host/port. */
-
-    std::string host(argv[3]);
-    std::string port;
-    std::size_t colon_index = host.find_last_of(':');
-    if (colon_index == std::string::npos) {
-        port = host;
-        host = "127.0.0.1";
-    } else {
-        port = host.substr(colon_index + 1);
-        host.erase(colon_index);
-    }
-
     /* Perform the computation. */
     if (garble) {
-        engine::HalfGatesGarblingEngine p(garbler_input_file.c_str(), output_file.c_str(), host.c_str(), port.c_str());
+        util::ResourceSet::Worker& opposite_worker = other_party->workers[self_id];
+        if (!opposite_worker.external_host.has_value() || !opposite_worker.external_port.has_value()) {
+            std::cerr << "Opposite party's external network information is not specified" << std::endl;
+            return 1;
+        }
+
+        engine::HalfGatesGarblingEngine p(garbler_input_file.c_str(), output_file.c_str(), opposite_worker.external_host->c_str(), opposite_worker.external_port->c_str());
         start = std::chrono::steady_clock::now();
-        engine::SingleCoreEngine executor(prog_file.c_str(), "garbler_swapfile", p);
+        engine::SingleCoreEngine executor(*party, self_id, p, prog_file.c_str());
         executor.execute_program();
     } else {
-        engine::HalfGatesEvaluationEngine p(evaluator_input_file.c_str(), port.c_str());
+        util::ResourceSet::Worker& worker = party->workers[self_id];
+        if (!worker.external_host.has_value() || !worker.external_port.has_value()) {
+            std::cerr << "This party's external network information is not specified" << std::endl;
+            return 1;
+        }
+
+        engine::HalfGatesEvaluationEngine p(evaluator_input_file.c_str(), worker.external_port->c_str());
         start = std::chrono::steady_clock::now();
-        engine::SingleCoreEngine executor(prog_file.c_str(), "evaluator_swapfile", p);
+        engine::SingleCoreEngine executor(*party, self_id, p, prog_file.c_str());
         executor.execute_program();
     }
     end = std::chrono::steady_clock::now();

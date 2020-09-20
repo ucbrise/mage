@@ -74,7 +74,7 @@ namespace mage::engine {
 
         HalfGatesGarblingEngine(const char* input_file, const char* output_file, const char* evaluator_host, const char* evaluator_port)
             : input_reader(input_file), output_writer(output_file), evaluator_input_labels(2) {
-            platform::network_connect(evaluator_host, evaluator_port, this->sockets.data(), halfgates_num_connections);
+            platform::network_connect(evaluator_host, evaluator_port, this->sockets.data(), nullptr, halfgates_num_connections);
             this->conn_reader.set_file_descriptor(this->sockets[0], false);
             this->conn_writer.set_file_descriptor(this->sockets[0], false);
             this->ot_conn_reader.set_file_descriptor(this->sockets[1], false);

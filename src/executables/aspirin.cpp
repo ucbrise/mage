@@ -124,13 +124,13 @@ int main(int argc, char** argv) {
                 std::cerr << "No garbler information specified in config file" << std::endl;
                 return 1;
             }
-            p = &rs.garbler.value();
+            p = &(*rs.garbler);
         } else if (std::strcmp(argv[2], "evaluator") == 0) {
             if (!rs.evaluator.has_value()) {
                 std::cerr << "No evaluator information specified in config file" << std::endl;
                 return 1;
             }
-            p = &rs.evaluator.value();
+            p = &(*rs.evaluator);
         } else {
             std::cerr << "Second argument (" << argv[2] << ") is neither garbler not evaluator" << std::endl;
             return 1;

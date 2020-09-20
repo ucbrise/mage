@@ -19,6 +19,8 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "platform/network.hpp"
+
 #include <cstddef>
 #include <cstdio>
 #include <cstdint>
@@ -76,7 +78,7 @@ namespace mage::platform {
         }
     }
 
-    void network_connect(const char* host, const char* port, int* into, std::uint32_t count) {
+    void network_connect(const char* host, const char* port, int* into, NetworkError* err, std::uint32_t count) {
         struct addrinfo hints = { 0 };
         hints.ai_family = AF_INET;
         hints.ai_socktype = SOCK_STREAM;
@@ -96,8 +98,16 @@ namespace mage::platform {
             }
 
             if (connect(into[i], info->ai_addr, info->ai_addrlen) == -1) {
-                std::perror("network_connect -> connect");
-                std::abort();
+                if (err != nullptr && errno == ECONNREFUSED) {
+                    err[i] = NetworkError::ConnectionRefused;
+                } else if (err != nullptr && errno == ETIMEDOUT) {
+                    err[i] = NetworkError::TimedOut;
+                } else {
+                    std::perror("network_connect -> connect");
+                    std::abort();
+                }
+            } else {
+                err[i] = NetworkError::Success;
             }
         }
 

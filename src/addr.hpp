@@ -86,6 +86,12 @@ namespace mage {
     const constexpr int storage_address_bits = 48;
     const constexpr StorageAddr invalid_saddr = (UINT64_C(1) << storage_address_bits) - 1;
     using StoragePageNumber = std::uint64_t;
+
+    /* CLUSTER */
+    using WorkerID = std::uint32_t;
+    using PartyID = std::uint32_t;
+    constexpr const PartyID evaluator_party_id = 0;
+    constexpr const PartyID garbler_party_id = 1;
 }
 
 #endif

@@ -94,31 +94,31 @@ namespace mage::util {
             if (worker.page_shift.has_value() && page_size.has_value()) {
                 return "page_shift and page_size should not both be set";
             } else if (page_size.has_value()) {
-                worker.page_shift = size_to_shift(page_size.value());
+                worker.page_shift = size_to_shift(*page_size);
             }
 
             if (worker.num_available_pages.has_value() && available_memory.has_value()) {
                 return "num_available_pages and available_memory should not both be set";
             } else if (available_memory.has_value()) {
                 if (worker.page_shift.has_value()) {
-                    PageShift shift = worker.page_shift.value();
-                    worker.num_available_pages = pg_num(available_memory.value(), shift);
+                    PageShift shift = *worker.page_shift;
+                    worker.num_available_pages = pg_num(*available_memory, shift);
                 } else {
                     return "cannot use num_available_pages unless page size is known";
                 }
             }
 
             if (!worker.num_available_pages.has_value() && this->default_num_available_pages.has_value()) {
-                worker.num_available_pages = this->default_num_available_pages.value();
+                worker.num_available_pages = *this->default_num_available_pages;
             }
             if (!worker.max_in_flight_swaps.has_value() && this->default_max_in_flight_swaps.has_value()) {
-                worker.max_in_flight_swaps = this->default_max_in_flight_swaps.value();
+                worker.max_in_flight_swaps = *this->default_max_in_flight_swaps;
             }
             if (!worker.page_shift.has_value() && this->default_page_shift.has_value()) {
-                worker.page_shift = this->default_page_shift.value();
+                worker.page_shift = *this->default_page_shift;
             }
 
-            if (worker.max_in_flight_swaps.has_value() && worker.max_in_flight_swaps.value() >= worker.num_available_pages.value()) {
+            if (worker.max_in_flight_swaps.has_value() && *worker.max_in_flight_swaps >= *worker.num_available_pages) {
                 return "must have at least one page available for each in-flight swap";
             }
         }
@@ -135,13 +135,13 @@ namespace mage::util {
             init_optional_uint8(party_node["default_page_shift"], p.default_page_shift);
 
             if (!p.default_num_available_pages.has_value() && this->default_num_available_pages.has_value()) {
-                p.default_num_available_pages = this->default_num_available_pages.value();
+                p.default_num_available_pages = *this->default_num_available_pages;
             }
             if (!p.default_max_in_flight_swaps.has_value() && this->default_max_in_flight_swaps.has_value()) {
-                p.default_max_in_flight_swaps = this->default_max_in_flight_swaps.value();
+                p.default_max_in_flight_swaps = *this->default_max_in_flight_swaps;
             }
             if (!p.default_page_shift.has_value() && this->default_page_shift.has_value()) {
-                p.default_page_shift = this->default_page_shift.value();
+                p.default_page_shift = *this->default_page_shift;
             }
             if (party_node["workers"]) {
                 const char* err = p.init_workers(party_node["workers"], p.workers);
@@ -166,7 +166,7 @@ namespace mage::util {
         init_optional_uint8(config["default_page_shift"], this->default_page_shift);
         if (config["garbler"]) {
             this->garbler.emplace();
-            std::string err = this->init_party(config["garbler"], this->garbler.value());
+            std::string err = this->init_party(config["garbler"], *this->garbler);
             if (!err.empty()) {
                 return err;
             }
@@ -175,7 +175,7 @@ namespace mage::util {
         }
         if (config["evaluator"]) {
             this->evaluator.emplace();
-            std::string err = this->init_party(config["evaluator"], this->evaluator.value());
+            std::string err = this->init_party(config["evaluator"], *this->evaluator);
             if (!err.empty()) {
                 return err;
             }

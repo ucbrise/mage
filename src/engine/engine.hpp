@@ -30,8 +30,10 @@
 #include <string>
 #include <unordered_map>
 #include "instruction.hpp"
+#include "engine/cluster.hpp"
 #include "platform/filesystem.hpp"
 #include "platform/memory.hpp"
+#include "util/resourceset.hpp"
 #include "util/stats.hpp"
 
 namespace mage::engine {
@@ -39,12 +41,29 @@ namespace mage::engine {
     class Engine {
         static const constexpr int aio_max_events = 2048;
         static const constexpr int aio_process_batch_size = 64;
+
     public:
-        Engine(ProtEngine& prot) : protocol(prot), memory(nullptr), memory_size(0), swap_in("SWAP-IN (ns)", true), swap_out("SWAP-OUT (ns)", true), swap_blocked("SWAP_BLOCKED (ns)", true), aio_ctx(0) {
+        Engine(WorkerID self, ProtEngine& prot) : protocol(prot),
+            memory(nullptr), memory_size(0), swap_in("SWAP-IN (ns)", true),
+            swap_out("SWAP-OUT (ns)", true), swap_blocked("SWAP_BLOCKED (ns)", true),
+            cluster(self), self_id(self), aio_ctx(0) {
         }
 
-        void init(PageShift shift, std::uint64_t num_pages, std::uint64_t swap_pages, std::uint32_t concurrent_swaps, std::string swapfile) {
+        void init(const util::ResourceSet::Party& party, PageShift shift, std::uint64_t num_pages, std::uint64_t swap_pages, std::uint32_t concurrent_swaps) {
             assert(this->memory == nullptr);
+
+            const util::ResourceSet::Worker& worker = party.workers[this->self_id];
+            if (!worker.storage_path.has_value()) {
+                std::cerr << "No storage path is specified for this worker (#" << this->self_id << ")" << std::endl;
+                std::abort();
+            }
+            const std::string& storage_file = *worker.storage_path;
+
+            std::string err = this->cluster.establish(party);
+            if (!err.empty()) {
+                std::cerr << err << std::endl;
+                std::abort();
+            }
 
             if (io_setup(concurrent_swaps, &this->aio_ctx) != 0) {
                 std::perror("io_setup");
@@ -54,15 +73,15 @@ namespace mage::engine {
             this->memory_size = pg_addr(num_pages, shift) * sizeof(typename ProtEngine::Wire);
             this->memory = platform::allocate_resident_memory<typename ProtEngine::Wire>(this->memory_size);
             std::uint64_t required_size = pg_addr(swap_pages, shift) * sizeof(typename ProtEngine::Wire);
-            if (swapfile.rfind("/dev/", 0) != std::string::npos) {
+            if (storage_file.rfind("/dev/", 0) != std::string::npos) {
                 std::uint64_t length;
-                this->swapfd = platform::open_file(swapfile.c_str(), &length, true);
+                this->swapfd = platform::open_file(storage_file.c_str(), &length, true);
                 if (length < required_size) {
                     std::cerr << "Disk too small: size is " << length << " B, requires " << required_size << " B" << std::endl;
                     std::abort();
                 }
             } else {
-                this->swapfd = platform::create_file(swapfile.c_str(), required_size, true, true);
+                this->swapfd = platform::create_file(storage_file.c_str(), required_size, true, true);
             }
             this->page_shift = shift;
         }
@@ -110,6 +129,9 @@ namespace mage::engine {
         PageShift page_shift;
         std::size_t memory_size;
         int swapfd;
+
+        ClusterNetwork cluster;
+        WorkerID self_id;
 
         io_context_t aio_ctx;
         std::unordered_map<PhysPageNumber, struct iocb> in_flight_swaps;
