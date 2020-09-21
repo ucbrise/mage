@@ -22,11 +22,12 @@
 #ifndef MAGE_DSL_INTEGER_HPP_
 #define MAGE_DSL_INTEGER_HPP_
 
-#include "instruction.hpp"
-#include "memprog/program.hpp"
-#include "opcode.hpp"
 #include <cassert>
 #include <cstdint>
+#include "instruction.hpp"
+#include "memprog/program.hpp"
+#include "addr.hpp"
+#include "opcode.hpp"
 
 namespace mage::dsl {
     using memprog::Program;
@@ -75,7 +76,7 @@ namespace mage::dsl {
         }
 
         void mark_input(enum Party party) {
-            assert(!sliced);
+            static_assert(!sliced);
             this->recycle();
 
             Instruction& instr = (*p)->instruction();
@@ -112,6 +113,32 @@ namespace mage::dsl {
             instr.header.output = this->v;
             instr.one_arg.input1 = other.v;
             (*p)->commit_instruction(0);
+        }
+
+        void send(WorkerID to) const {
+            Instruction& instr = (*p)->instruction();
+            instr.header.operation = OpCode::NetworkSend;
+            instr.header.width = bits;
+            instr.header.flags = 0;
+            instr.header.output = this->v;
+            instr.constant.constant = to;
+            (*p)->commit_instruction(0);
+        }
+
+        void receive(WorkerID from) const {
+            static_assert(!sliced);
+            this->recycle();
+
+            Instruction& instr = (*p)->instruction();
+            instr.header.operation = OpCode::NetworkReceive;
+            instr.header.width = bits;
+            instr.header.flags = 0;
+            instr.constant.constant = from;
+            (*p)->commit_instruction(bits);
+        }
+
+        static void communication_barrier(WorkerID to) {
+            (*p)->communication_barrier(to);
         }
 
         template <bool other_sliced>

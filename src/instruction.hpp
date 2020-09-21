@@ -52,36 +52,45 @@ namespace mage {
         struct {
             OpCode operation;
             std::uint8_t flags;
-            std::uint64_t output : addr_bits;
         } __attribute__((packed)) header;
         union {
             struct {
                 BitWidth width;
+                std::uint64_t output : addr_bits;
             } __attribute__((packed)) no_args;
             struct {
                 BitWidth width;
+                std::uint64_t output : addr_bits;
                 std::uint64_t input1 : addr_bits;
             } __attribute__((packed)) one_arg;
             struct {
                 BitWidth width;
+                std::uint64_t output : addr_bits;
                 std::uint64_t input1 : addr_bits;
                 std::uint64_t input2 : addr_bits;
             } __attribute__((packed)) two_args;
             struct {
                 BitWidth width;
+                std::uint64_t output : addr_bits;
                 std::uint64_t input1 : addr_bits;
                 std::uint64_t input2 : addr_bits;
                 std::uint64_t input3 : addr_bits;
             } __attribute__((packed)) three_args;
             struct {
                 BitWidth width;
+                std::uint64_t output : addr_bits;
                 std::uint64_t constant;
             } __attribute__((packed)) constant;
             struct {
+                std::uint64_t memory : addr_bits;
                 std::uint64_t storage : storage_bits;
             } __attribute__((packed)) swap;
             struct {
-            } __attribute__((packed)) nothing;
+                std::uint64_t memory : addr_bits;
+            } __attribute__((packed)) swap_finish;
+            struct {
+                std::uint32_t data;
+            } __attribute__((packed)) control;
         };
 
         static constexpr std::size_t size(InstructionFormat format) {
@@ -98,8 +107,10 @@ namespace mage {
                 return sizeof(PackedInstruction<addr_bits, storage_bits>::header) + sizeof(PackedInstruction<addr_bits, storage_bits>::constant);
             case InstructionFormat::Swap:
                 return sizeof(PackedInstruction<addr_bits, storage_bits>::header) + sizeof(PackedInstruction<addr_bits, storage_bits>::swap);
-            case InstructionFormat::Nothing:
-                return sizeof(PackedInstruction<addr_bits, storage_bits>::header) + sizeof(PackedInstruction<addr_bits, storage_bits>::nothing);
+            case InstructionFormat::SwapFinish:
+                return sizeof(PackedInstruction<addr_bits, storage_bits>::header) + sizeof(PackedInstruction<addr_bits, storage_bits>::swap_finish);
+            case InstructionFormat::Control:
+                return sizeof(PackedInstruction<addr_bits, storage_bits>::header) + sizeof(PackedInstruction<addr_bits, storage_bits>::control);
             default:
                 std::abort();
             }
@@ -138,66 +149,99 @@ namespace mage {
 
         std::uint8_t store_page_numbers(std::uint64_t* into, PageShift page_shift) {
             OpInfo info(this->header.operation);
-            int num_args = info.num_args();
 
-            std::uint8_t num_pages = 0;
+            switch (info.format()) {
+            case InstructionFormat::NoArgs:
+            case InstructionFormat::OneArg:
+            case InstructionFormat::TwoArgs:
+            case InstructionFormat::ThreeArgs:
+            case InstructionFormat::Constant:
+            {
+                int num_args = info.num_args();
+                std::uint8_t num_pages = 0;
 
-            std::uint64_t output_vpn = pg_num(this->header.output, page_shift);
-            into[num_pages++] = output_vpn;
-            if (num_args > 0) {
-                std::uint64_t input1_vpn = pg_num(this->three_args.input1, page_shift);
-                if (input1_vpn != output_vpn) {
-                    into[num_pages++] = input1_vpn;
-                }
-                if (num_args > 1) {
-                    std::uint64_t input2_vpn = pg_num(this->three_args.input2, page_shift);
-                    if (input2_vpn != output_vpn && input2_vpn != input1_vpn) {
-                        into[num_pages++] = input2_vpn;
+                std::uint64_t output_vpn = pg_num(this->three_args.output, page_shift);
+                into[num_pages++] = output_vpn;
+                if (num_args > 0) {
+                    std::uint64_t input1_vpn = pg_num(this->three_args.input1, page_shift);
+                    if (input1_vpn != output_vpn) {
+                        into[num_pages++] = input1_vpn;
                     }
-                    if (num_args > 2) {
-                        std::uint64_t input3_vpn = pg_num(this->three_args.input3, page_shift);
-                        if (input3_vpn != output_vpn && input3_vpn != input1_vpn && input3_vpn != input2_vpn) {
-                            into[num_pages++] = input3_vpn;
+                    if (num_args > 1) {
+                        std::uint64_t input2_vpn = pg_num(this->three_args.input2, page_shift);
+                        if (input2_vpn != output_vpn && input2_vpn != input1_vpn) {
+                            into[num_pages++] = input2_vpn;
+                        }
+                        if (num_args > 2) {
+                            std::uint64_t input3_vpn = pg_num(this->three_args.input3, page_shift);
+                            if (input3_vpn != output_vpn && input3_vpn != input1_vpn && input3_vpn != input2_vpn) {
+                                into[num_pages++] = input3_vpn;
+                            }
                         }
                     }
                 }
+
+                return num_pages;
             }
-            return num_pages;
+            case InstructionFormat::Swap:
+            case InstructionFormat::SwapFinish:
+            case InstructionFormat::Control:
+                return 0;
+            default:
+                std::abort();
+            }
         }
 
         template <std::uint8_t other_addr_bits, std::uint8_t other_storage_bits>
         std::uint8_t restore_page_numbers(const PackedInstruction<other_addr_bits, other_storage_bits>& original, const std::uint64_t* from, PageShift page_shift) {
             OpInfo info(this->header.operation);
-            int num_args = info.num_args();
 
-            std::uint8_t num_pages = 0;
+            switch (info.format()) {
+            case InstructionFormat::NoArgs:
+            case InstructionFormat::OneArg:
+            case InstructionFormat::TwoArgs:
+            case InstructionFormat::ThreeArgs:
+            case InstructionFormat::Constant:
+            {
+                int num_args = info.num_args();
+                std::uint8_t num_pages = 0;
 
-            std::uint64_t output_vpn = pg_num(original.header.output, page_shift);
-            std::uint64_t output_ppn = from[num_pages++];
-            this->header.output = pg_set_num(original.header.output, output_ppn, page_shift);
-            if (num_args > 0) {
-                std::uint64_t input1_vpn = pg_num(original.three_args.input1, page_shift);
-                std::uint64_t input1_ppn = input1_vpn == output_vpn ? output_ppn : from[num_pages++];
-                this->three_args.input1 = pg_set_num(original.three_args.input1, input1_ppn, page_shift);
-                if (num_args > 1) {
-                    std::uint64_t input2_vpn = pg_num(original.three_args.input2, page_shift);
-                    std::uint64_t input2_ppn = input2_vpn == output_vpn ? output_ppn
-                        : input2_vpn == input1_vpn ? input1_ppn
-                        : from[num_pages++];
-                    this->three_args.input2 = pg_set_num(original.three_args.input2, input2_ppn, page_shift);
-                    if (num_args > 2) {
-                        std::uint64_t input3_vpn = pg_num(original.three_args.input3, page_shift);
-                        std::uint64_t input3_ppn = input3_vpn == output_vpn ? output_ppn
-                            : input3_vpn == input1_vpn ? input1_ppn
-                            : input3_vpn == input2_vpn ? input2_ppn
+                std::uint64_t output_vpn = pg_num(original.three_args.output, page_shift);
+                std::uint64_t output_ppn = from[num_pages++];
+                this->three_args.output = pg_set_num(original.three_args.output, output_ppn, page_shift);
+                if (num_args > 0) {
+                    std::uint64_t input1_vpn = pg_num(original.three_args.input1, page_shift);
+                    std::uint64_t input1_ppn = input1_vpn == output_vpn ? output_ppn : from[num_pages++];
+                    this->three_args.input1 = pg_set_num(original.three_args.input1, input1_ppn, page_shift);
+                    if (num_args > 1) {
+                        std::uint64_t input2_vpn = pg_num(original.three_args.input2, page_shift);
+                        std::uint64_t input2_ppn = input2_vpn == output_vpn ? output_ppn
+                            : input2_vpn == input1_vpn ? input1_ppn
                             : from[num_pages++];
-                        this->three_args.input3 = pg_set_num(original.three_args.input3, input3_ppn, page_shift);
+                        this->three_args.input2 = pg_set_num(original.three_args.input2, input2_ppn, page_shift);
+                        if (num_args > 2) {
+                            std::uint64_t input3_vpn = pg_num(original.three_args.input3, page_shift);
+                            std::uint64_t input3_ppn = input3_vpn == output_vpn ? output_ppn
+                                : input3_vpn == input1_vpn ? input1_ppn
+                                : input3_vpn == input2_vpn ? input2_ppn
+                                : from[num_pages++];
+                            this->three_args.input3 = pg_set_num(original.three_args.input3, input3_ppn, page_shift);
+                        }
                     }
+                } else if (info.uses_constant()) {
+                    this->constant.constant = original.constant.constant;
                 }
-            } else if (info.uses_constant()) {
-                this->constant.constant = original.constant.constant;
+                return num_pages;
             }
-            return num_pages;
+            case InstructionFormat::Swap:
+            case InstructionFormat::SwapFinish:
+                std::abort(); // shouldn't be necessary for these instruction types
+            case InstructionFormat::Control:
+                this->control.data = original.control.data;
+                return 0;
+            default:
+                std::abort();
+            }
         }
     } __attribute__((packed));
 
@@ -231,43 +275,55 @@ namespace mage {
                 std::uint64_t storage;
             } swap;
             struct {
-            } nothing;
+            } swap_finish;
+            struct {
+                std::uint32_t data;
+            } control;
         };
 
         template <std::uint8_t addr_bits, std::uint8_t storage_bits>
         std::size_t pack(PackedInstruction<addr_bits, storage_bits>& packed, InstructionFormat format) const {
             packed.header.operation = this->header.operation;
             packed.header.flags = this->header.flags;
-            packed.header.output = this->header.output;
 
             switch (format) {
             case InstructionFormat::NoArgs:
                 packed.no_args.width = this->header.width;
+                packed.no_args.output = this->header.output;
                 return sizeof(packed.header) + sizeof(packed.no_args);
             case InstructionFormat::OneArg:
                 packed.one_arg.width = this->header.width;
+                packed.one_arg.output = this->header.output;
                 packed.one_arg.input1 = this->one_arg.input1;
                 return sizeof(packed.header) + sizeof(packed.one_arg);
             case InstructionFormat::TwoArgs:
                 packed.two_args.width = this->header.width;
+                packed.two_args.output = this->header.output;
                 packed.two_args.input1 = this->two_args.input1;
                 packed.two_args.input2 = this->two_args.input2;
                 return sizeof(packed.header) + sizeof(packed.two_args);
             case InstructionFormat::ThreeArgs:
                 packed.three_args.width = this->header.width;
+                packed.three_args.output = this->header.output;
                 packed.three_args.input1 = this->three_args.input1;
                 packed.three_args.input2 = this->three_args.input2;
                 packed.three_args.input3 = this->three_args.input3;
                 return sizeof(packed.header) + sizeof(packed.three_args);
             case InstructionFormat::Constant:
                 packed.constant.width = this->header.width;
+                packed.constant.output = this->header.output;
                 packed.constant.constant = this->constant.constant;
                 return sizeof(packed.header) + sizeof(packed.constant);
             case InstructionFormat::Swap:
+                packed.swap.memory = this->header.output;
                 packed.swap.storage = this->swap.storage;
                 return sizeof(packed.header) + sizeof(packed.swap);
-            case InstructionFormat::Nothing:
-                return sizeof(packed.header) + sizeof(packed.nothing);
+            case InstructionFormat::SwapFinish:
+                packed.swap_finish.memory = this->header.output;
+                return sizeof(packed.header) + sizeof(packed.swap_finish);
+            case InstructionFormat::Control:
+                packed.control.data = this->control.data;
+                return sizeof(packed.header) + sizeof(packed.control);
             default:
                 std::abort();
             }
@@ -373,15 +429,33 @@ namespace mage {
         out << name;
 
         OpInfo info(p.header.operation);
-        int num_args = info.num_args();
-        if (num_args == 0) {
-            out << "(" << p.header.output << ")";
-        } else if (num_args == 1) {
-            out << "<" << (int) p.one_arg.width << ">(" << p.header.output << ", " << p.one_arg.input1 << ")";
-        } else if (num_args == 2) {
-            out << "<" << (int) p.two_args.width << ">(" << p.header.output << ", " << p.two_args.input1 << ", " << p.two_args.input2 << ")";
-        } else if (num_args == 3) {
-            out << "<" << (int) p.three_args.width << ">(" << p.header.output << ", " << p.three_args.input1 << ", " << p.three_args.input2 << ", " << p.three_args.input3 << ")";
+        switch (info.format()) {
+        case InstructionFormat::NoArgs:
+            out << "(" << p.no_args.output << ")";
+            break;
+        case InstructionFormat::OneArg:
+            out << "<" << (int) p.one_arg.width << ">(" << p.one_arg.output << ", " << p.one_arg.input1 << ")";
+            break;
+        case InstructionFormat::TwoArgs:
+            out << "<" << (int) p.two_args.width << ">(" << p.two_args.output << ", " << p.two_args.input1 << ", " << p.two_args.input2 << ")";
+            break;
+        case InstructionFormat::ThreeArgs:
+            out << "<" << (int) p.three_args.width << ">(" << p.three_args.output << ", " << p.three_args.input1 << ", " << p.three_args.input2 << ", " << p.three_args.input3 << ")";
+            break;
+        case InstructionFormat::Constant:
+            out << "(" << p.constant.output << ")";
+            break;
+        case InstructionFormat::Swap:
+            out << "(" << p.swap.memory << ", " << p.swap.storage << ")";
+            break;
+        case InstructionFormat::SwapFinish:
+            out << "(" << p.swap_finish.memory << ")";
+            break;
+        case InstructionFormat::Control:
+            out << "(" << p.control.data << ")";
+            break;
+        default:
+            std::abort();
         }
 
         return out;

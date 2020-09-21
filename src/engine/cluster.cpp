@@ -120,8 +120,10 @@ namespace mage::engine {
                 platform::read_from_file(accept_fds[i], &from, sizeof(from));
                 if (from > self_id && from < num_workers && fds[from] == -1) {
                     success[from] = true;
+                    fds[from] = accept_fds[i];
+                } else {
+                    platform::network_close(accept_fds[i]);
                 }
-                fds[from] = accept_fds[i];
             }
         }
 

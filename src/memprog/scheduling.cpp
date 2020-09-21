@@ -43,7 +43,7 @@ namespace mage::memprog {
         PackedPhysInstruction& phys = this->output.start_instruction(length);
         phys.header.operation = OpCode::IssueSwapIn;
         phys.header.flags = 0;
-        phys.header.output = primary;
+        phys.swap.memory = primary;
         phys.swap.storage = secondary;
         this->output.finish_instruction(length);
     }
@@ -54,7 +54,7 @@ namespace mage::memprog {
         PackedPhysInstruction& phys = this->output.start_instruction(length);
         phys.header.operation = OpCode::IssueSwapOut;
         phys.header.flags = 0;
-        phys.header.output = primary;
+        phys.swap.memory = primary;
         phys.swap.storage = secondary;
         this->output.finish_instruction(length);
     }
@@ -65,28 +65,28 @@ namespace mage::memprog {
         PackedPhysInstruction& phys = this->output.start_instruction(length);
         phys.header.operation = OpCode::CopySwap;
         phys.header.flags = 0;
-        phys.header.output = to;
+        phys.swap.memory = to;
         phys.swap.storage = from;
         this->output.finish_instruction(length);
     }
 
     void Scheduler::emit_finish_swapin(PhysPageNumber ppn) {
-        constexpr std::size_t length = PackedPhysInstruction::size(InstructionFormat::Nothing);
+        constexpr std::size_t length = PackedPhysInstruction::size(InstructionFormat::SwapFinish);
 
         PackedPhysInstruction& finish = this->output.start_instruction();
         finish.header.operation = OpCode::FinishSwapIn;
         finish.header.flags = 0;
-        finish.header.output = ppn;
+        finish.swap_finish.memory = ppn;
         this->output.finish_instruction(length);
     }
 
     void Scheduler::emit_finish_swapout(PhysPageNumber ppn) {
-        constexpr std::size_t length = PackedPhysInstruction::size(InstructionFormat::Nothing);
+        constexpr std::size_t length = PackedPhysInstruction::size(InstructionFormat::SwapFinish);
 
         PackedPhysInstruction& finish = this->output.start_instruction();
         finish.header.operation = OpCode::FinishSwapOut;
         finish.header.flags = 0;
-        finish.header.output = ppn;
+        finish.swap_finish.memory = ppn;
         this->output.finish_instruction(length);
     }
 
@@ -110,9 +110,9 @@ namespace mage::memprog {
             this->output.finish_instruction(phys_size);
 
             if (phys.header.operation == OpCode::IssueSwapIn) {
-                this->emit_finish_swapin(phys.header.output);
+                this->emit_finish_swapin(phys.swap.memory);
             } else if (phys.header.operation == OpCode::IssueSwapOut) {
-                this->emit_finish_swapout(phys.header.output);
+                this->emit_finish_swapout(phys.swap.memory);
             }
 
             this->input.finish_instruction(phys_size);
@@ -233,7 +233,7 @@ namespace mage::memprog {
              * Otherwise, check if the corresponding swapout was elided: if so,
              * copy the page from the place it was copied to.
              */
-            PhysPageNumber ppn = phys.header.output;
+            PhysPageNumber ppn = phys.swap.memory;
             StoragePageNumber spn = phys.swap.storage;
             auto iter = this->in_flight_swapins.find(spn);
             if (iter != this->in_flight_swapins.end()) {
@@ -272,7 +272,7 @@ namespace mage::memprog {
              */
             PhysPageNumber ppn;
             if (this->allocate_page_frame(ppn)) {
-                this->emit_page_copy(phys.header.output, ppn);
+                this->emit_page_copy(phys.swap.memory, ppn);
                 auto iter2 = this->in_flight_swapouts.find(spn);
                 if (iter2 != this->in_flight_swapouts.end()) {
                     /*
@@ -290,8 +290,8 @@ namespace mage::memprog {
                 this->in_flight_swapouts[spn] = std::make_pair(i, ppn);
                 this->in_flight_swapout_queue.insert(i, spn);
             } else {
-                this->emit_issue_swapout(phys.header.output, spn);
-                this->emit_finish_swapout(phys.header.output);
+                this->emit_issue_swapout(phys.swap.memory, spn);
+                this->emit_finish_swapout(phys.swap.memory);
             }
         } else {
             /* Copy instruction to output. */
@@ -312,6 +312,7 @@ namespace mage::memprog {
             PackedPhysInstruction& phys = this->readahead.start_instruction();
             this->process_gap_increase(phys, i);
             this->readahead.finish_instruction(phys.size());
+
         }
 
         // Process the remaining instructions

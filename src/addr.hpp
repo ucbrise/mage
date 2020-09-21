@@ -44,7 +44,6 @@ namespace mage {
     inline std::uint64_t pg_addr(std::uint64_t page_number, PageShift shift) {
         return page_number << shift;
     }
-
     inline std::uint64_t pg_num(std::uint64_t addr, PageShift shift) {
         return addr >> shift;
     }

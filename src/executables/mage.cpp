@@ -134,8 +134,8 @@ int main(int argc, char** argv) {
         }
 
         engine::HalfGatesGarblingEngine p(garbler_input_file.c_str(), output_file.c_str(), opposite_worker.external_host->c_str(), opposite_worker.external_port->c_str());
-        start = std::chrono::steady_clock::now();
         engine::SingleCoreEngine executor(*party, self_id, p, prog_file.c_str());
+        start = std::chrono::steady_clock::now();
         executor.execute_program();
     } else {
         util::ResourceSet::Worker& worker = party->workers[self_id];
@@ -145,8 +145,8 @@ int main(int argc, char** argv) {
         }
 
         engine::HalfGatesEvaluationEngine p(evaluator_input_file.c_str(), worker.external_port->c_str());
-        start = std::chrono::steady_clock::now();
         engine::SingleCoreEngine executor(*party, self_id, p, prog_file.c_str());
+        start = std::chrono::steady_clock::now();
         executor.execute_program();
     }
     end = std::chrono::steady_clock::now();

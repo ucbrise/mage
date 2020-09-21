@@ -64,7 +64,11 @@ namespace mage::memprog {
             max_working_set_size = std::max(max_working_set_size, next_access.size());
 
             if ((current.header.flags & FlagOutputPageFirstUse) != 0) {
-                next_access.erase(pg_num(current.header.output, page_shift));
+                /*
+                 * Instruction format must be NoArgs, OneArg, TwoArgs,
+                 * ThreeArgs, or Constant in order to get this flag.
+                 */
+                next_access.erase(pg_num(current.no_args.output, page_shift));
             }
         } while (inum != 0);
 

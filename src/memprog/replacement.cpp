@@ -66,7 +66,7 @@ namespace mage::memprog {
         PackedPhysInstruction& phys = this->phys_prog.start_instruction(length);
         phys.header.operation = OpCode::IssueSwapOut;
         phys.header.flags = 0;
-        phys.header.output = primary;
+        phys.swap.memory = primary;
         phys.swap.storage = secondary;
         this->phys_prog.finish_instruction(length);
 
@@ -79,7 +79,7 @@ namespace mage::memprog {
         PackedPhysInstruction& phys = this->phys_prog.start_instruction(length);
         phys.header.operation = OpCode::IssueSwapIn;
         phys.header.flags = 0;
-        phys.header.output = primary;
+        phys.swap.memory = primary;
         phys.swap.storage = secondary;
         this->phys_prog.finish_instruction(length);
 

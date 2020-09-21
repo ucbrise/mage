@@ -67,6 +67,14 @@ namespace mage::memprog {
             this->placer.deallocate_virtual(addr, width);
         }
 
+        void communication_barrier(WorkerID to) {
+            Instruction instr;
+            instr.header.operation = OpCode::NetworkFlush;
+            instr.header.flags = 0;
+            instr.control.data = to;
+            this->append_instruction(this->current);
+        }
+
         static Program<Placer>* set_current_working_program(Program<Placer>* cwp) {
             Program<Placer>* old_cwp = Program<Placer>::current_working_program;
             Program<Placer>::current_working_program = cwp;

@@ -172,7 +172,7 @@ int main(int argc, char** argv) {
             return 1;
         }
     } else {
-        std::cerr << "Usage: " << argv[0] << "[config.yaml garbler/evaluator index] input_size_per_party" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " [config.yaml garbler/evaluator index] input_size_per_party" << std::endl;
         return 1;
     }
     filename.append(std::to_string(input_size_per_party));

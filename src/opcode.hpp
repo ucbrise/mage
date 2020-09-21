@@ -123,7 +123,8 @@ namespace mage {
         ThreeArgs = 3,
         Constant = 4,
         Swap = 5,
-        Nothing = 6
+        SwapFinish = 6,
+        Control = 7
     };
 
     constexpr int instruction_format_num_args(InstructionFormat format) {
@@ -138,7 +139,8 @@ namespace mage {
             return 3;
         case InstructionFormat::Constant:
         case InstructionFormat::Swap:
-        case InstructionFormat::Nothing:
+        case InstructionFormat::SwapFinish:
+        case InstructionFormat::Control:
             return 0;
         default:
             std::abort();
@@ -155,7 +157,8 @@ namespace mage {
         case InstructionFormat::Constant:
             return true;
         case InstructionFormat::Swap:
-        case InstructionFormat::Nothing:
+        case InstructionFormat::SwapFinish:
+        case InstructionFormat::Control:
             return false;
         default:
             std::abort();
@@ -198,7 +201,7 @@ namespace mage {
                 break;
             case OpCode::FinishSwapIn:
             case OpCode::FinishSwapOut:
-                this->layout = InstructionFormat::Nothing;
+                this->layout = InstructionFormat::SwapFinish;
                 this->single_bit = false;
                 this->has_output = false;
                 break;
@@ -213,7 +216,7 @@ namespace mage {
                 this->has_output = false;
                 break;
             case OpCode::NetworkFlush:
-                this->layout = InstructionFormat::Nothing;
+                this->layout = InstructionFormat::Control;
                 this->single_bit = false;
                 this->has_output = false;
                 break;
