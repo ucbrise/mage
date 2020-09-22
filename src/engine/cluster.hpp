@@ -77,7 +77,7 @@ namespace mage::engine {
 
         std::string establish(const util::ResourceSet::Party& party);
 
-        const MessageChannel* contact_worker(WorkerID worker_id) const {
+        MessageChannel* contact_worker(WorkerID worker_id) {
             if (worker_id == this->self_id || worker_id >= this->channels.size()) {
                 return nullptr;
             }

@@ -34,6 +34,53 @@
 #include "platform/filesystem.hpp"
 
 namespace mage::engine {
+    template <typename ProtEngine>
+    void Engine<ProtEngine>::init(const util::ResourceSet::Party& party, PageShift shift, std::uint64_t num_pages, std::uint64_t swap_pages, std::uint32_t concurrent_swaps) {
+        assert(this->memory == nullptr);
+
+        const util::ResourceSet::Worker& worker = party.workers[this->self_id];
+        if (!worker.storage_path.has_value()) {
+            std::cerr << "No storage path is specified for this worker (#" << this->self_id << ")" << std::endl;
+            std::abort();
+        }
+        const std::string& storage_file = *worker.storage_path;
+
+        std::string err = this->cluster.establish(party);
+        if (!err.empty()) {
+            std::cerr << err << std::endl;
+            std::abort();
+        }
+
+        if (io_setup(concurrent_swaps, &this->aio_ctx) != 0) {
+            std::perror("io_setup");
+            std::abort();
+        }
+
+        this->memory_size = pg_addr(num_pages, shift) * sizeof(typename ProtEngine::Wire);
+        this->memory = platform::allocate_resident_memory<typename ProtEngine::Wire>(this->memory_size);
+        std::uint64_t required_size = pg_addr(swap_pages, shift) * sizeof(typename ProtEngine::Wire);
+        if (storage_file.rfind("/dev/", 0) != std::string::npos) {
+            std::uint64_t length;
+            this->swapfd = platform::open_file(storage_file.c_str(), &length, true);
+            if (length < required_size) {
+                std::cerr << "Disk too small: size is " << length << " B, requires " << required_size << " B" << std::endl;
+                std::abort();
+            }
+        } else {
+            this->swapfd = platform::create_file(storage_file.c_str(), required_size, true, true);
+        }
+        this->page_shift = shift;
+    }
+
+    template <typename ProtEngine>
+    Engine<ProtEngine>::~Engine()  {
+        if (this->aio_ctx != 0 && io_destroy(this->aio_ctx) != 0) {
+            std::perror("io_destroy");
+            std::abort();
+        }
+        platform::deallocate_resident_memory(this->memory, this->memory_size);
+        platform::close_file(this->swapfd);
+    }
 
     template <typename ProtEngine>
     void Engine<ProtEngine>::execute_issue_swap_in(const PackedPhysInstruction& phys) {
@@ -133,6 +180,41 @@ namespace mage::engine {
     template <typename ProtEngine>
     void Engine<ProtEngine>::execute_finish_swap_out(const PackedPhysInstruction& phys) {
         this->wait_for_finish_swap(phys.swap.memory);
+    }
+
+    template <typename ProtEngine>
+    MessageChannel& Engine<ProtEngine>::contact_worker_checked(WorkerID worker_id) {
+        MessageChannel* channel = this->cluster.contact_worker(worker_id);
+        if (channel == nullptr) {
+            std::cerr << "Attempted to contact worker " << worker_id << std::endl;
+            std::abort();
+        }
+        return *channel;
+    }
+
+    template <typename ProtEngine>
+    void Engine<ProtEngine>::execute_network_receive(const PackedPhysInstruction& phys) {
+        typename ProtEngine::Wire* input = &this->memory[phys.one_arg.output];
+        BitWidth num_wires = phys.constant.width;
+
+        MessageChannel& c = this->contact_worker_checked(phys.constant.constant);
+        const typename ProtEngine::Wire* buffer = c.read<typename ProtEngine::Wire>(num_wires);
+        std::copy(buffer, buffer + num_wires, input);
+    }
+
+    template <typename ProtEngine>
+    void Engine<ProtEngine>::execute_network_send(const PackedPhysInstruction& phys) {
+        const typename ProtEngine::Wire* output = &this->memory[phys.one_arg.output];
+        BitWidth num_wires = phys.constant.width;
+
+        MessageChannel& c = this->contact_worker_checked(phys.constant.constant);
+        typename ProtEngine::Wire* buffer = c.write<typename ProtEngine::Wire>(num_wires);
+        std::copy(output, output + num_wires, buffer);
+    }
+
+    template <typename ProtEngine>
+    void Engine<ProtEngine>::execute_network_flush(const PackedPhysInstruction& phys) {
+        this->contact_worker_checked(phys.control.data).flush();
     }
 
     template <typename ProtEngine>
@@ -422,13 +504,13 @@ namespace mage::engine {
             this->execute_copy_swap(phys);
             return PackedPhysInstruction::size(OpCode::CopySwap);
         case OpCode::NetworkReceive:
-            std::abort();
+            this->execute_network_receive(phys);
             return PackedPhysInstruction::size(OpCode::NetworkReceive);
         case OpCode::NetworkSend:
-            std::abort();
-            return PackedPhysInstruction::size(OpCode::NetworkReceive);
+            this->execute_network_send(phys);
+            return PackedPhysInstruction::size(OpCode::NetworkSend);
         case OpCode::NetworkFlush:
-            std::abort();
+            this->execute_network_flush(phys);
             return PackedPhysInstruction::size(OpCode::NetworkFlush);
         case OpCode::Input:
             this->protocol.input(&this->memory[phys.no_args.output], phys.no_args.width, (phys.header.flags & FlagEvaluatorInput) == 0);

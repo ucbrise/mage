@@ -49,51 +49,9 @@ namespace mage::engine {
             cluster(self), self_id(self), aio_ctx(0) {
         }
 
-        void init(const util::ResourceSet::Party& party, PageShift shift, std::uint64_t num_pages, std::uint64_t swap_pages, std::uint32_t concurrent_swaps) {
-            assert(this->memory == nullptr);
+        virtual ~Engine();
 
-            const util::ResourceSet::Worker& worker = party.workers[this->self_id];
-            if (!worker.storage_path.has_value()) {
-                std::cerr << "No storage path is specified for this worker (#" << this->self_id << ")" << std::endl;
-                std::abort();
-            }
-            const std::string& storage_file = *worker.storage_path;
-
-            std::string err = this->cluster.establish(party);
-            if (!err.empty()) {
-                std::cerr << err << std::endl;
-                std::abort();
-            }
-
-            if (io_setup(concurrent_swaps, &this->aio_ctx) != 0) {
-                std::perror("io_setup");
-                std::abort();
-            }
-
-            this->memory_size = pg_addr(num_pages, shift) * sizeof(typename ProtEngine::Wire);
-            this->memory = platform::allocate_resident_memory<typename ProtEngine::Wire>(this->memory_size);
-            std::uint64_t required_size = pg_addr(swap_pages, shift) * sizeof(typename ProtEngine::Wire);
-            if (storage_file.rfind("/dev/", 0) != std::string::npos) {
-                std::uint64_t length;
-                this->swapfd = platform::open_file(storage_file.c_str(), &length, true);
-                if (length < required_size) {
-                    std::cerr << "Disk too small: size is " << length << " B, requires " << required_size << " B" << std::endl;
-                    std::abort();
-                }
-            } else {
-                this->swapfd = platform::create_file(storage_file.c_str(), required_size, true, true);
-            }
-            this->page_shift = shift;
-        }
-
-        virtual ~Engine() {
-            if (io_destroy(this->aio_ctx) != 0) {
-                std::perror("io_destroy");
-                std::abort();
-            }
-            platform::deallocate_resident_memory(this->memory, this->memory_size);
-            platform::close_file(this->swapfd);
-        }
+        void init(const util::ResourceSet::Party& party, PageShift shift, std::uint64_t num_pages, std::uint64_t swap_pages, std::uint32_t concurrent_swaps);
 
         std::size_t execute_instruction(const PackedPhysInstruction& phys);
         void wait_for_finish_swap(PhysPageNumber ppn);
@@ -103,6 +61,9 @@ namespace mage::engine {
         void execute_finish_swap_in(const PackedPhysInstruction& phys);
         void execute_finish_swap_out(const PackedPhysInstruction& phys);
         void execute_copy_swap(const PackedPhysInstruction& phys);
+        void execute_network_receive(const PackedPhysInstruction& phys);
+        void execute_network_send(const PackedPhysInstruction& phys);
+        void execute_network_flush(const PackedPhysInstruction& phys);
         void execute_public_constant(const PackedPhysInstruction& phys);
         void execute_copy(const PackedPhysInstruction& phys);
         void execute_int_add(const PackedPhysInstruction& phys);
@@ -124,6 +85,12 @@ namespace mage::engine {
         util::StreamStats swap_blocked;
 
     private:
+        /*
+         * There is nothing protocol-specific about this method --- perhaps
+         * move to a non-template superclass?
+         */
+        MessageChannel& contact_worker_checked(WorkerID worker_id);
+
         ProtEngine& protocol;
         typename ProtEngine::Wire* memory;
         PageShift page_shift;
