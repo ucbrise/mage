@@ -59,6 +59,7 @@ namespace mage::memprog {
                     this->current.header.flags |= FlagOutputPageFirstUse;
                 }
             }
+            assert(this->current.header.output != invalid_vaddr);
             this->append_instruction(this->current);
             return this->current.header.output;
         }

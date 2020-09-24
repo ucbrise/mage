@@ -20,7 +20,7 @@ all: mage tests
 
 tests: $(BINDIR)/test
 
-mage: $(BINDIR)/mage $(BINDIR)/aspirin_input $(BINDIR)/aspirin
+mage: $(BINDIR)/mage $(BINDIR)/aspirin_input $(BINDIR)/aspirin $(BINDIR)/aspirin_parallel
 
 $(BINDIR)/test: $(MAGE_OBJECTS) $(TEST_OBJECTS)
 	$(CXX) $(LDFLAGS) $+ -lboost_unit_test_framework -o $@

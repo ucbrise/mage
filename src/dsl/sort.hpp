@@ -27,7 +27,7 @@
 
 namespace mage::dsl {
     /*
-     * BITONIC-SORTER[length] network (see CLR, Section 28.3).
+     * BITONIC-SORTER[length] network (see Algorithms by CLR, Section 28.3).
      * Sorts a bitonic sequence.
      */
     template <typename T>
