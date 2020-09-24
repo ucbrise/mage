@@ -35,21 +35,14 @@
 
 namespace mage::engine {
     template <typename ProtEngine>
-    void Engine<ProtEngine>::init(const util::ResourceSet::Party& party, PageShift shift, std::uint64_t num_pages, std::uint64_t swap_pages, std::uint32_t concurrent_swaps) {
+    void Engine<ProtEngine>::init(const util::ResourceSet::Worker& worker, PageShift shift, std::uint64_t num_pages, std::uint64_t swap_pages, std::uint32_t concurrent_swaps) {
         assert(this->memory == nullptr);
 
-        const util::ResourceSet::Worker& worker = party.workers[this->self_id];
         if (!worker.storage_path.has_value()) {
-            std::cerr << "No storage path is specified for this worker (#" << this->self_id << ")" << std::endl;
+            std::cerr << "No storage path is specified for this worker" << std::endl;
             std::abort();
         }
         const std::string& storage_file = *worker.storage_path;
-
-        std::string err = this->cluster.establish(party);
-        if (!err.empty()) {
-            std::cerr << err << std::endl;
-            std::abort();
-        }
 
         if (io_setup(concurrent_swaps, &this->aio_ctx) != 0) {
             std::perror("io_setup");
@@ -184,7 +177,7 @@ namespace mage::engine {
 
     template <typename ProtEngine>
     MessageChannel& Engine<ProtEngine>::contact_worker_checked(WorkerID worker_id) {
-        MessageChannel* channel = this->cluster.contact_worker(worker_id);
+        MessageChannel* channel = this->cluster->contact_worker(worker_id);
         if (channel == nullptr) {
             std::cerr << "Attempted to contact worker " << worker_id << std::endl;
             std::abort();
@@ -194,7 +187,7 @@ namespace mage::engine {
 
     template <typename ProtEngine>
     void Engine<ProtEngine>::execute_network_receive(const PackedPhysInstruction& phys) {
-        typename ProtEngine::Wire* input = &this->memory[phys.one_arg.output];
+        typename ProtEngine::Wire* input = &this->memory[phys.constant.output];
         BitWidth num_wires = phys.constant.width;
 
         MessageChannel& c = this->contact_worker_checked(phys.constant.constant);
@@ -204,7 +197,7 @@ namespace mage::engine {
 
     template <typename ProtEngine>
     void Engine<ProtEngine>::execute_network_send(const PackedPhysInstruction& phys) {
-        const typename ProtEngine::Wire* output = &this->memory[phys.one_arg.output];
+        const typename ProtEngine::Wire* output = &this->memory[phys.constant.output];
         BitWidth num_wires = phys.constant.width;
 
         MessageChannel& c = this->contact_worker_checked(phys.constant.constant);

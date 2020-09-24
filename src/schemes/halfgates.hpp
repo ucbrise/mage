@@ -44,11 +44,16 @@ namespace mage::schemes {
         HalfGatesGarbler() : global_id(0) {
         }
 
-        crypto::block initialize() {
+        crypto::block initialize(Wire& delta_precursor) {
             crypto::PRG tmp;
-            tmp.random_block(&this->seed);
-            Wire a;
-            this->set_delta(a); // Is this a bug? a appears uninitialized.
+            tmp.random_block(&delta_precursor);
+            this->set_delta(delta_precursor);
+
+            return this->initialize_with_delta(delta_precursor);
+        }
+
+        crypto::block initialize_with_delta(Wire& existing_delta_precursor) {
+            this->set_delta(existing_delta_precursor);
 
             crypto::block input_seed;
             this->prg.random_block(&input_seed);
@@ -200,7 +205,6 @@ namespace mage::schemes {
 
         std::int64_t global_id;
         Wire delta;
-        Wire seed;
         Wire public_constants[2];
 
         crypto::PRP prp;

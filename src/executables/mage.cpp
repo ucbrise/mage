@@ -34,7 +34,7 @@ using namespace mage;
 
 int main(int argc, char** argv) {
     if (argc != 5) {
-        std::cerr << "Usage: " << argv[0] << " config.yaml worker_id garble/evaluate program_name" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " config.yaml garble/evaluate worker_id program_name" << std::endl;
         return 1;
     }
 
@@ -50,7 +50,7 @@ int main(int argc, char** argv) {
     /* Parse the worker ID. */
 
     WorkerID self_id;
-    std::istringstream self_id_stream(argv[2]);
+    std::istringstream self_id_stream(argv[3]);
     self_id_stream >> self_id;
 
     /* Validate the config.yaml file for running the computation. */
@@ -78,15 +78,15 @@ int main(int argc, char** argv) {
     bool garble = false;
     util::ResourceSet::Party* party;
     util::ResourceSet::Party* other_party;
-    if (std::strcmp(argv[3], "garble") == 0) {
+    if (std::strcmp(argv[2], "garble") == 0) {
         garble = true;
         party = &(*rs.garbler);
         other_party = &(*rs.evaluator);
-    } else if (std::strcmp(argv[3], "evaluate") == 0) {
+    } else if (std::strcmp(argv[2], "evaluate") == 0) {
         garble = false;
         party = &(*rs.evaluator);
         other_party = &(*rs.garbler);
-    } else if (std::strcmp(argv[3], "plaintext") == 0) {
+    } else if (std::strcmp(argv[2], "plaintext") == 0) {
         plaintext = true;
         party = &(*rs.garbler);
         other_party = &(*rs.evaluator);
@@ -98,6 +98,8 @@ int main(int argc, char** argv) {
     /* Generate the file names. */
 
     std::string file_base(argv[4]);
+    file_base.append("_");
+    file_base.append(std::to_string(self_id));
 
     std::string prog_file(file_base);
     prog_file.append(".memprog");
@@ -111,13 +113,20 @@ int main(int argc, char** argv) {
     std::string output_file(file_base);
     output_file.append(".output");
 
+    auto cluster = std::make_shared<mage::engine::ClusterNetwork>(self_id);
+    err = cluster->establish(*party);
+    if (!err.empty()) {
+        std::cerr << err << std::endl;
+        std::abort();
+    }
+
     std::chrono::time_point<std::chrono::steady_clock> start;
     std::chrono::time_point<std::chrono::steady_clock> end;
 
     if (plaintext) {
         engine::PlaintextEvaluationEngine p(garbler_input_file.c_str(), evaluator_input_file.c_str(), output_file.c_str());
         start = std::chrono::steady_clock::now();
-        engine::SingleCoreEngine executor(*party, self_id, p, prog_file.c_str());
+        engine::SingleCoreEngine executor(cluster, party->workers[self_id], p, prog_file.c_str());
         executor.execute_program();
         end = std::chrono::steady_clock::now();
         std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
@@ -126,6 +135,7 @@ int main(int argc, char** argv) {
     }
 
     /* Perform the computation. */
+
     if (garble) {
         util::ResourceSet::Worker& opposite_worker = other_party->workers[self_id];
         if (!opposite_worker.external_host.has_value() || !opposite_worker.external_port.has_value()) {
@@ -133,8 +143,8 @@ int main(int argc, char** argv) {
             return 1;
         }
 
-        engine::HalfGatesGarblingEngine p(garbler_input_file.c_str(), output_file.c_str(), opposite_worker.external_host->c_str(), opposite_worker.external_port->c_str());
-        engine::SingleCoreEngine executor(*party, self_id, p, prog_file.c_str());
+        engine::HalfGatesGarblingEngine p(cluster, garbler_input_file.c_str(), output_file.c_str(), opposite_worker.external_host->c_str(), opposite_worker.external_port->c_str());
+        engine::SingleCoreEngine executor(cluster, party->workers[self_id], p, prog_file.c_str());
         start = std::chrono::steady_clock::now();
         executor.execute_program();
     } else {
@@ -145,7 +155,7 @@ int main(int argc, char** argv) {
         }
 
         engine::HalfGatesEvaluationEngine p(evaluator_input_file.c_str(), worker.external_port->c_str());
-        engine::SingleCoreEngine executor(*party, self_id, p, prog_file.c_str());
+        engine::SingleCoreEngine executor(cluster, party->workers[self_id], p, prog_file.c_str());
         start = std::chrono::steady_clock::now();
         executor.execute_program();
     }

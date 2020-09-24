@@ -125,7 +125,7 @@ namespace mage::dsl {
             (*p)->commit_instruction(0);
         }
 
-        void receive(WorkerID from) const {
+        void receive(WorkerID from) {
             static_assert(!sliced);
             this->recycle();
 
@@ -134,7 +134,7 @@ namespace mage::dsl {
             instr.header.width = bits;
             instr.header.flags = 0;
             instr.constant.constant = from;
-            (*p)->commit_instruction(bits);
+            this->v = (*p)->commit_instruction(bits);
         }
 
         static void communication_barrier(WorkerID to) {

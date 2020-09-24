@@ -46,6 +46,7 @@ namespace mage::engine {
 
     MessageChannel::~MessageChannel() {
         if (this->socket_fd != -1) {
+            this->writer.flush();
             platform::network_close(this->socket_fd);
         }
     }
@@ -54,6 +55,10 @@ namespace mage::engine {
     const std::chrono::duration<std::uint32_t, std::milli> ClusterNetwork::delay_between_connection_tries(3000);
 
     ClusterNetwork::ClusterNetwork(WorkerID self) : channels(), self_id(self) {
+    }
+
+    WorkerID ClusterNetwork::get_self() const {
+        return this->self_id;
     }
 
     std::string ClusterNetwork::establish(const util::ResourceSet::Party& party) {
@@ -146,9 +151,7 @@ namespace mage::engine {
         if (overall_success) {
             this->channels.resize(0);
             for (WorkerID i = 0; i != num_workers; i++) {
-                if (i != this->self_id) {
-                    this->channels.emplace_back(fds[i]);
-                }
+                this->channels.emplace_back(fds[i]);
             }
         } else {
             for (WorkerID i = 0; i != num_workers; i++) {

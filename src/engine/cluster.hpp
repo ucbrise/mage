@@ -39,7 +39,7 @@ namespace mage::engine {
         MessageChannel(int fd);
         MessageChannel();
         MessageChannel(MessageChannel&& other);
-        ~MessageChannel();
+        virtual ~MessageChannel();
 
         template <typename T>
         T* read(std::size_t count) {
@@ -74,6 +74,8 @@ namespace mage::engine {
     class ClusterNetwork {
     public:
         ClusterNetwork(WorkerID self);
+
+        WorkerID get_self() const;
 
         std::string establish(const util::ResourceSet::Party& party);
 

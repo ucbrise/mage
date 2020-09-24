@@ -106,7 +106,7 @@ namespace mage::platform {
                     std::perror("network_connect -> connect");
                     std::abort();
                 }
-            } else {
+            } else if (err != nullptr) {
                 err[i] = NetworkError::Success;
             }
         }

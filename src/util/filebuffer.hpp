@@ -80,7 +80,9 @@ namespace mage::util {
 
         virtual ~BufferedFileWriter() {
             if (this->fd != -1) {
-                this->flush();
+                if (this->position != 0) {
+                    this->flush();
+                }
                 if (this->owns_fd) {
                     platform::close_file(this->fd);
                 }

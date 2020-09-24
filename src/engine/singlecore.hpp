@@ -23,6 +23,7 @@
 #define MAGE_ENGINE_SINGLECORE_HPP_
 
 #include <iostream>
+#include <memory>
 #include <string>
 #include "addr.hpp"
 #include "engine/engine.hpp"
@@ -34,10 +35,10 @@ namespace mage::engine {
     template <typename ProtEngine>
     class SingleCoreEngine : private Engine<ProtEngine> {
     public:
-        SingleCoreEngine(const util::ResourceSet::Party& party, WorkerID self, ProtEngine& prot, std::string program)
-            : Engine<ProtEngine>(self, prot), input(program.c_str()) {
+        SingleCoreEngine(std::shared_ptr<ClusterNetwork>& network, const util::ResourceSet::Worker& worker, ProtEngine& prot, std::string program)
+            : Engine<ProtEngine>(network, prot), input(program.c_str()) {
             const ProgramFileHeader& header = this->input.get_header();
-            this->init(party, header.page_shift, header.num_pages, header.num_swap_pages, header.max_concurrent_swaps);
+            this->init(worker, header.page_shift, header.num_pages, header.num_swap_pages, header.max_concurrent_swaps);
             this->input.enable_stats("READ-INSTR (ns)");
         }
 

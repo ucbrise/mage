@@ -34,11 +34,11 @@ int main(int argc, char** argv) {
 
     std::string garbler_file("aspirin_");
     garbler_file.append(std::to_string(input_size));
-    garbler_file.append("_garbler.input");
+    garbler_file.append("_0_garbler.input");
 
     std::string evaluator_file("aspirin_");
     evaluator_file.append(std::to_string(input_size));
-    evaluator_file.append("_evaluator.input");
+    evaluator_file.append("_0_evaluator.input");
 
     mage::util::BinaryFileWriter garbler_writer(garbler_file.c_str());
     mage::util::BinaryFileWriter evaluator_writer(evaluator_file.c_str());

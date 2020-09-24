@@ -72,7 +72,7 @@ namespace mage::memprog {
             instr.header.operation = OpCode::NetworkFlush;
             instr.header.flags = 0;
             instr.control.data = to;
-            this->append_instruction(this->current);
+            this->append_instruction(instr);
         }
 
         static Program<Placer>* set_current_working_program(Program<Placer>* cwp) {

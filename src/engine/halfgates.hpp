@@ -32,6 +32,7 @@
 #include <string>
 #include <thread>
 #include "crypto/block.hpp"
+#include "engine/cluster.hpp"
 #include "platform/network.hpp"
 #include "schemes/halfgates.hpp"
 #include "util/binaryfile.hpp"
@@ -72,7 +73,7 @@ namespace mage::engine {
     public:
         using Wire = schemes::HalfGatesGarbler::Wire;
 
-        HalfGatesGarblingEngine(const char* input_file, const char* output_file, const char* evaluator_host, const char* evaluator_port)
+        HalfGatesGarblingEngine(std::shared_ptr<ClusterNetwork>& network, const char* input_file, const char* output_file, const char* evaluator_host, const char* evaluator_port)
             : input_reader(input_file), output_writer(output_file), evaluator_input_labels(2) {
             platform::network_connect(evaluator_host, evaluator_port, this->sockets.data(), nullptr, halfgates_num_connections);
             this->conn_reader.set_file_descriptor(this->sockets[0], false);
@@ -83,7 +84,17 @@ namespace mage::engine {
             this->start_input_daemon();
 
             this->conn_writer.enable_stats("GATE-SEND (ns)");
-            crypto::block input_seed = this->garbler.initialize();
+            crypto::block input_seed;
+            if (network->get_self() == 0) {
+                MessageChannel* c = network->contact_worker(1);
+                Wire* buffer = c->write<Wire>(1);
+                input_seed = this->garbler.initialize(*buffer);
+                c->flush();
+            } else {
+                MessageChannel* c = network->contact_worker(0);
+                Wire* buffer = c->read<Wire>(1);
+                input_seed = this->garbler.initialize_with_delta(*buffer);
+            }
             this->conn_writer.write<Wire>() = input_seed;
             this->conn_writer.flush();
         }

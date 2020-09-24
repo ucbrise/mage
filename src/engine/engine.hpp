@@ -27,6 +27,7 @@
 #include <cstdlib>
 #include <libaio.h>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include "instruction.hpp"
@@ -43,15 +44,15 @@ namespace mage::engine {
         static const constexpr int aio_process_batch_size = 64;
 
     public:
-        Engine(WorkerID self, ProtEngine& prot) : protocol(prot),
+        Engine(std::shared_ptr<ClusterNetwork>& network, ProtEngine& prot) : protocol(prot),
             memory(nullptr), memory_size(0), swap_in("SWAP-IN (ns)", true),
             swap_out("SWAP-OUT (ns)", true), swap_blocked("SWAP_BLOCKED (ns)", true),
-            cluster(self), self_id(self), aio_ctx(0) {
+            cluster(network), aio_ctx(0) {
         }
 
         virtual ~Engine();
 
-        void init(const util::ResourceSet::Party& party, PageShift shift, std::uint64_t num_pages, std::uint64_t swap_pages, std::uint32_t concurrent_swaps);
+        void init(const util::ResourceSet::Worker& worker, PageShift shift, std::uint64_t num_pages, std::uint64_t swap_pages, std::uint32_t concurrent_swaps);
 
         std::size_t execute_instruction(const PackedPhysInstruction& phys);
         void wait_for_finish_swap(PhysPageNumber ppn);
@@ -97,8 +98,7 @@ namespace mage::engine {
         std::size_t memory_size;
         int swapfd;
 
-        ClusterNetwork cluster;
-        WorkerID self_id;
+        std::shared_ptr<ClusterNetwork> cluster;
 
         io_context_t aio_ctx;
         std::unordered_map<PhysPageNumber, struct iocb> in_flight_swaps;
