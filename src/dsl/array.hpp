@@ -22,13 +22,16 @@
 #ifndef MAGE_DSL_ARRAY_HPP_
 #define MAGE_DSL_ARRAY_HPP_
 
+#include <cassert>
 #include <cstdint>
 #include <cstdlib>
 #include <functional>
 #include <iostream>
+#include <string>
 #include <utility>
 #include <vector>
 #include "addr.hpp"
+#include "util/misc.hpp"
 
 namespace mage::dsl {
     enum class Layout : std::uint8_t {
@@ -37,12 +40,12 @@ namespace mage::dsl {
     };
 
     template <typename T>
-    class DistributedArray {
+    class ShardedArray {
         template <typename U>
-        friend class DistributedArray;
+        friend class ShardedArray;
 
     public:
-        DistributedArray(std::size_t length, WorkerID self, WorkerID num_processors, Layout strategy)
+        ShardedArray(std::size_t length, WorkerID self, WorkerID num_processors, Layout strategy)
             : total_length(length), self_id(self), num_proc(num_processors), layout(strategy) {
             this->num_local_base = this->total_length / this->num_proc;
             this->num_extras = this->total_length % this->num_proc;
@@ -54,7 +57,7 @@ namespace mage::dsl {
         }
 
         void for_each(std::function<void(std::size_t, T&)> f) {
-            auto [index, stride] = this->get_base_and_stride();
+            auto [index, stride] = this->get_global_base_and_stride(this->self_id, this->layout);
             for (T& elem : this->local_array) {
                 f(index, elem);
                 index += stride;
@@ -62,67 +65,98 @@ namespace mage::dsl {
         }
 
         void for_each_pair(std::function<void(std::size_t, T&, T&)> f) {
-            if (this->layout != Layout::Blocked) {
+            if (this->layout == Layout::Cyclic) {
                 // Not supported yet
-                return;
+                this->operation_panic("for_each_pair on cyclic-layout array");
+            } else if (this->layout == Layout::Blocked) {
+                if (this->self_id != 0 && this->get_local_size(self_id) != 0) {
+                    assert(this->local_array.size() != 0);
+                    this->local_array[0].send(this->self_id - 1);
+                    T::communication_barrier(this->self_id - 1);
+                }
+                for (std::size_t i = 0; i + 1 < this->local_array.size(); i++) {
+                    f(i, this->local_array[i], this->local_array[i + 1]);
+                }
+                if (this->self_id != this->num_proc - 1 && this->get_local_size(self_id + 1) != 0) {
+                    std::size_t num_local = this->local_array.size();
+                    T first_next;
+                    first_next.receive(this->self_id + 1);
+                    f(num_local - 1, this->local_array[num_local - 1], first_next);
+                }
+            } else {
+                this->layout_panic();
             }
-            if (this->self_id != 0) {
-                // TODO edge case: what if local_array size is 0?
-                this->local_array[0].send(this->self_id - 1);
-                T::communication_barrier(this->self_id - 1);
-            }
-            // TODO
         }
 
-        template <typename U>
-        DistributedArray<U> map(std::function<U(std::size_t, T&)> f) {
-            DistributedArray<U> rv(this->total_length, this->self_id, this->num_proc, this->layout);
-            assert(this->local_array.size() == rv.local_array.size());
-            auto [index, stride] = this->get_base_and_stride();
-            for (std::size_t i = 0; i != this->local_array.size(); i++) {
-                rv.local_array[i] = f(index, this->local_array.size());
-                index += stride;
-            }
-            return rv;
-        }
+        void switch_layout(Layout to) {
+            if (this->layout == Layout::Cyclic && to == Layout::Blocked) {
+                auto [my_cyclic_base, my_cyclic_stride] = this->get_global_base_and_stride(this->self_id, Layout::Cyclic);
+                auto [my_blocked_base, my_blocked_stride] = this->get_global_base_and_stride(this->self_id, Layout::Blocked);
+                std::size_t my_length = this->get_local_size(this->self_id);
+                if (my_length == 0) {
+                    return;
+                }
+                std::vector<T> array(my_length);
+                for (WorkerID j = 1; j != this->num_proc; j++) {
+                    {
+                        WorkerID i = (this->self_id + j) % this->num_proc;
+                        /* Send to Worker i everything that is relevant to that worker. */
+                        auto [i_blocked_base, i_blocked_stride] = this->get_global_base_and_stride(i, Layout::Blocked);
+                        std::size_t i_length = this->get_local_size(i);
 
-        std::optional<T> reduce(WorkerID gets_result, std::function<T(T&, T&)> f, T&& initial_value) {
-            T current = initial_value;
-            for (T& elem : this->local_array) {
-                current = f(current, elem);
-            }
-            if (this->self_id == gets_result) {
-                std::vector<T> partial_reduction(this->num_proc - 1);
-                for (WorkerID i = 0; i != this->num_proc; i++) {
-                    if (i < this->self_id) {
-                        partial_reduction[i].receive(i);
-                    } else if (i > this->self_id) {
-                        partial_reduction[i - 1].receive(i);
+                        /*
+                         * base + local_index * stride = global_index
+                         * So local_index = (global_index - base / stride);
+                         */
+                        std::int64_t local_start = util::ceil_div(i_blocked_base - my_cyclic_base, my_cyclic_stride).first;
+                        std::int64_t local_end = util::floor_div((i_blocked_base + i_length - 1) - my_cyclic_base, my_cyclic_stride).first;
+                        for (std::int64_t j = local_start; j <= local_end; j++) {
+                            // std::cout << "Sending " << j << std::endl;
+                            this->local_array[j].send(i);
+                        }
+
+                        T::communication_barrier(i);
+                    }
+                    {
+                        WorkerID k = (this->self_id - j + this->num_proc) % this->num_proc;
+                        /* Receive from Worker k. */
+                        auto [k_cyclic_base, k_cyclic_stride] = this->get_global_base_and_stride(k, Layout::Cyclic);
+                        std::size_t start_offset = util::floor_div(k_cyclic_base - my_blocked_base, k_cyclic_stride).second;
+                        for (std::size_t gi = start_offset; gi < my_length; gi += k_cyclic_stride) {
+                            // std::cout << "Receiving " << gi << std::endl;
+                            array[gi].receive(k);
+                        }
                     }
                 }
-                for (T& elem : partial_reduction) {
-                    current = f(current, elem);
+                {
+                    /* Shuffle the elements that need to be kept locally. */
+                    std::size_t from_start = util::ceil_div(my_blocked_base - my_cyclic_base, my_cyclic_stride).first;
+                    // std::size_t from_end = util::floor_div((my_blocked_base + my_length - 1) - my_cyclic_base, my_cyclic_stride).first;
+                    std::size_t to_start = util::floor_div(my_cyclic_base - my_blocked_base, my_cyclic_stride).second;
+                    for (std::size_t to = to_start, from = from_start; to < my_length; (to += my_cyclic_stride), from++) {
+                        // std::cout << "Shuffling " << from << " -> " << to << std::endl;
+                        array[to] = std::move(this->local_array[from]);
+                    }
                 }
-                return std::move(current);
+                this->local_array = std::move(array);
+                this->layout = Layout::Blocked;
             } else {
-                current.send(gets_result);
-                T::communication_barrier(gets_result);
-                return std::nullopt;
+                this->operation_panic("cannot switch layout");
             }
         }
 
-        std::pair<std::size_t, std::size_t> get_base_and_stride() const {
-            std::size_t base;
-            std::size_t stride;
-            if (this->layout == Layout::Cyclic) {
-                base = this->self_id;
+        std::pair<std::int64_t, std::int64_t> get_global_base_and_stride(WorkerID id, Layout layout) const {
+            std::int64_t base;
+            std::int64_t stride;
+            if (layout == Layout::Cyclic) {
+                base = id;
                 stride = this->num_proc;
-            } else if (this->layout == Layout::Blocked) {
-                if (this->self_id < this->num_extras) {
-                    base = (this->num_local_base + 1) * this->self_id;
+            } else if (layout == Layout::Blocked) {
+                if (id < this->num_extras) {
+                    base = (this->num_local_base + 1) * id;
                 } else {
-                    std::size_t boundary = this->num_extras * (this->num_local_base + 1);
-                    base = boundary + (this->self_id - this->num_extras) * this->num_local_base;
+                    std::int64_t boundary = this->num_extras * (this->num_local_base + 1);
+                    base = boundary + (id - this->num_extras) * this->num_local_base;
                 }
                 stride = 1;
             } else {
@@ -131,16 +165,24 @@ namespace mage::dsl {
             return std::make_pair(base, stride);
         }
 
-        WorkerID who(std::size_t index) {
-            assert(index < this->total_length);
+        std::size_t get_local_size(WorkerID who) const {
+            if (who < num_extras) {
+                return this->num_local_base + 1;
+            } else {
+                return this->num_local_base;
+            }
+        }
+
+        WorkerID who(std::size_t global_index) const {
+            assert(global_index < this->total_length);
             if (this->layout == Layout::Cyclic) {
-                return index % this->num_proc;
+                return global_index % this->num_proc;
             } else if (this->layout == Layout::Blocked) {
                 std::size_t boundary = this->num_extras * (this->num_local_base + 1);
-                if (index < boundary) {
-                    return index / (this->num_local_base + 1);
+                if (global_index < boundary) {
+                    return global_index / (this->num_local_base + 1);
                 } else {
-                    return this->num_extras + (index - boundary) / this->num_local_base;
+                    return this->num_extras + (global_index - boundary) / this->num_local_base;
                 }
             } else {
                 this->layout_panic();
@@ -150,6 +192,11 @@ namespace mage::dsl {
     private:
         void layout_panic() const {
             std::cerr << "Unknown layout " << static_cast<std::uint8_t>(this->layout) << std::endl;
+            std::abort();
+        }
+
+        static void operation_panic(std::string details) {
+            std::cerr << "Unsupported operation: " << details << std::endl;
             std::abort();
         }
 
