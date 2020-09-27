@@ -115,9 +115,9 @@ namespace mage::dsl {
             (*p)->commit_instruction(0);
         }
 
-        void send(WorkerID to) const {
+        void buffer_send(WorkerID to) const {
             Instruction& instr = (*p)->instruction();
-            instr.header.operation = OpCode::NetworkSend;
+            instr.header.operation = OpCode::NetworkBufferSend;
             instr.header.width = bits;
             instr.header.flags = 0;
             instr.header.output = this->v;
@@ -125,20 +125,24 @@ namespace mage::dsl {
             (*p)->commit_instruction(0);
         }
 
-        void receive(WorkerID from) {
+        void post_receive(WorkerID from) {
             static_assert(!sliced);
             this->recycle();
 
             Instruction& instr = (*p)->instruction();
-            instr.header.operation = OpCode::NetworkReceive;
+            instr.header.operation = OpCode::NetworkPostReceive;
             instr.header.width = bits;
             instr.header.flags = 0;
             instr.constant.constant = from;
             this->v = (*p)->commit_instruction(bits);
         }
 
-        static void communication_barrier(WorkerID to) {
-            (*p)->communication_barrier(to);
+        static void finish_send(WorkerID to) {
+            (*p)->finish_send(to);
+        }
+
+        static void finish_receive(WorkerID from) {
+            (*p)->finish_receive(from);
         }
 
         template <bool other_sliced>

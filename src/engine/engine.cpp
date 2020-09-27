@@ -186,7 +186,7 @@ namespace mage::engine {
     }
 
     template <typename ProtEngine>
-    void Engine<ProtEngine>::execute_network_receive(const PackedPhysInstruction& phys) {
+    void Engine<ProtEngine>::execute_network_post_receive(const PackedPhysInstruction& phys) {
         typename ProtEngine::Wire* input = &this->memory[phys.constant.output];
         BitWidth num_wires = phys.constant.width;
 
@@ -195,12 +195,16 @@ namespace mage::engine {
         ar.into = input;
         ar.length = num_wires * sizeof(typename ProtEngine::Wire);
         c.finish_post_read();
+    }
 
+    template <typename ProtEngine>
+    void Engine<ProtEngine>::execute_network_finish_receive(const PackedPhysInstruction& phys) {
+        MessageChannel& c = this->contact_worker_checked(phys.control.data);
         c.wait_until_reads_finished();
     }
 
     template <typename ProtEngine>
-    void Engine<ProtEngine>::execute_network_send(const PackedPhysInstruction& phys) {
+    void Engine<ProtEngine>::execute_network_buffer_send(const PackedPhysInstruction& phys) {
         const typename ProtEngine::Wire* output = &this->memory[phys.constant.output];
         BitWidth num_wires = phys.constant.width;
 
@@ -210,7 +214,7 @@ namespace mage::engine {
     }
 
     template <typename ProtEngine>
-    void Engine<ProtEngine>::execute_network_flush(const PackedPhysInstruction& phys) {
+    void Engine<ProtEngine>::execute_network_finish_send(const PackedPhysInstruction& phys) {
         this->contact_worker_checked(phys.control.data).flush();
     }
 
@@ -500,15 +504,18 @@ namespace mage::engine {
         case OpCode::CopySwap:
             this->execute_copy_swap(phys);
             return PackedPhysInstruction::size(OpCode::CopySwap);
-        case OpCode::NetworkReceive:
-            this->execute_network_receive(phys);
-            return PackedPhysInstruction::size(OpCode::NetworkReceive);
-        case OpCode::NetworkSend:
-            this->execute_network_send(phys);
-            return PackedPhysInstruction::size(OpCode::NetworkSend);
-        case OpCode::NetworkFlush:
-            this->execute_network_flush(phys);
-            return PackedPhysInstruction::size(OpCode::NetworkFlush);
+        case OpCode::NetworkPostReceive:
+            this->execute_network_post_receive(phys);
+            return PackedPhysInstruction::size(OpCode::NetworkPostReceive);
+        case OpCode::NetworkFinishReceive:
+            this->execute_network_finish_receive(phys);
+            return PackedPhysInstruction::size(OpCode::NetworkFinishReceive);
+        case OpCode::NetworkBufferSend:
+            this->execute_network_buffer_send(phys);
+            return PackedPhysInstruction::size(OpCode::NetworkBufferSend);
+        case OpCode::NetworkFinishSend:
+            this->execute_network_finish_send(phys);
+            return PackedPhysInstruction::size(OpCode::NetworkFinishSend);
         case OpCode::Input:
             this->protocol.input(&this->memory[phys.no_args.output], phys.no_args.width, (phys.header.flags & FlagEvaluatorInput) == 0);
             return PackedPhysInstruction::size(OpCode::Input);

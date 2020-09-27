@@ -68,11 +68,19 @@ namespace mage::memprog {
             this->placer.deallocate_virtual(addr, width);
         }
 
-        void communication_barrier(WorkerID to) {
+        void finish_send(WorkerID to) {
             Instruction instr;
-            instr.header.operation = OpCode::NetworkFlush;
+            instr.header.operation = OpCode::NetworkFinishSend;
             instr.header.flags = 0;
             instr.control.data = to;
+            this->append_instruction(instr);
+        }
+
+        void finish_receive(WorkerID from) {
+            Instruction instr;
+            instr.header.operation = OpCode::NetworkFinishReceive;
+            instr.header.flags = 0;
+            instr.control.data = from;
             this->append_instruction(instr);
         }
 

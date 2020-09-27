@@ -36,18 +36,19 @@ namespace mage::dsl {
                 std::vector<T> partial_reduction(this->num_proc - 1);
                 for (WorkerID i = 0; i != this->num_proc; i++) {
                     if (i < this->self_id) {
-                        partial_reduction[i].receive(i);
+                        partial_reduction[i].post_receive(i);
                     } else if (i > this->self_id) {
-                        partial_reduction[i - 1].receive(i);
+                        partial_reduction[i - 1].post_receive(i);
                     }
                 }
-                for (T& elem : partial_reduction) {
-                    current = f(current, elem);
+                for (WorkerID i = 0; i != this->num_proc - 1; i++) {
+                    T::finish_receive(i < this->self_id ? i : i + 1);
+                    current = f(current, partial_reduction[i]);
                 }
                 return std::move(current);
             } else {
-                current.send(gets_result);
-                T::communication_barrier(gets_result);
+                current.buffer_send(gets_result);
+                T::finish_send(gets_result);
                 return std::nullopt;
             }
         }

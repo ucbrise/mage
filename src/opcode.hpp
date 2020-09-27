@@ -35,9 +35,10 @@ namespace mage {
         FinishSwapIn,
         FinishSwapOut,
         CopySwap,
-        NetworkReceive,
-        NetworkSend,
-        NetworkFlush,
+        NetworkPostReceive,
+        NetworkFinishReceive,
+        NetworkBufferSend,
+        NetworkFinishSend,
         Input, // 1 argument
         Output, // 1 argument
         PublicConstant, // 0 arguments
@@ -71,12 +72,14 @@ namespace mage {
             return "FinishSwapOut";
         case OpCode::CopySwap:
             return "CopySwap";
-        case OpCode::NetworkReceive:
-            return "NetworkReceive";
-        case OpCode::NetworkSend:
-            return "NetworkSend";
-        case OpCode::NetworkFlush:
-            return "NetworkFlush";
+        case OpCode::NetworkPostReceive:
+            return "NetworkPostReceive";
+        case OpCode::NetworkFinishReceive:
+            return "NetworkFinishReceive";
+        case OpCode::NetworkBufferSend:
+            return "NetworkBufferSend";
+        case OpCode::NetworkFinishSend:
+            return "NetworkFinishSend";
         case OpCode::Input:
             return "Input";
         case OpCode::Output:
@@ -205,17 +208,22 @@ namespace mage {
                 this->single_bit = false;
                 this->has_output = false;
                 break;
-            case OpCode::NetworkReceive:
+            case OpCode::NetworkPostReceive:
                 this->layout = InstructionFormat::Constant;
                 this->single_bit = false;
                 this->has_output = true;
                 break;
-            case OpCode::NetworkSend:
+            case OpCode::NetworkFinishReceive:
+                this->layout = InstructionFormat::Control;
+                this->single_bit = false;
+                this->has_output = false;
+                break;
+            case OpCode::NetworkBufferSend:
                 this->layout = InstructionFormat::Constant;
                 this->single_bit = false;
                 this->has_output = false;
                 break;
-            case OpCode::NetworkFlush:
+            case OpCode::NetworkFinishSend:
                 this->layout = InstructionFormat::Control;
                 this->single_bit = false;
                 this->has_output = false;

@@ -62,9 +62,10 @@ namespace mage::engine {
         void execute_finish_swap_in(const PackedPhysInstruction& phys);
         void execute_finish_swap_out(const PackedPhysInstruction& phys);
         void execute_copy_swap(const PackedPhysInstruction& phys);
-        void execute_network_receive(const PackedPhysInstruction& phys);
-        void execute_network_send(const PackedPhysInstruction& phys);
-        void execute_network_flush(const PackedPhysInstruction& phys);
+        void execute_network_post_receive(const PackedPhysInstruction& phys);
+        void execute_network_finish_receive(const PackedPhysInstruction& phys);
+        void execute_network_buffer_send(const PackedPhysInstruction& phys);
+        void execute_network_finish_send(const PackedPhysInstruction& phys);
         void execute_public_constant(const PackedPhysInstruction& phys);
         void execute_copy(const PackedPhysInstruction& phys);
         void execute_int_add(const PackedPhysInstruction& phys);

@@ -94,9 +94,9 @@ namespace mage::dsl {
                     start = 1; // very first element of array is never second in a pair
                 }
                 for (std::size_t i = start; i < this->local_array.size(); i++) {
-                    this->local_array[i].send(prev);
+                    this->local_array[i].buffer_send(prev);
                 }
-                T::communication_barrier(prev);
+                T::finish_send(prev);
 
                 WorkerID next = (this->self_id + 1) % this->num_proc;
                 this->for_each([this, next, f](std::size_t index, T& elem) {
@@ -105,14 +105,15 @@ namespace mage::dsl {
                         return;
                     }
                     T next_elem;
-                    next_elem.receive(next);
+                    next_elem.post_receive(next);
+                    T::finish_receive(next);
                     f(index, elem, next_elem);
                 });
             } else if (this->layout == Layout::Blocked) {
                 if (this->self_id != 0 && this->get_local_size(self_id) != 0) {
                     assert(this->local_array.size() != 0);
-                    this->local_array[0].send(this->self_id - 1);
-                    T::communication_barrier(this->self_id - 1);
+                    this->local_array[0].buffer_send(this->self_id - 1);
+                    T::finish_send(this->self_id - 1);
                 }
                 auto [base, stride] = this->get_global_base_and_stride(this->self_id, this->layout);
                 for (std::size_t i = 0; i + 1 < this->local_array.size(); i++) {
@@ -121,7 +122,8 @@ namespace mage::dsl {
                 if (this->self_id != this->num_proc - 1 && this->get_local_size(self_id + 1) != 0) {
                     std::size_t num_local = this->local_array.size();
                     T first_next;
-                    first_next.receive(this->self_id + 1);
+                    first_next.post_receive(this->self_id + 1);
+                    T::finish_receive(this->self_id + 1);
                     f(num_local - 1, this->local_array[num_local - 1], first_next);
                 }
             } else {
@@ -153,10 +155,10 @@ namespace mage::dsl {
                         std::int64_t local_end = util::floor_div((i_blocked_base + i_length - 1) - my_cyclic_base, my_cyclic_stride).first;
                         for (std::int64_t j = local_start; j <= local_end; j++) {
                             // std::cout << "Sending " << j << std::endl;
-                            this->local_array[j].send(i);
+                            this->local_array[j].buffer_send(i);
                         }
 
-                        T::communication_barrier(i);
+                        T::finish_send(i);
                     }
                     {
                         WorkerID k = (this->self_id - j + this->num_proc) % this->num_proc;
@@ -165,8 +167,10 @@ namespace mage::dsl {
                         std::size_t start_offset = util::floor_div(k_cyclic_base - my_blocked_base, k_cyclic_stride).second;
                         for (std::size_t gi = start_offset; gi < my_length; gi += k_cyclic_stride) {
                             // std::cout << "Receiving " << gi << std::endl;
-                            array[gi].receive(k);
+                            array[gi].post_receive(k);
                         }
+
+                        T::finish_receive(k);
                     }
                 }
                 {

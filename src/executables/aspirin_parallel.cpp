@@ -64,18 +64,22 @@ struct Input {
         Bit::swap_if(predicate, arg0.diagnosis, arg1.diagnosis);
     }
 
-    static void communication_barrier(WorkerID to) {
-        Integer<bits>::communication_barrier(to);
+    void buffer_send(WorkerID to) {
+        this->patient_id_concat_timestamp.buffer_send(to);
+        this->diagnosis.buffer_send(to);
     }
 
-    void send(WorkerID to) {
-        this->patient_id_concat_timestamp.send(to);
-        this->diagnosis.send(to);
+    static void finish_send(WorkerID to) {
+        Integer<bits>::finish_send(to);
     }
 
-    void receive(WorkerID from) {
-        this->patient_id_concat_timestamp.receive(from);
-        this->diagnosis.receive(from);
+    void post_receive(WorkerID from) {
+        this->patient_id_concat_timestamp.post_receive(from);
+        this->diagnosis.post_receive(from);
+    }
+
+    static void finish_receive(WorkerID from) {
+        Integer<bits>::finish_receive(from);
     }
 };
 
