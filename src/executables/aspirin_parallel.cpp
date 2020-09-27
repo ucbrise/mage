@@ -24,8 +24,10 @@
 #include <chrono>
 #include <iostream>
 #include <string>
+#include <utility>
 #include "dsl/array.hpp"
 #include "dsl/integer.hpp"
+#include "dsl/parallel.hpp"
 #include "dsl/sort.hpp"
 #include "memprog/annotation.hpp"
 #include "memprog/program.hpp"
@@ -37,7 +39,7 @@
 using mage::BitWidth;
 using mage::WorkerID;
 using mage::dsl::Party;
-using mage::dsl::DistributedArray;
+using mage::dsl::ShardedArray;
 using mage::dsl::Layout;
 
 mage::memprog::DefaultProgram* p;
@@ -81,13 +83,48 @@ template <BitWidth patient_id_bits = 32, BitWidth timestamp_bits = 32, BitWidth 
 void create_parallel_aspirin_circuit(mage::WorkerID index, mage::WorkerID num_workers, int input_size_per_party) {
     int input_array_length = input_size_per_party * 2;
 
-    DistributedArray<Input<patient_id_bits + timestamp_bits>> inputs(input_array_length, index, num_workers, Layout::Cyclic);
+    mage::dsl::ClusterUtils utils;
+    utils.self_id = index;
+    utils.num_proc = num_workers;
+
+    ShardedArray<Input<patient_id_bits + timestamp_bits>> inputs(input_array_length, index, num_workers, Layout::Cyclic);
     inputs.for_each([=](std::size_t i, auto& input) {
         input.patient_id_concat_timestamp.mark_input(i < input_size_per_party ? Party::Garbler : Party::Evaluator);
         input.diagnosis.mark_input(i < input_size_per_party ? Party::Garbler : Party::Evaluator);
     });
 
-    // TODO
+    // Sort inputs and switch to blocked layout
+    mage::dsl::parallel_bitonic_sorter(inputs);
+
+    Integer<result_bits> local_total(0);
+    inputs.for_each_pair([&local_total](std::size_t index, Input<patient_id_bits + timestamp_bits>& first, Input<patient_id_bits + timestamp_bits>& second) {
+        Bit add = first.diagnosis & ~second.diagnosis;
+        IntSlice<patient_id_bits> patient_id_i = first.patient_id_concat_timestamp.template slice<patient_id_bits>(timestamp_bits);
+        IntSlice<patient_id_bits> patient_id_ip1 = second.patient_id_concat_timestamp.template slice<patient_id_bits>(timestamp_bits);
+        add = add & (patient_id_i == patient_id_ip1);
+        Integer<result_bits> next = local_total.increment();
+        local_total = Integer<result_bits>::select(add, next, local_total);
+    });
+
+    std::optional<Integer<result_bits>> total = utils.reduce_aggregates<Integer<result_bits>>(0, local_total, [](Integer<result_bits>& first, Integer<result_bits>& second) -> Integer<result_bits> {
+        return first + second;
+    });
+    if (index == 0) {
+        total.value().mark_output();
+    }
+}
+
+void test_sorter(mage::WorkerID index, mage::WorkerID num_workers) {
+    ShardedArray<Integer<8>> arr(128, index, num_workers, Layout::Cyclic);
+    arr.for_each([](std::size_t i, auto& elem) {
+        elem = Integer<8>(i < 64 ? i : 127 - i);
+    });
+
+    mage::dsl::parallel_bitonic_sorter(arr);
+
+    arr.for_each([](std::size_t i, auto& elem) {
+        elem.mark_output();
+    });
 }
 
 std::uint8_t page_shift = 12; // 64 KiB

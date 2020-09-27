@@ -26,6 +26,19 @@
 #include <utility>
 
 namespace mage::util {
+    template <typename T>
+    bool is_power_of_two(T number) {
+        return (number & (number - 1)) == 0;
+    }
+
+    std::uint8_t log_base_2(std::uint64_t number) {
+        std::uint8_t logarithm = 0;
+        while ((UINT64_C(1) << logarithm) < number) {
+            logarithm++;
+        }
+        return logarithm;
+    }
+
     std::pair<std::int64_t, std::int64_t> floor_div(std::int64_t dividend, std::int64_t divisor) {
         int64_t quotient = dividend / divisor;
         int64_t remainder = dividend % divisor;

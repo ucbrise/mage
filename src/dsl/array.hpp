@@ -56,6 +56,22 @@ namespace mage::dsl {
             }
         }
 
+        std::vector<T>& get_locals() {
+            return this->local_array;
+        }
+
+        const std::vector<T>& get_locals() const {
+            return this->local_array;
+        }
+
+        Layout get_layout() const {
+            return this->layout;
+        }
+
+        WorkerID get_num_proc() const {
+            return this->num_proc;
+        }
+
         void for_each(std::function<void(std::size_t, T&)> f) {
             auto [index, stride] = this->get_global_base_and_stride(this->self_id, this->layout);
             for (T& elem : this->local_array) {

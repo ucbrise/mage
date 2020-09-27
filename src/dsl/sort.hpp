@@ -24,6 +24,8 @@
 
 #include <cassert>
 #include <cstdint>
+#include "dsl/array.hpp"
+#include "util/misc.hpp"
 
 namespace mage::dsl {
     /*
@@ -31,11 +33,11 @@ namespace mage::dsl {
      * Sorts a bitonic sequence.
      */
     template <typename T>
-    void bitonic_sorter(T* array, std::uint64_t length) {
-        assert((length & (length - 1)) == 0); // length must be a power of two
+    void bitonic_sorter(T* array, std::uint64_t length, std::uint64_t max_depth = UINT64_MAX) {
+        assert(util::is_power_of_two(length));
 
         /* Base case */
-        if (length == 1) {
+        if (length == 1 || max_depth == 0) {
             return;
         }
 
@@ -46,8 +48,24 @@ namespace mage::dsl {
             T::comparator(array[i], array[i + half_length]);
         }
 
-        bitonic_sorter<T>(array, half_length);
-        bitonic_sorter<T>(&array[half_length], half_length);
+        bitonic_sorter<T>(array, half_length, max_depth - 1);
+        bitonic_sorter<T>(&array[half_length], half_length, max_depth - 1);
+    }
+
+    template <typename T>
+    void parallel_bitonic_sorter(ShardedArray<T>& array) {
+        std::vector<T>& locals = array.get_locals();
+        std::uint64_t length = locals.size();
+
+        assert(util::is_power_of_two(length));
+        assert(util::is_power_of_two(array.get_num_proc()));
+        assert(array.get_layout() == Layout::Cyclic);
+
+        std::uint64_t total_phases = util::log_base_2(length * array.get_num_proc());
+        std::uint64_t first_pass_phases = total_phases - util::log_base_2(length);
+        bitonic_sorter<T>(locals.data(), length, first_pass_phases);
+        array.switch_layout(Layout::Blocked);
+        bitonic_sorter<T>(locals.data(), length);
     }
 }
 
