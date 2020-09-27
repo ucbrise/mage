@@ -82,16 +82,41 @@ namespace mage::dsl {
 
         void for_each_pair(std::function<void(std::size_t, T&, T&)> f) {
             if (this->layout == Layout::Cyclic) {
-                // Not supported yet
-                this->operation_panic("for_each_pair on cyclic-layout array");
+                if (this->num_proc == 1) {
+                    for (std::size_t i = 0; i + 1 < this->local_array.size(); i++) {
+                        f(i, this->local_array[i], this->local_array[i + 1]);
+                    }
+                    return;
+                }
+                WorkerID prev = (this->self_id == 0 ? this->num_proc : this->self_id) - 1;
+                std::size_t start = 0;
+                if (this->self_id == 0) {
+                    start = 1; // very first element of array is never second in a pair
+                }
+                for (std::size_t i = start; i < this->local_array.size(); i++) {
+                    this->local_array[i].send(prev);
+                }
+                T::communication_barrier(prev);
+
+                WorkerID next = (this->self_id + 1) % this->num_proc;
+                this->for_each([this, next, f](std::size_t index, T& elem) {
+                    if (index == this->total_length - 1) {
+                        // No next element
+                        return;
+                    }
+                    T next_elem;
+                    next_elem.receive(next);
+                    f(index, elem, next_elem);
+                });
             } else if (this->layout == Layout::Blocked) {
                 if (this->self_id != 0 && this->get_local_size(self_id) != 0) {
                     assert(this->local_array.size() != 0);
                     this->local_array[0].send(this->self_id - 1);
                     T::communication_barrier(this->self_id - 1);
                 }
+                auto [base, stride] = this->get_global_base_and_stride(this->self_id, this->layout);
                 for (std::size_t i = 0; i + 1 < this->local_array.size(); i++) {
-                    f(i, this->local_array[i], this->local_array[i + 1]);
+                    f(base + i, this->local_array[i], this->local_array[i + 1]);
                 }
                 if (this->self_id != this->num_proc - 1 && this->get_local_size(self_id + 1) != 0) {
                     std::size_t num_local = this->local_array.size();
