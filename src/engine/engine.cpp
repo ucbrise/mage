@@ -191,8 +191,12 @@ namespace mage::engine {
         BitWidth num_wires = phys.constant.width;
 
         MessageChannel& c = this->contact_worker_checked(phys.constant.constant);
-        const typename ProtEngine::Wire* buffer = c.read<typename ProtEngine::Wire>(num_wires);
-        std::copy(buffer, buffer + num_wires, input);
+        AsyncRead& ar = c.start_post_read();
+        ar.into = input;
+        ar.length = num_wires * sizeof(typename ProtEngine::Wire);
+        c.finish_post_read();
+
+        c.wait_until_reads_finished();
     }
 
     template <typename ProtEngine>

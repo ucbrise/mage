@@ -52,7 +52,7 @@ namespace mage::engine {
         void read_elements(T* into, std::size_t count) {
             std::size_t read_so_far = 0;
             while (read_so_far != count) {
-                std::array<T, batch_size>& latest = this->start_read_single_in_place();
+                std::array<T, batch_size>& latest = *(this->start_read_single_in_place());
                 T* batch_data = latest.data();
                 std::size_t to_read = std::min(batch_size - this->index_into_batch, count - read_so_far);
                 std::copy(&batch_data[this->index_into_batch], &batch_data[this->index_into_batch + to_read], &into[read_so_far]);
@@ -94,8 +94,9 @@ namespace mage::engine {
                 }
             } else {
                 MessageChannel* c = network->contact_worker(0);
-                Wire* buffer = c->read<Wire>(1);
-                input_seed = this->garbler.initialize_with_delta(*buffer);
+                Wire buffer;
+                c->read<Wire>(&buffer, 1);
+                input_seed = this->garbler.initialize_with_delta(buffer);
             }
             this->conn_writer.write<Wire>() = input_seed;
             this->conn_writer.flush();

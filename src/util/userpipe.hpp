@@ -31,25 +31,43 @@ namespace mage::util {
     template <typename T>
     class UserPipe : private CircularBuffer<T> {
     public:
-        UserPipe(std::size_t capacity_shift) : CircularBuffer<T>(capacity_shift) {
+        UserPipe(std::size_t capacity_shift) : CircularBuffer<T>(capacity_shift), closed(false) {
         }
 
-        void read_contiguous(T* elements, std::size_t count) {
-            std::unique_lock<std::mutex> lock(this->mutex);
-            while (this->get_space_occupied() < count) {
-                this->added.wait(lock);
-            }
-            this->read_unchecked(elements, count);
+        /*
+         * Closing a pipe disallows writes to the pipe. Reads can still get
+         * what was previously written to the pipe, but they will no longer
+         * block waiting for more data.
+         */
+        void close() {
+            std::lock_guard<std::mutex> lock(this->mutex);
+            this->closed = true;
+            this->added.notify_all();
             this->removed.notify_all();
         }
 
-        void write_contiguous(const T* elements, std::size_t count) {
+        std::size_t read_contiguous(T* elements, std::size_t count) {
             std::unique_lock<std::mutex> lock(this->mutex);
-            while (this->get_space_unoccupied() < count) {
+            while (this->get_space_occupied() < count && !this->closed) {
+                this->added.wait(lock);
+            }
+            std::size_t to_read = std::min(this->get_space_occupcied(), count);
+            this->read_unchecked(elements, to_read);
+            this->removed.notify_all();
+            return to_read;
+        }
+
+        bool write_contiguous(const T* elements, std::size_t count) {
+            std::unique_lock<std::mutex> lock(this->mutex);
+            while (this->get_space_unoccupied() < count && !this->closed) {
                 this->removed.wait(lock);
+            }
+            if (this->closed) {
+                return false;
             }
             this->write_unchecked(elements, count);
             this->added.notify_all();
+            return true;
         }
 
         /*
@@ -61,12 +79,15 @@ namespace mage::util {
          * should not be too difficult to use.
          */
 
-        T& start_read_single_in_place() {
+        T* start_read_single_in_place() {
             std::unique_lock<std::mutex> lock(this->mutex);
-            while (this->get_space_occupied() == 0) {
+            while (this->get_space_occupied() == 0 && !this->closed) {
                 this->added.wait(lock);
             }
-            return this->start_read_single_unchecked();
+            if (this->get_space_occupied() == 0) {
+                return nullptr;
+            }
+            return &(this->start_read_single_unchecked());
         }
 
         void finish_read_single_in_place() {
@@ -76,12 +97,15 @@ namespace mage::util {
             this->removed.notify_all();
         }
 
-        T& start_write_single_in_place() {
+        T* start_write_single_in_place() {
             std::unique_lock<std::mutex> lock(this->mutex);
-            while (this->get_space_unoccupied() == 0) {
+            while (this->get_space_unoccupied() == 0 && !this->closed) {
                 this->removed.wait(lock);
             }
-            return this->start_write_single_unchecked();
+            if (this->closed) {
+                return nullptr;
+            }
+            return &(this->start_write_single_unchecked());
         }
 
         void finish_write_single_in_place() {
@@ -91,10 +115,25 @@ namespace mage::util {
             this->added.notify_all();
         }
 
+        /* Interface for synchronization based on internal events. */
+
+        std::unique_lock<std::mutex> lock() {
+            return std::unique_lock<std::mutex>(&mutex);
+        }
+
+        void wait_for_addition(std::unique_lock<std::mutex>& lock) {
+            this->added.wait(lock);
+        }
+
+        void wait_for_removal(std::unique_lock<std::mutex>& lock) {
+            this->removed.wait(lock);
+        }
+
     private:
         std::mutex mutex;
         std::condition_variable added;
         std::condition_variable removed;
+        bool closed;
     };
 }
 

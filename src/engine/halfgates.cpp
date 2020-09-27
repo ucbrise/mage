@@ -51,7 +51,7 @@ namespace mage::engine {
                 // ot_sender.send(this->ot_conn_reader, this->ot_conn_writer, ot_pairs, batch_size);
                 // delete[] ot_pairs;
 
-                std::array<crypto::block, halfgates_max_batch_size>& batch = this->evaluator_input_labels.start_write_single_in_place();
+                std::array<crypto::block, halfgates_max_batch_size>& batch = *(this->evaluator_input_labels.start_write_single_in_place());
                 ot_sender.send(this->ot_conn_reader, this->ot_conn_writer, this->garbler.get_delta(), batch.data(), batch_size);
                 this->evaluator_input_labels.finish_write_single_in_place();
             }
@@ -79,8 +79,8 @@ namespace mage::engine {
                 choices[num_blocks - 1] = crypto::zero_block();
                 this->input_reader.read_bytes(reinterpret_cast<std::uint8_t*>(&choices[0]), batch_size >> 3);
 
-                std::array<crypto::block, halfgates_max_batch_size>& batch = this->evaluator_input_labels.start_write_single_in_place();
-                ot_chooser.choose(this->ot_conn_reader, this->ot_conn_writer, choices, batch.data(), batch_size);
+                std::array<crypto::block, halfgates_max_batch_size>* batch = this->evaluator_input_labels.start_write_single_in_place();
+                ot_chooser.choose(this->ot_conn_reader, this->ot_conn_writer, choices, batch->data(), batch_size);
                 this->evaluator_input_labels.finish_write_single_in_place();
             }
         });

@@ -19,36 +19,66 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <cassert>
 #include <cstdint>
 #include <cstdlib>
 #include <algorithm>
 #include <chrono>
+#include <condition_variable>
 #include <iostream>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <utility>
+#include <vector>
 #include "engine/cluster.hpp"
 #include "platform/filesystem.hpp"
 #include "platform/network.hpp"
 #include "util/filebuffer.hpp"
+#include "util/userpipe.hpp"
 
 namespace mage::engine {
-    MessageChannel::MessageChannel(int fd) : reader(fd), writer(fd), socket_fd(fd) {
+    MessageChannel::MessageChannel(int fd) : reader(fd), writer(fd), socket_fd(fd),
+        posted_reads(14), num_posted_reads(0) {
+        if (fd != -1) {
+            this->start_reading_daemon();
+        }
     }
 
     MessageChannel::MessageChannel() : MessageChannel(-1) {
     }
 
-    MessageChannel::MessageChannel(MessageChannel&& other)
-        : reader(std::move(other.reader)), writer(std::move(other.writer)), socket_fd(other.socket_fd) {
-        other.socket_fd = -1;
-    }
-
     MessageChannel::~MessageChannel() {
         if (this->socket_fd != -1) {
             this->writer.flush();
+            this->posted_reads.close();
+            if (this->reading_daemon.joinable()) {
+                this->reading_daemon.join();
+            }
             platform::network_close(this->socket_fd);
         }
+    }
+
+    void MessageChannel::start_reading_daemon() {
+        assert(!this->reading_daemon.joinable());
+        this->reading_daemon = std::thread([this]() {
+            AsyncRead* read_op;
+            while ((read_op = this->posted_reads.start_read_single_in_place()) != nullptr) {
+                std::uint8_t* buffer = &(this->reader.start_read<std::uint8_t>(read_op->length));
+                std::copy(buffer, buffer + read_op->length, static_cast<std::uint8_t*>(read_op->into));
+                this->reader.finish_read(read_op->length);
+                this->posted_reads.finish_read_single_in_place();
+
+                {
+                    std::lock_guard<std::mutex> lock(this->num_posted_reads_mutex);
+                    this->num_posted_reads--;
+                    if (this->num_posted_reads == 0) {
+                        this->no_posted_reads.notify_all();
+                    }
+                }
+            }
+        });
     }
 
     const std::uint32_t ClusterNetwork::max_connection_tries = 20;
@@ -153,9 +183,9 @@ namespace mage::engine {
             }
         }
         if (overall_success) {
-            this->channels.resize(0);
+            this->channels.resize(num_workers);
             for (WorkerID i = 0; i != num_workers; i++) {
-                this->channels.emplace_back(fds[i]);
+                this->channels[i] = std::make_unique<MessageChannel>(fds[i]);
             }
         } else {
             for (WorkerID i = 0; i != num_workers; i++) {

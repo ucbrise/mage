@@ -24,11 +24,22 @@
 
 #include <cstdint>
 #include <chrono>
+#include <condition_variable>
+#include <memory>
+#include <mutex>
+#include <thread>
+#include <vector>
 #include "addr.hpp"
 #include "util/filebuffer.hpp"
 #include "util/resourceset.hpp"
+#include "util/userpipe.hpp"
 
 namespace mage::engine {
+    struct AsyncRead {
+        void* into;
+        std::size_t length;
+    };
+
     /*
      * If, in the future, we need to allow multiple implementations (e.g.,
      * sockets, shared memory, etc.), I may change this to an abstract class.
@@ -38,13 +49,35 @@ namespace mage::engine {
     public:
         MessageChannel(int fd);
         MessageChannel();
-        MessageChannel(MessageChannel&& other);
         virtual ~MessageChannel();
 
         template <typename T>
-        T* read(std::size_t count) {
-            T& buffer = this->reader.read<T>(count * sizeof(T));
-            return &buffer;
+        void read(T* buffer, std::size_t count) {
+            AsyncRead& ar = this->start_post_read();
+            ar.into = buffer;
+            ar.length = sizeof(T) * count;
+            this->finish_post_read();
+            this->wait_until_reads_finished();
+        }
+
+        AsyncRead& start_post_read() {
+            AsyncRead* ar = this->posted_reads.start_write_single_in_place();
+            return *ar;
+        }
+
+        void finish_post_read() {
+            {
+                std::lock_guard<std::mutex> lock(this->num_posted_reads_mutex);
+                this->num_posted_reads++;
+            }
+            this->posted_reads.finish_write_single_in_place();
+        }
+
+        void wait_until_reads_finished() {
+            std::unique_lock<std::mutex> lock(this->num_posted_reads_mutex);
+            while (this->num_posted_reads != 0) {
+                this->no_posted_reads.wait(lock);
+            }
         }
 
         template <typename T>
@@ -57,14 +90,18 @@ namespace mage::engine {
             this->writer.flush();
         }
 
-        void rebuffer() {
-            this->reader.rebuffer();
-        }
-
     private:
+        void start_reading_daemon();
+
         util::BufferedFileWriter<false> writer;
         util::BufferedFileReader<false> reader;
         int socket_fd;
+
+        util::UserPipe<AsyncRead> posted_reads;
+        std::size_t num_posted_reads;
+        std::mutex num_posted_reads_mutex;
+        std::condition_variable no_posted_reads;
+        std::thread reading_daemon;
     };
 
     /*
@@ -84,14 +121,14 @@ namespace mage::engine {
             if (worker_id == this->self_id || worker_id >= this->channels.size()) {
                 return nullptr;
             }
-            return &this->channels[worker_id];
+            return this->channels[worker_id].get();
         }
 
         static const std::uint32_t max_connection_tries;
         static const std::chrono::duration<std::uint32_t, std::milli> delay_between_connection_tries;
 
     private:
-        std::vector<MessageChannel> channels;
+        std::vector<std::unique_ptr<MessageChannel>> channels;
         WorkerID self_id;
     };
 }
