@@ -29,8 +29,8 @@
 #include "opcode.hpp"
 
 namespace mage::memprog {
-    Allocator::Allocator(std::string output_file, PhysPageNumber num_page_frames)
-        : next_storage_frame(0), pages_end(0), num_swapouts(0), num_swapins(0), phys_prog(output_file, 0, num_page_frames) {
+    Allocator::Allocator(std::string output_file, PhysPageNumber num_page_frames, PageShift shift)
+        : next_storage_frame(0), pages_end(0), page_shift(shift), num_swapouts(0), num_swapins(0), phys_prog(output_file, 0, num_page_frames) {
         this->free_page_frames.reserve(num_page_frames);
         PhysPageNumber curr = num_page_frames;
         do {
@@ -61,6 +61,44 @@ namespace mage::memprog {
     }
 
     void Allocator::emit_swapout(PhysPageNumber primary, StoragePageNumber secondary) {
+        /*
+         * Before swapping out this page, make sure to finish any outstanding
+         * network receives for this page. Otherwise, the receive may complete
+         * after we've swapped out the page overwriting whatever else is at the
+         * physical page frame...
+         * But this is prone to deadlock, because the data might still be in
+         * the sender's buffer, causing us to block, and the sender may also
+         * block in the same way, and so on, in a cycle. So, we should first
+         * flush any output buffers, and only then wait for any outstanding
+         * data to arrive.
+         */
+        bool flushed_send_buffers = false;
+        for (WorkerID i = 0; i != this->pending_receive_ops.size(); i++) {
+            std::unordered_set<PhysPageNumber>& pending = this->pending_receive_ops[i];
+            if (pending.contains(primary)) {
+                constexpr std::size_t control_length = PackedPhysInstruction::size(InstructionFormat::Control);
+                if (!flushed_send_buffers) {
+                    for (WorkerID j = 0; j != this->buffered_send_ops.size(); j++) {
+                        if (this->buffered_send_ops[j]) {
+                            PackedPhysInstruction& phys = this->phys_prog.start_instruction(control_length);
+                            phys.header.operation = OpCode::NetworkFinishSend;
+                            phys.header.flags = 0;
+                            phys.control.data = j;
+                            this->phys_prog.finish_instruction(control_length);
+                            this->buffered_send_ops[j] = false;
+                        }
+                    }
+                    flushed_send_buffers = true;
+                }
+                PackedPhysInstruction& phys = this->phys_prog.start_instruction(control_length);
+                phys.header.operation = OpCode::NetworkFinishReceive;
+                phys.header.flags = 0;
+                phys.control.data = i;
+                this->phys_prog.finish_instruction(control_length);
+                pending.clear();
+            }
+        }
+
         constexpr std::size_t length = PackedPhysInstruction::size(InstructionFormat::Swap);
 
         PackedPhysInstruction& phys = this->phys_prog.start_instruction(length);
@@ -86,8 +124,44 @@ namespace mage::memprog {
         this->num_swapins++;
     }
 
+    void Allocator::update_network_state(const PackedPhysInstruction& phys) {
+        WorkerID other;
+        switch (phys.header.operation) {
+        case OpCode::NetworkPostReceive:
+            other = phys.constant.constant;
+            if (other + 1 > this->pending_receive_ops.size()) {
+                this->pending_receive_ops.resize(other + 1);
+            }
+            this->pending_receive_ops[other].insert(pg_num(phys.constant.output, this->page_shift));
+            break;
+        case OpCode::NetworkFinishReceive:
+            other = phys.control.data;
+            if (other + 1 > this->pending_receive_ops.size()) {
+                this->pending_receive_ops.resize(other + 1);
+            }
+            this->pending_receive_ops[other].clear();
+            break;
+        case OpCode::NetworkBufferSend:
+            other = phys.constant.constant;
+            if (other + 1 > this->buffered_send_ops.size()) {
+                this->buffered_send_ops.resize(other + 1);
+            }
+            this->buffered_send_ops[other] = true;
+            break;
+        case OpCode::NetworkFinishSend:
+            other = phys.control.data;
+            if (other + 1 > this->buffered_send_ops.size()) {
+                this->buffered_send_ops.resize(other + 1);
+            }
+            this->buffered_send_ops[other] = false;
+            break;
+        default:
+            break;
+        }
+    }
+
     BeladyAllocator::BeladyAllocator(std::string output_file, std::string virtual_program_file, std::string annotations_file, PhysPageNumber num_page_frames, PageShift shift)
-        : Allocator(output_file, num_page_frames), virt_prog(virtual_program_file.c_str()), annotations(annotations_file.c_str()), page_shift(shift) {
+        : Allocator(output_file, num_page_frames, shift), virt_prog(virtual_program_file.c_str()), annotations(annotations_file.c_str()) {
         this->set_page_shift(this->virt_prog.get_header().page_shift);
     }
 
@@ -212,7 +286,23 @@ namespace mage::memprog {
             phys.no_args.width = current.no_args.width;
             phys.header.flags = current.header.flags;
             phys.restore_page_numbers(current, ppns.data(), this->page_shift);
+            this->update_network_state(phys);
             this->phys_prog.finish_instruction(phys.size());
+
+            /*
+             * Possible optimization: try to avoid swapping out a page for which
+             * an asynchronous receive was recently issued. It's unclear if
+             * this would provide benefit; I'll need to do benchmarks first.
+             *
+             * The idea is that if we keep issuing async receives and
+             * immediately swapping out the page we're receiving into, we have
+             * to stall, waiting for the receive to finish, before swapping out
+             * the page. So perhaps the replacement should take async receives
+             * into account by marking the page as "pinned" or "busy" for a
+             * short time after the async receive is issued, to give the
+             * data some time to arrive, so we stall for less/no time waiting
+             * for it to arrive before swapping out the page.
+             */
 
             for (std::uint8_t j = 0; j != num_pages; j++) {
                 InstructionNumber next_use = ann.slots[j].next_use;

@@ -34,7 +34,7 @@
 namespace mage::memprog {
     class Allocator {
     public:
-        Allocator(std::string output_file, PhysPageNumber num_page_frames);
+        Allocator(std::string output_file, PhysPageNumber num_page_frames, PageShift page_shift);
         virtual ~Allocator();
 
         void set_page_shift(PageShift shift);
@@ -48,6 +48,8 @@ namespace mage::memprog {
     protected:
         void emit_swapout(PhysPageNumber primary, StoragePageNumber secondary);
         void emit_swapin(StoragePageNumber secondary, PhysPageNumber primary);
+
+        void update_network_state(const PackedPhysInstruction& phys);
 
         StoragePageNumber alloc_storage_frame() {
             if (this->free_storage_frames.empty()) {
@@ -79,12 +81,21 @@ namespace mage::memprog {
         }
 
         PhysProgramFileWriter phys_prog;
+        PageShift page_shift;
 
     private:
         std::vector<PhysPageNumber> free_page_frames;
         std::vector<StoragePageNumber> free_storage_frames;
         StoragePageNumber next_storage_frame;
         PhysPageNumber pages_end;
+
+        /*
+         * Network information so that we can make sure to steal pages used for
+         * async network operations. The index into both vectors is the
+         * WorkerID.
+         */
+        std::vector<std::unordered_set<PhysPageNumber>> pending_receive_ops;
+        std::vector<bool> buffered_send_ops;
 
         /* Keeps track of the number of swaps performed in the allocation. */
         std::uint64_t num_swapouts;
@@ -134,7 +145,6 @@ namespace mage::memprog {
         util::PriorityQueue<BeladyScore, VirtPageNumber> next_use_heap;
         VirtProgramFileReader virt_prog;
         util::BufferedReverseFileReader<true> annotations;
-        PageShift page_shift;
     };
 }
 
