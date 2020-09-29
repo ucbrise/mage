@@ -110,7 +110,7 @@ namespace mage::dsl {
                     f(index, elem, next_elem);
                 });
             } else if (this->layout == Layout::Blocked) {
-                if (this->self_id != 0 && this->get_local_size(self_id) != 0) {
+                if (this->self_id != 0 && this->get_local_size(this->self_id) != 0) {
                     assert(this->local_array.size() != 0);
                     this->local_array[0].buffer_send(this->self_id - 1);
                     T::finish_send(this->self_id - 1);
@@ -119,12 +119,12 @@ namespace mage::dsl {
                 for (std::size_t i = 0; i + 1 < this->local_array.size(); i++) {
                     f(base + i, this->local_array[i], this->local_array[i + 1]);
                 }
-                if (this->self_id != this->num_proc - 1 && this->get_local_size(self_id + 1) != 0) {
+                if (this->self_id != this->num_proc - 1 && this->get_local_size(this->self_id + 1) != 0) {
                     std::size_t num_local = this->local_array.size();
                     T first_next;
                     first_next.post_receive(this->self_id + 1);
                     T::finish_receive(this->self_id + 1);
-                    f(num_local - 1, this->local_array[num_local - 1], first_next);
+                    f(base + num_local - 1, this->local_array[num_local - 1], first_next);
                 }
             } else {
                 this->layout_panic();
@@ -141,8 +141,12 @@ namespace mage::dsl {
                 }
                 std::vector<T> array(my_length);
                 for (WorkerID j = 1; j != this->num_proc; j++) {
+                    WorkerID i; // send to worker i
+                    std::int64_t send_start, send_end, send_stride;
+                    WorkerID k; // receive from worker k
+                    std::int64_t recv_start, recv_end, recv_stride;
                     {
-                        WorkerID i = (this->self_id + j) % this->num_proc;
+                        i = (this->self_id + j) % this->num_proc;
                         /* Send to Worker i everything that is relevant to that worker. */
                         auto [i_blocked_base, i_blocked_stride] = this->get_global_base_and_stride(i, Layout::Blocked);
                         std::size_t i_length = this->get_local_size(i);
@@ -153,25 +157,38 @@ namespace mage::dsl {
                          */
                         std::int64_t local_start = util::ceil_div(i_blocked_base - my_cyclic_base, my_cyclic_stride).first;
                         std::int64_t local_end = util::floor_div((i_blocked_base + i_length - 1) - my_cyclic_base, my_cyclic_stride).first;
-                        for (std::int64_t j = local_start; j <= local_end; j++) {
-                            // std::cout << "Sending " << j << std::endl;
-                            this->local_array[j].buffer_send(i);
-                        }
 
-                        T::finish_send(i);
+                        send_start = local_start;
+                        send_end = local_end;
+                        send_stride = 1;
                     }
                     {
-                        WorkerID k = (this->self_id - j + this->num_proc) % this->num_proc;
+                        k = (this->self_id - j + this->num_proc) % this->num_proc;
                         /* Receive from Worker k. */
                         auto [k_cyclic_base, k_cyclic_stride] = this->get_global_base_and_stride(k, Layout::Cyclic);
                         std::size_t start_offset = util::floor_div(k_cyclic_base - my_blocked_base, k_cyclic_stride).second;
-                        for (std::size_t gi = start_offset; gi < my_length; gi += k_cyclic_stride) {
-                            // std::cout << "Receiving " << gi << std::endl;
-                            array[gi].post_receive(k);
-                        }
 
-                        T::finish_receive(k);
+                        recv_start = start_offset;
+                        recv_end = my_length - 1;
+                        recv_stride = k_cyclic_stride;
                     }
+
+                    std::int64_t s = send_start;
+                    std::int64_t r = recv_start;
+                    while (s <= send_end || r <= recv_end) {
+                        if (s <= send_end) {
+                            // std::cout << "Sending " << s << std::endl;
+                            this->local_array[s].buffer_send(i);
+                            s += send_stride;
+                        }
+                        if (r <= recv_end) {
+                            // std::cout << "Receiving " << r << std::endl;
+                            array[r].post_receive(k);
+                            r += recv_stride;
+                        }
+                    }
+                    T::finish_send(i);
+                    T::finish_receive(k);
                 }
                 {
                     /* Shuffle the elements that need to be kept locally. */
@@ -185,6 +202,12 @@ namespace mage::dsl {
                 }
                 this->local_array = std::move(array);
                 this->layout = Layout::Blocked;
+
+                for (WorkerID k = 0; k != this->num_proc; k++) {
+                    if (k != this->self_id) {
+                        T::finish_receive(k);
+                    }
+                }
             } else {
                 this->operation_panic("cannot switch layout");
             }
