@@ -61,6 +61,10 @@ namespace mage::engine {
         return this->self_id;
     }
 
+    WorkerID ClusterNetwork::get_num_workers() const {
+        return this->channels.size();
+    }
+
     std::string ClusterNetwork::establish(const util::ResourceSet::Party& party) {
         WorkerID num_workers = party.workers.size();
         if (this->self_id >= num_workers) {

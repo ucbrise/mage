@@ -76,6 +76,7 @@ namespace mage::engine {
         ClusterNetwork(WorkerID self);
 
         WorkerID get_self() const;
+        WorkerID get_num_workers() const;
 
         std::string establish(const util::ResourceSet::Party& party);
 

@@ -84,10 +84,14 @@ namespace mage::engine {
             this->conn_writer.enable_stats("GATE-SEND (ns)");
             crypto::block input_seed;
             if (network->get_self() == 0) {
-                MessageChannel* c = network->contact_worker(1);
-                Wire* buffer = c->write<Wire>(1);
-                input_seed = this->garbler.initialize(*buffer);
-                c->flush();
+                WorkerID num_workers = network->get_num_workers();
+                Wire delta_precursor;
+                input_seed = this->garbler.initialize(delta_precursor);
+                for (WorkerID i = 1; i != num_workers; i++) {
+                    MessageChannel* c = network->contact_worker(i);
+                    *(c->write<Wire>(1)) = delta_precursor;
+                    c->flush();
+                }
             } else {
                 MessageChannel* c = network->contact_worker(0);
                 Wire* buffer = c->read<Wire>(1);
