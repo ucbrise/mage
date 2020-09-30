@@ -47,7 +47,6 @@ namespace mage::schemes {
         crypto::block initialize(Wire& delta_precursor) {
             crypto::PRG tmp;
             tmp.random_block(&delta_precursor);
-            this->set_delta(delta_precursor);
 
             return this->initialize_with_delta(delta_precursor);
         }
@@ -124,6 +123,7 @@ namespace mage::schemes {
     private:
         void set_delta(const Wire& x) {
             this->delta = crypto::make_delta(x);
+
             crypto::PRG tmp(crypto::fix_key);
             tmp.random_block(this->public_constants, 2);
             this->public_constants[1] = crypto::xorBlocks(this->public_constants[1], this->delta);

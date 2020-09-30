@@ -81,8 +81,6 @@ namespace mage::engine {
             this->ot_conn_reader.set_file_descriptor(this->sockets[1], false);
             this->ot_conn_writer.set_file_descriptor(this->sockets[1], false);
 
-            this->start_input_daemon();
-
             this->conn_writer.enable_stats("GATE-SEND (ns)");
             crypto::block input_seed;
             if (network->get_self() == 0) {
@@ -97,6 +95,9 @@ namespace mage::engine {
             }
             this->conn_writer.write<Wire>() = input_seed;
             this->conn_writer.flush();
+
+            /* Once this->garbler is initialized, start the OT daemon. */
+            this->start_input_daemon();
         }
 
         ~HalfGatesGarblingEngine() {
@@ -195,11 +196,12 @@ namespace mage::engine {
             this->ot_conn_reader.set_file_descriptor(this->sockets[1], false);
             this->ot_conn_writer.set_file_descriptor(this->sockets[1], false);
 
-            this->start_input_daemon();
-
             this->conn_reader.enable_stats("GATE-RECV (ns)");
             crypto::block input_seed = this->conn_reader.read<crypto::block>();
             this->evaluator.initialize(input_seed);
+
+            /* Once this->evaluator is initialized, start the OT daemon. */
+            this->start_input_daemon();
         }
 
         ~HalfGatesEvaluationEngine() {
