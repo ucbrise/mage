@@ -97,25 +97,24 @@ void create_parallel_aspirin_circuit(mage::WorkerID index, mage::WorkerID num_wo
         input.diagnosis.mark_input(i < input_size_per_party ? Party::Garbler : Party::Evaluator);
     });
 
-    Bit local_order(1);
-    // inputs.for_each_pair([&](std::size_t i, auto& first, auto& second) {
-    //     if (i < input_size_per_party - 1) {
-    //         Bit lte = first.patient_id_concat_timestamp <= second.patient_id_concat_timestamp;
-    //         local_order = local_order & lte;
-    //     } else if (i >= input_size_per_party) {
-    //         Bit gte = first.patient_id_concat_timestamp >= second.patient_id_concat_timestamp;
-    //         local_order = local_order & gte;
-    //     }
-    // });
-    // std::optional<Bit> order = utils.reduce_aggregates<Bit>(0, local_order, [](Bit& first, Bit& second) -> Bit {
-    //     return first & second;
-    // });
-    if (index == 0) {
-        // order.value().mark_output();
-        local_order.mark_output();
-    }
-
     // Verify that inputs are sorted
+
+    Bit local_order(1);
+    inputs.for_each_pair([&](std::size_t i, auto& first, auto& second) {
+        if (i < input_size_per_party - 1) {
+            Bit lte = first.patient_id_concat_timestamp <= second.patient_id_concat_timestamp;
+            local_order = local_order & lte;
+        } else if (i >= input_size_per_party) {
+            Bit gte = first.patient_id_concat_timestamp >= second.patient_id_concat_timestamp;
+            local_order = local_order & gte;
+        }
+    });
+    std::optional<Bit> order = utils.reduce_aggregates<Bit>(0, local_order, [](Bit& first, Bit& second) -> Bit {
+        return first & second;
+    });
+    if (index == 0) {
+        order.value().mark_output();
+    }
 
     // Sort inputs and switch to blocked layout
     mage::dsl::parallel_bitonic_sorter(inputs);

@@ -88,26 +88,39 @@ namespace mage::dsl {
                     }
                     return;
                 }
+
                 WorkerID prev = (this->self_id == 0 ? this->num_proc : this->self_id) - 1;
+                WorkerID next = (this->self_id + 1) % this->num_proc;
+
+                std::size_t num_pairs = this->local_array.size();
+                if (this->self_id == this->num_proc - 1 && num_pairs != 0) {
+                    num_pairs--; // very last element is never the first in a pair
+                }
+                std::vector<T> next_elems(num_pairs);
+
                 std::size_t start = 0;
                 if (this->self_id == 0) {
                     start = 1; // very first element of array is never second in a pair
+                    if (next_elems.size() != 0) {
+                        next_elems[0].post_receive(next);
+                    }
                 }
                 for (std::size_t i = start; i < this->local_array.size(); i++) {
                     this->local_array[i].buffer_send(prev);
+                    if (i < next_elems.size()) {
+                        next_elems[i].post_receive(next);
+                    }
                 }
                 T::finish_send(prev);
+                T::finish_receive(next);
 
-                WorkerID next = (this->self_id + 1) % this->num_proc;
-                this->for_each([this, next, f](std::size_t index, T& elem) {
+                std::size_t j = 0;
+                this->for_each([this, &j, &next_elems, f](std::size_t index, T& elem) {
                     if (index == this->total_length - 1) {
                         // No next element
                         return;
                     }
-                    T next_elem;
-                    next_elem.post_receive(next);
-                    T::finish_receive(next);
-                    f(index, elem, next_elem);
+                    f(index, elem, next_elems[j++]);
                 });
             } else if (this->layout == Layout::Blocked) {
                 if (this->self_id != 0 && this->get_local_size(this->self_id) != 0) {
