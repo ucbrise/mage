@@ -110,6 +110,7 @@ std::uint64_t max_in_flight = 256;
 int main(int argc, char** argv) {
     int input_size_per_party;
     std::string filename = "aspirin_";
+    unsigned long long index = 0;
     if (argc == 5) {
         mage::util::ResourceSet rs;
         std::string err = rs.from_yaml_file(argv[1]);
@@ -137,7 +138,7 @@ int main(int argc, char** argv) {
         }
 
         errno = 0;
-        unsigned long long index = std::strtoull(argv[3], nullptr, 10);
+        index = std::strtoull(argv[3], nullptr, 10);
         if (errno != 0) {
             std::perror("Third argument (index)");
             return 1;
@@ -176,6 +177,8 @@ int main(int argc, char** argv) {
         return 1;
     }
     filename.append(std::to_string(input_size_per_party));
+    filename.append("_");
+    filename.append(std::to_string(index));
 
     std::string program_filename = filename;
     program_filename.append(".prog");
