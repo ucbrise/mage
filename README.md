@@ -9,6 +9,8 @@ This is still in progress, but it's far enough along that you can run the code.
 
 To build MAGE, first install OpenSSL. Also install version 0.63 of the yaml-cpp library (https://github.com/jbeder/yaml-cpp).
 
+On a Ubuntu install, you can install the dependencies by running `apt install build-essential clang cmake libssl-dev libaio-dev`. Then you have to install the yaml-cpp library, using the `-DYAML_BUILD_SHARED_LIBS=ON` option when running `cmake`.
+
 Once you've done this, you should be able to run `make`. I've tested this on an Ubuntu 16.04 system. You will obtain three executables: `mage`, `aspirin`, and `aspirin_input`.
 
 How to Run
