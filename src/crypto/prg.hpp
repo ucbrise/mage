@@ -5,9 +5,10 @@
 #ifndef MAGE_CRYPTO_PRG_HPP_
 #define MAGE_CRYPTO_PRG_HPP_
 
-#include <x86intrin.h>
 #include <cstdint>
 #include <algorithm>
+#include <openssl/err.h>
+#include <openssl/rand.h>
 #include "crypto/aes.hpp"
 
 namespace mage::crypto {
@@ -20,11 +21,12 @@ namespace mage::crypto {
                 this->set_seed(*seed_block);
                 return;
             }
-            std::uint64_t v0, v1;
-            if (_rdseed64_step(reinterpret_cast<unsigned long long*>(&v0)) != 1 || _rdseed64_step(reinterpret_cast<unsigned long long*>(&v1)) != 1) {
+            block v;
+            int rv = RAND_bytes(reinterpret_cast<unsigned char*>(&v), sizeof(v));
+            if (rv == 0) {
+                ERR_print_errors_fp(stderr);
                 std::abort();
             }
-            block v = makeBlock(v0, v1);
             this->set_seed(v);
         }
 

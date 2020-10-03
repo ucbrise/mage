@@ -27,7 +27,9 @@ namespace mage::crypto {
     }
 
     inline bool block_bit(const block& x, std::uint8_t index) {
-        return ((_mm_extract_epi16(x, index >> 4) >> (index & 0xf)) & 0x1) != 0x0;
+        assert(index < 128);
+        const std::uint64_t* halves = reinterpret_cast<const std::uint64_t*>(&x);
+        return ((halves[index >> 6] >> (index & 0x3f)) & 0x1) != 0x0;
     }
 
     inline bool getLSB(const block & x) {
