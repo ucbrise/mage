@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <openssl/bn.h>
 #include <openssl/ec.h>
 #include <openssl/err.h>

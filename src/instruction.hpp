@@ -24,6 +24,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <ostream>
 #include "addr.hpp"
 #include "opcode.hpp"

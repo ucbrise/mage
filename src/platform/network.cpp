@@ -24,6 +24,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstdint>
+#include <cstdlib>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <sys/socket.h>

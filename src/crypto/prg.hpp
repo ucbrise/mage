@@ -6,6 +6,7 @@
 #define MAGE_CRYPTO_PRG_HPP_
 
 #include <cstdint>
+#include <cstdlib>
 #include <algorithm>
 #include <openssl/err.h>
 #include <openssl/rand.h>

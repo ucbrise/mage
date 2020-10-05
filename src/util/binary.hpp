@@ -23,6 +23,7 @@
 #define MAGE_UTIL_BINARY_HPP_
 
 #include <cstdint>
+#include <cstdlib>
 #include <bit>
 #include <istream>
 #include <ostream>

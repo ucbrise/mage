@@ -1,6 +1,7 @@
 #ifndef MAGE_CRYPTO_MITCCRH_HPP_
 #define MAGE_CRYPTO_MITCCRH_HPP_
 
+#include <cstdlib>
 #include <cstring>
 #include "crypto/aes_cpu.hpp"
 #include "crypto/block.hpp"

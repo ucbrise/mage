@@ -19,6 +19,7 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <cstdlib>
 #include <cstring>
 #include <chrono>
 #include <iostream>
