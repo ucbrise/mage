@@ -7,10 +7,13 @@ MAGE_CPP_SOURCES = $(foreach dir,$(MAGE_DIRS),$(wildcard $(dir)/*.cpp))
 MAGE_HEADERS = $(foreach dir,$(MAGE_DIRS),$(wildcard $(dir)/*.hpp))
 
 MAGE_TEST_SOURCES = $(wildcard tests/*.cpp)
+MAGE_EXECUTABLE_SOURCES = $(wildcard src/executables/*.cpp)
+MAGE_EXECUTABLE_NAMES = $(foreach file,$(MAGE_EXECUTABLE_SOURCES),$(notdir $(basename $(file))))
 
 BINDIR = bin
 MAGE_OBJECTS = $(addprefix $(BINDIR)/,$(MAGE_CPP_SOURCES:.cpp=.o))
 TEST_OBJECTS = $(addprefix $(BINDIR)/,$(MAGE_TEST_SOURCES:.cpp=.o))
+EXECUTABLES = $(addprefix $(BINDIR)/,$(MAGE_EXECUTABLE_NAMES))
 
 .PHONY: clean
 
@@ -20,7 +23,7 @@ all: mage tests
 
 tests: $(BINDIR)/test
 
-mage: $(BINDIR)/mage $(BINDIR)/aspirin_input $(BINDIR)/aspirin $(BINDIR)/aspirin_parallel
+mage: $(EXECUTABLES)
 
 $(BINDIR)/test: $(MAGE_OBJECTS) $(TEST_OBJECTS)
 	$(CXX) $(LDFLAGS) $+ -lboost_unit_test_framework -o $@
