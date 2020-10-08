@@ -107,7 +107,7 @@ namespace mage::platform {
         const std::uint8_t* data = reinterpret_cast<const std::uint8_t*>(buffer);
         std::size_t processed = 0;
         while (processed != length) {
-            ssize_t rv = write(fd, &data[processed], length);
+            ssize_t rv = write(fd, &data[processed], length - processed);
             if (rv <= 0) {
                 if (rv < 0) {
                     std::perror("write_to_file -> write");
@@ -122,7 +122,7 @@ namespace mage::platform {
         const std::uint8_t* data = reinterpret_cast<const std::uint8_t*>(buffer);
         std::size_t processed = 0;
         while (processed != length) {
-            ssize_t rv = pwrite(fd, &data[processed], length, (off_t) (offset + processed));
+            ssize_t rv = pwrite(fd, &data[processed], length - processed, (off_t) (offset + processed));
             if (rv <= 0) {
                 if (rv < 0) {
                     std::perror("write_to_file_at -> pwrite");
@@ -137,7 +137,7 @@ namespace mage::platform {
         std::uint8_t* data = reinterpret_cast<std::uint8_t*>(buffer);
         std::size_t processed = 0;
         while (processed != length) {
-            ssize_t rv = read(fd, &data[processed], length);
+            ssize_t rv = read(fd, &data[processed], length - processed);
             if (rv <= 0) {
                 if (rv < 0) {
                     std::perror("read_from_file -> read");
@@ -154,7 +154,7 @@ namespace mage::platform {
         std::uint8_t* data = reinterpret_cast<std::uint8_t*>(buffer);
         std::size_t processed = 0;
         while (processed != length) {
-            ssize_t rv = pread(fd, &data[processed], length, (off_t) (offset + processed));
+            ssize_t rv = pread(fd, &data[processed], length - processed, (off_t) (offset + processed));
             if (rv <= 0) {
                 if (rv < 0) {
                     std::perror("read_from_file -> pread");
