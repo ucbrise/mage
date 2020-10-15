@@ -28,17 +28,21 @@
 #include "addr.hpp"
 #include "engine/engine.hpp"
 #include "programfile.hpp"
-#include "util/resourceset.hpp"
+#include "util/config.hpp"
 #include "util/stats.hpp"
 
 namespace mage::engine {
     template <typename ProtEngine>
     class SingleCoreEngine : private Engine<ProtEngine> {
     public:
-        SingleCoreEngine(std::shared_ptr<ClusterNetwork>& network, const util::ResourceSet::Worker& worker, ProtEngine& prot, std::string program)
+        SingleCoreEngine(std::shared_ptr<ClusterNetwork>& network, const util::ConfigValue& worker, ProtEngine& prot, std::string program)
             : Engine<ProtEngine>(network, prot), input(program.c_str()) {
             const ProgramFileHeader& header = this->input.get_header();
-            this->init(worker, header.page_shift, header.num_pages, header.num_swap_pages, header.max_concurrent_swaps);
+            if (worker.get("storage_path") == nullptr) {
+                std::cerr << "No storage path is specified for this worker" << std::endl;
+                std::abort();
+            }
+            this->init(worker["storage_path"].as_string(), header.page_shift, header.num_pages, header.num_swap_pages, header.max_concurrent_swaps);
             this->input.enable_stats("READ-INSTR (ns)");
         }
 

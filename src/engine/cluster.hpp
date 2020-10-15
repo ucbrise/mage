@@ -30,8 +30,8 @@
 #include <thread>
 #include <vector>
 #include "addr.hpp"
+#include "util/config.hpp"
 #include "util/filebuffer.hpp"
-#include "util/resourceset.hpp"
 #include "util/userpipe.hpp"
 
 namespace mage::engine {
@@ -115,7 +115,7 @@ namespace mage::engine {
         WorkerID get_self() const;
         WorkerID get_num_workers() const;
 
-        std::string establish(const util::ResourceSet::Party& party);
+        std::string establish(const util::ConfigValue& party);
 
         MessageChannel* contact_worker(WorkerID worker_id) {
             if (worker_id == this->self_id || worker_id >= this->channels.size()) {

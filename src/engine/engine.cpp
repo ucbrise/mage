@@ -26,6 +26,7 @@
 #include <cstdlib>
 #include <libaio.h>
 #include <chrono>
+#include <string>
 #include "addr.hpp"
 #include "instruction.hpp"
 #include "opcode.hpp"
@@ -35,14 +36,8 @@
 
 namespace mage::engine {
     template <typename ProtEngine>
-    void Engine<ProtEngine>::init(const util::ResourceSet::Worker& worker, PageShift shift, std::uint64_t num_pages, std::uint64_t swap_pages, std::uint32_t concurrent_swaps) {
+    void Engine<ProtEngine>::init(const std::string& storage_file, PageShift shift, std::uint64_t num_pages, std::uint64_t swap_pages, std::uint32_t concurrent_swaps) {
         assert(this->memory == nullptr);
-
-        if (!worker.storage_path.has_value()) {
-            std::cerr << "No storage path is specified for this worker" << std::endl;
-            std::abort();
-        }
-        const std::string& storage_file = *worker.storage_path;
 
         if (io_setup(concurrent_swaps, &this->aio_ctx) != 0) {
             std::perror("io_setup");

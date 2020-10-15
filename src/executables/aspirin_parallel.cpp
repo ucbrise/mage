@@ -34,7 +34,7 @@
 #include "memprog/replacement.hpp"
 #include "memprog/scheduling.hpp"
 #include "programfile.hpp"
-#include "util/resourceset.hpp"
+#include "util/config.hpp"
 
 using mage::BitWidth;
 using mage::WorkerID;
@@ -164,30 +164,13 @@ int main(int argc, char** argv) {
     WorkerID num_workers = 1;
     std::string filename = "aspirin_";
     if (argc == 5) {
-        mage::util::ResourceSet rs;
-        std::string err = rs.from_yaml_file(argv[1]);
-        if (!err.empty()) {
-            std::cerr << err << std::endl;
-            return 1;
-        }
+        mage::util::Configuration c(argv[1]);
 
-        const mage::util::ResourceSet::Party* p;
-        if (std::strcmp(argv[2], "garbler") == 0) {
-            if (!rs.garbler.has_value()) {
-                std::cerr << "No garbler information specified in config file" << std::endl;
-                return 1;
-            }
-            p = &(*rs.garbler);
-        } else if (std::strcmp(argv[2], "evaluator") == 0) {
-            if (!rs.evaluator.has_value()) {
-                std::cerr << "No evaluator information specified in config file" << std::endl;
-                return 1;
-            }
-            p = &(*rs.evaluator);
-        } else {
+        if (std::strcmp(argv[2], "garbler") != 0 && std::strcmp(argv[2], "evaluator") != 0) {
             std::cerr << "Second argument (" << argv[2] << ") is neither garbler not evaluator" << std::endl;
             return 1;
         }
+        const mage::util::ConfigValue& p = c[argv[2]];
 
         errno = 0;
         index = std::strtoull(argv[3], nullptr, 10);
@@ -196,21 +179,10 @@ int main(int argc, char** argv) {
             return 1;
         }
 
-        num_workers = p->workers.size();
-        if (index >= num_workers) {
-            std::cerr << "No worker specified in " << argv[1] << " at index " << index << std::endl;
-            return 1;
-        }
-
-        const mage::util::ResourceSet::Worker& w = p->workers[index];
-        try {
-            page_shift = w.page_shift.value();
-            max_in_flight = w.max_in_flight_swaps.value();
-            num_pages = w.num_available_pages.value();
-        } catch (const std::bad_optional_access& boa) {
-            std::cerr << "Required memory info not available for " << argv[2] << " worker #" << argv[3] << std::endl;
-            return 1;
-        }
+        const mage::util::ConfigValue& w = p["workers"][index];
+        page_shift = w["page_shift"].as_int();
+        max_in_flight = w["max_in_flight_swaps"].as_int();
+        num_pages = w["num_available_pages"].as_int();
 
         errno = 0;
         input_size_per_party = std::strtoull(argv[4], nullptr, 10);

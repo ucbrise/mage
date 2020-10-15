@@ -19,9 +19,9 @@ How to Run
 
 To run the Aspirin Count problem, first create a `config.yaml` file. Here is an example of one that should work:
 ```
-default_num_available_pages: 1024
-default_max_in_flight_swaps: 256
-default_page_shift: 12
+num_available_pages: 1024
+max_in_flight_swaps: 256
+page_shift: 12
 
 garbler:
     workers:

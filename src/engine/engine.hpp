@@ -52,7 +52,7 @@ namespace mage::engine {
 
         virtual ~Engine();
 
-        void init(const util::ResourceSet::Worker& worker, PageShift shift, std::uint64_t num_pages, std::uint64_t swap_pages, std::uint32_t concurrent_swaps);
+        void init(const std::string& storage_file, PageShift shift, std::uint64_t num_pages, std::uint64_t swap_pages, std::uint32_t concurrent_swaps);
 
         std::size_t execute_instruction(const PackedPhysInstruction& phys);
         void wait_for_finish_swap(PhysPageNumber ppn);

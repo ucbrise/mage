@@ -35,6 +35,7 @@
 #include "engine/cluster.hpp"
 #include "platform/filesystem.hpp"
 #include "platform/network.hpp"
+#include "util/config.hpp"
 #include "util/filebuffer.hpp"
 #include "util/userpipe.hpp"
 
@@ -95,15 +96,15 @@ namespace mage::engine {
         return this->channels.size();
     }
 
-    std::string ClusterNetwork::establish(const util::ResourceSet::Party& party) {
-        WorkerID num_workers = party.workers.size();
+    std::string ClusterNetwork::establish(const util::ConfigValue& party) {
+        WorkerID num_workers = party["workers"].get_size();
         if (this->self_id >= num_workers) {
             return "Self index is " + std::to_string(this->self_id) + " but num_workers is " + std::to_string(num_workers);
         }
 
         for (WorkerID i = 0; i != num_workers; i++) {
-            const util::ResourceSet::Worker& worker = party.workers[i];
-            if (!worker.internal_host.has_value() || !worker.internal_port.has_value()) {
+            const util::ConfigValue& worker = party["workers"][i];
+            if (worker.get("internal_host") == nullptr || worker.get("internal_port") == nullptr) {
                 return "Insufficient internal network information for worker " + std::to_string(i);
             }
         }
@@ -122,10 +123,10 @@ namespace mage::engine {
         connectors.resize(self_id);
         for (WorkerID j = 0; j != self_id; j++) {
             connectors[j] = std::thread([&](WorkerID i) {
-                const util::ResourceSet::Worker& worker = party.workers[i];
+                const util::ConfigValue& worker = party["workers"][i];
                 for (std::uint32_t k = 0; k != ClusterNetwork::max_connection_tries; k++) {
                     platform::NetworkError err;
-                    platform::network_connect(worker.internal_host->c_str(), worker.internal_port->c_str(), &fds[i], &err);
+                    platform::network_connect(worker["internal_host"].as_string().c_str(), worker["internal_port"].as_string().c_str(), &fds[i], &err);
                     if (err == platform::NetworkError::Success) {
                         platform::write_to_file(fds[i], &self_id, sizeof(self_id));
                         success[i] = true;
@@ -153,7 +154,7 @@ namespace mage::engine {
          * specified in the configuration file.
          */
         if (remaining != 0) {
-            platform::network_accept(party.workers[this->self_id].internal_port->c_str(), accept_fds.data(), remaining);
+            platform::network_accept(party["workers"][this->self_id]["internal_port"].as_string().c_str(), accept_fds.data(), remaining);
             for (WorkerID i = 0; i != remaining; i++) {
                 WorkerID from;
                 platform::read_from_file(accept_fds[i], &from, sizeof(from));

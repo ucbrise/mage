@@ -29,6 +29,7 @@
 #include "engine/halfgates.hpp"
 #include "engine/plaintext.hpp"
 #include "platform/network.hpp"
+#include "util/config.hpp"
 #include "util/resourceset.hpp"
 
 using namespace mage;
@@ -41,12 +42,7 @@ int main(int argc, char** argv) {
 
     /* Parse the config.yaml file. */
 
-    util::ResourceSet rs;
-    std::string err = rs.from_yaml_file(argv[1]);
-    if (!err.empty()) {
-        std::cerr << err << std::endl;
-        return 1;
-    }
+    util::Configuration c(argv[1]);
 
     /* Parse the worker ID. */
 
@@ -56,20 +52,20 @@ int main(int argc, char** argv) {
 
     /* Validate the config.yaml file for running the computation. */
 
-    if (!rs.garbler.has_value()) {
+    if (c.get("garbler") == nullptr) {
         std::cerr << "Garbler not present in configuration file" << std::endl;
         return 1;
     }
-    if (!rs.evaluator.has_value()) {
+    if (c.get("evaluator") == nullptr) {
         std::cerr << "Evaluator not present in configuration file" << std::endl;
         return 1;
     }
-    if (rs.garbler->workers.size() != rs.evaluator->workers.size()) {
-        std::cerr << "Garbler has " << rs.garbler->workers.size() << " workers but evaluator has " << rs.evaluator->workers.size() << " workers --- must be equal" << std::endl;
+    if (c["garbler"]["workers"].get_size() != c["evaluator"]["workers"].get_size()) {
+        std::cerr << "Garbler has " << c["garbler"]["workers"].get_size() << " workers but evaluator has " << c["evaluator"]["workers"].get_size() << " workers --- must be equal" << std::endl;
         return 1;
     }
-    if (self_id >= rs.garbler->workers.size()) {
-        std::cerr << "Worker index is " << self_id << " but only " << rs.garbler->workers.size() << " workers are specified" << std::endl;
+    if (self_id >= c["garbler"]["workers"].get_size()) {
+        std::cerr << "Worker index is " << self_id << " but only " << c["garbler"]["workers"].get_size() << " workers are specified" << std::endl;
         return 1;
     }
 
@@ -77,20 +73,20 @@ int main(int argc, char** argv) {
 
     bool plaintext = false;
     bool garble = false;
-    util::ResourceSet::Party* party;
-    util::ResourceSet::Party* other_party;
+    const util::ConfigValue* party;
+    const util::ConfigValue* other_party;
     if (std::strcmp(argv[2], "garble") == 0) {
         garble = true;
-        party = &(*rs.garbler);
-        other_party = &(*rs.evaluator);
+        party = &c["garbler"];
+        other_party = &c["evaluator"];
     } else if (std::strcmp(argv[2], "evaluate") == 0) {
         garble = false;
-        party = &(*rs.evaluator);
-        other_party = &(*rs.garbler);
+        party = &c["evaluator"];
+        other_party = &c["garbler"];
     } else if (std::strcmp(argv[2], "plaintext") == 0) {
         plaintext = true;
-        party = &(*rs.garbler);
-        other_party = &(*rs.evaluator);
+        party = &c["garbler"];
+        other_party = &c["evaluator"];
     } else {
         std::cerr << "Third argument must be \"garble\" or \"evaluate\"" << std::endl;
         return 1;
@@ -115,7 +111,7 @@ int main(int argc, char** argv) {
     output_file.append(".output");
 
     auto cluster = std::make_shared<mage::engine::ClusterNetwork>(self_id);
-    err = cluster->establish(*party);
+    std::string err = cluster->establish(*party);
     if (!err.empty()) {
         std::cerr << err << std::endl;
         std::abort();
@@ -127,7 +123,7 @@ int main(int argc, char** argv) {
     if (plaintext) {
         engine::PlaintextEvaluationEngine p(garbler_input_file.c_str(), evaluator_input_file.c_str(), output_file.c_str());
         start = std::chrono::steady_clock::now();
-        engine::SingleCoreEngine executor(cluster, party->workers[self_id], p, prog_file.c_str());
+        engine::SingleCoreEngine executor(cluster, (*party)["workers"][self_id], p, prog_file.c_str());
         executor.execute_program();
         end = std::chrono::steady_clock::now();
         std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
@@ -138,25 +134,25 @@ int main(int argc, char** argv) {
     /* Perform the computation. */
 
     if (garble) {
-        util::ResourceSet::Worker& opposite_worker = other_party->workers[self_id];
-        if (!opposite_worker.external_host.has_value() || !opposite_worker.external_port.has_value()) {
+        const util::ConfigValue& opposite_worker = (*other_party)["workers"][self_id];
+        if (opposite_worker.get("external_host") == nullptr || opposite_worker.get("external_port") == nullptr) {
             std::cerr << "Opposite party's external network information is not specified" << std::endl;
             return 1;
         }
 
-        engine::HalfGatesGarblingEngine p(cluster, garbler_input_file.c_str(), output_file.c_str(), opposite_worker.external_host->c_str(), opposite_worker.external_port->c_str());
-        engine::SingleCoreEngine executor(cluster, party->workers[self_id], p, prog_file.c_str());
+        engine::HalfGatesGarblingEngine p(cluster, garbler_input_file.c_str(), output_file.c_str(), opposite_worker["external_host"].as_string().c_str(), opposite_worker["external_port"].as_string().c_str());
+        engine::SingleCoreEngine executor(cluster, (*party)["workers"][self_id], p, prog_file.c_str());
         start = std::chrono::steady_clock::now();
         executor.execute_program();
     } else {
-        util::ResourceSet::Worker& worker = party->workers[self_id];
-        if (!worker.external_host.has_value() || !worker.external_port.has_value()) {
+        const util::ConfigValue& worker = (*party)["workers"][self_id];
+        if (worker.get("external_host") == nullptr || worker.get("external_port") == nullptr) {
             std::cerr << "This party's external network information is not specified" << std::endl;
             return 1;
         }
 
-        engine::HalfGatesEvaluationEngine p(evaluator_input_file.c_str(), worker.external_port->c_str());
-        engine::SingleCoreEngine executor(cluster, party->workers[self_id], p, prog_file.c_str());
+        engine::HalfGatesEvaluationEngine p(evaluator_input_file.c_str(), worker["external_port"].as_string().c_str());
+        engine::SingleCoreEngine executor(cluster, (*party)["workers"][self_id], p, prog_file.c_str());
         start = std::chrono::steady_clock::now();
         executor.execute_program();
     }
