@@ -29,10 +29,7 @@
 #include "dsl/integer.hpp"
 #include "dsl/parallel.hpp"
 #include "dsl/sort.hpp"
-#include "memprog/annotation.hpp"
-#include "memprog/program.hpp"
-#include "memprog/replacement.hpp"
-#include "memprog/scheduling.hpp"
+#include "memprog/pipeline.hpp"
 #include "programfile.hpp"
 #include "util/config.hpp"
 
@@ -150,116 +147,54 @@ void test_sorter(mage::WorkerID index, mage::WorkerID num_workers) {
     });
 }
 
-std::uint8_t page_shift = 12; // 64 KiB
-std::uint64_t num_pages = 1 << 10;
-std::uint64_t max_in_flight = 256;
-// std::uint64_t num_pages = 65536 * 3;
-
-// About 27 GiB
-// std::uint64_t num_pages = 1769472;
-
 int main(int argc, char** argv) {
     int input_size_per_party;
     WorkerID index = 0;
     WorkerID num_workers = 1;
-    std::string filename = "aspirin_";
-    if (argc == 5) {
-        mage::util::Configuration c(argv[1]);
-
-        if (std::strcmp(argv[2], "garbler") != 0 && std::strcmp(argv[2], "evaluator") != 0) {
-            std::cerr << "Second argument (" << argv[2] << ") is neither garbler not evaluator" << std::endl;
-            return 1;
-        }
-        const mage::util::ConfigValue& p = c[argv[2]];
-
-        errno = 0;
-        index = std::strtoull(argv[3], nullptr, 10);
-        if (errno != 0) {
-            std::perror("Third argument (index)");
-            return 1;
-        }
-
-        const mage::util::ConfigValue& w = p["workers"][index];
-        page_shift = w["page_shift"].as_int();
-        max_in_flight = w["max_in_flight_swaps"].as_int();
-        num_pages = w["num_available_pages"].as_int();
-
-        errno = 0;
-        input_size_per_party = std::strtoull(argv[4], nullptr, 10);
-        if (errno != 0 || input_size_per_party == 0) {
-            std::cerr << "Bad fourth argument (input size)" << std::endl;
-            return 1;
-        }
-    } else if (argc == 2) {
-        errno = 0;
-        input_size_per_party = std::strtoull(argv[1], nullptr, 10);
-        if (errno != 0 || input_size_per_party == 0) {
-            std::cerr << "Bad second argument (input size)" << std::endl;
-            return 1;
-        }
-    } else {
+    std::string problem_name = "aspirin_";
+    if (argc != 5) {
         std::cerr << "Usage: " << argv[0] << " [config.yaml garbler/evaluator index] input_size_per_party" << std::endl;
         return 1;
     }
-    filename.append(std::to_string(input_size_per_party));
-    filename.append("_");
-    filename.append(std::to_string(index));
 
-    std::string program_filename = filename;
-    program_filename.append(".prog");
+    mage::util::Configuration c(argv[1]);
 
-    auto program_start = std::chrono::steady_clock::now();
-    {
-        mage::memprog::DefaultProgram program(program_filename, page_shift);
-        p = &program;
+    if (std::strcmp(argv[2], "garbler") != 0 && std::strcmp(argv[2], "evaluator") != 0) {
+        std::cerr << "Second argument (" << argv[2] << ") is neither garbler not evaluator" << std::endl;
+        return 1;
+    }
+
+    errno = 0;
+    index = std::strtoull(argv[3], nullptr, 10);
+    if (errno != 0) {
+        std::perror("Third argument (index)");
+        return 1;
+    }
+
+    const mage::util::ConfigValue& w = c[argv[2]]["workers"][index];
+
+    errno = 0;
+    input_size_per_party = std::strtoull(argv[4], nullptr, 10);
+    if (errno != 0 || input_size_per_party == 0) {
+        std::cerr << "Bad fourth argument (input size)" << std::endl;
+        return 1;
+    }
+    problem_name.append(std::to_string(input_size_per_party));
+    problem_name.append("_");
+    problem_name.append(std::to_string(index));
+
+    mage::memprog::DefaultPipeline planner(problem_name, w);
+    planner.set_verbose(true);
+    planner.plan(&p, [=]() {
         create_parallel_aspirin_circuit(index, num_workers, input_size_per_party);
-        p = nullptr;
-        std::cout << "Created program with " << program.num_instructions() << " instructions" << std::endl;
-    }
-    auto program_end = std::chrono::steady_clock::now();
-
-    auto replacement_start = std::chrono::steady_clock::now();
-    std::string ann_filename = filename;
-    ann_filename.append(".ann");
-    mage::memprog::annotate_program(ann_filename, program_filename, page_shift);
-    std::cout << "Computed annotations" << std::endl;
-
-    std::string repprog_filename = filename;
-    repprog_filename.append(".repprog");
-    {
-        mage::memprog::BeladyAllocator allocator(repprog_filename, program_filename, ann_filename, num_pages, page_shift);
-        allocator.allocate();
-        std::cout << "Finished replacement stage: " << allocator.get_num_swapouts() << " swapouts, " << allocator.get_num_swapins() << " swapins" << std::endl;
-    }
-    auto replacement_end = std::chrono::steady_clock::now();
-
-    auto scheduling_start = std::chrono::steady_clock::now();
-
-    // {
-    //     std::string memprog_filename = filename;
-    //     memprog_filename.append(".memprog");
-    //     mage::memprog::NOPScheduler scheduler(repprog_filename, memprog_filename);
-    //     scheduler.schedule();
-    //     std::cout << "Finished scheduling swaps" << std::endl;
-    // }
-
-    {
-        std::string memprog_filename = filename;
-        memprog_filename.append(".memprog");
-        mage::memprog::BackdatingScheduler scheduler(repprog_filename, memprog_filename, 10000, max_in_flight);
-        scheduler.schedule();
-        std::cout << "Finished scheduling swaps: " << scheduler.get_num_allocation_failures() << " allocation failures, " << scheduler.get_num_synchronous_swapins() << " synchronous swapins" << std::endl;
-    }
-
-    auto scheduling_end = std::chrono::steady_clock::now();
+    });
 
     std::cout << std::endl;
 
-    std::cout << "Phase Times (ms): ";
-    std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(program_end - program_start).count() << " ";
-    std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(replacement_end - replacement_start).count() << " ";
-    std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(scheduling_end - scheduling_start).count();
-    std::cout << std::endl;
+    const mage::memprog::DefaultPipelineStats& stats = planner.get_stats();
+
+    std::cout << "Phase Times (ms): " << stats.placement_duration.count() << " "
+        << stats.replacement_duration.count() << " " << stats.scheduling_duration.count() << std::endl;
 
     return 0;
 }

@@ -32,6 +32,13 @@
 #include "util/prioqueue.hpp"
 
 namespace mage::memprog {
+    class Placer {
+    public:
+        virtual VirtAddr allocate_virtual(BitWidth width, bool& fresh_page) = 0;
+        virtual void deallocate_virtual(VirtAddr addr, BitWidth width) = 0;
+        virtual VirtPageNumber get_num_pages() const = 0;
+    };
+
     class SimplePlacer {
     public:
         SimplePlacer(PageShift shift) : next_free_address(0), page_shift(shift) {
