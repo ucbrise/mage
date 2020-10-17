@@ -40,9 +40,9 @@ evaluator:
           external_port: 54324
           storage_path: evaluator_swapfile_1
 ```
-The internal host/port won't matter on a single machine (which is the only stable part for now). A page shift of 12 corresponds to 64 KiB pages, so this config will ask MAGE to run the program within 64 MiB of memory.
+The internal host/port won't matter on a single machine. A page shift of 12 corresponds to 64 KiB pages, so this config will ask MAGE to run the program within 64 MiB of memory.
 
-As a quick check that everything works correctly, run `./aspirin ../config.yaml garbler 0 128` and `./aspirin_input 128`. Here, 128 is the size of the program. You can increase it for a larger computation, but it should be a power of 2 (the code isn't written to work with anything else). Then run, in two separate terminal windows:
+As a quick check that everything works correctly, run `./planner aspirin ../config.yaml garbler 0 128` and `./aspirin_input 128`. Here, 128 is the size of the program. You can increase it for a larger computation, but it should be a power of 2 (the code isn't written to work with anything else). Then run, in two separate terminal windows:
 `./mage ../config.yaml evaluate 0 aspirin_128`
 `./mage ../config.yaml garble 0 aspirin_128`
 Make sure to start the evaluator first. If you hexdump the output file, you should see `0xff`.
