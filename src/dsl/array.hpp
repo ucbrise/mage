@@ -145,9 +145,9 @@ namespace mage::dsl {
         }
 
         void switch_layout(Layout to) {
-            if (this->layout == Layout::Cyclic && to == Layout::Blocked) {
-                auto [my_cyclic_base, my_cyclic_stride] = this->get_global_base_and_stride(this->self_id, Layout::Cyclic);
-                auto [my_blocked_base, my_blocked_stride] = this->get_global_base_and_stride(this->self_id, Layout::Blocked);
+            if ((this->layout == Layout::Cyclic && to == Layout::Blocked) || (this->layout == Layout::Blocked && to == Layout::Cyclic)) {
+                auto [my_current_base, my_current_stride] = this->get_global_base_and_stride(this->self_id, this->layout);
+                auto [my_target_base, my_target_stride] = this->get_global_base_and_stride(this->self_id, to);
                 std::size_t my_length = this->get_local_size(this->self_id);
                 if (my_length == 0) {
                     return;
@@ -161,29 +161,32 @@ namespace mage::dsl {
                     {
                         i = (this->self_id + j) % this->num_proc;
                         /* Send to Worker i everything that is relevant to that worker. */
-                        auto [i_blocked_base, i_blocked_stride] = this->get_global_base_and_stride(i, Layout::Blocked);
+                        auto [i_target_base, i_target_stride] = this->get_global_base_and_stride(i, to);
                         std::size_t i_length = this->get_local_size(i);
 
-                        /*
-                         * base + local_index * stride = global_index
-                         * So local_index = (global_index - base / stride);
-                         */
-                        std::int64_t local_start = util::ceil_div(i_blocked_base - my_cyclic_base, my_cyclic_stride).first;
-                        std::int64_t local_end = util::floor_div((i_blocked_base + i_length - 1) - my_cyclic_base, my_cyclic_stride).first;
-
-                        send_start = local_start;
-                        send_end = local_end;
-                        send_stride = 1;
+                        if (this->layout == Layout::Cyclic && to == Layout::Blocked) {
+                            send_start = util::ceil_div(i_target_base - my_current_base, my_current_stride).first;
+                            send_end = util::floor_div((i_target_base + (i_length - 1)) - my_current_base, my_current_stride).first;
+                        } else {
+                            send_start = util::floor_div(i_target_base - my_current_base, my_target_stride).second;
+                            send_end = my_length - 1;
+                        }
+                        send_stride = i_target_stride;
                     }
                     {
                         k = (this->self_id - j + this->num_proc) % this->num_proc;
                         /* Receive from Worker k. */
-                        auto [k_cyclic_base, k_cyclic_stride] = this->get_global_base_and_stride(k, Layout::Cyclic);
-                        std::size_t start_offset = util::floor_div(k_cyclic_base - my_blocked_base, k_cyclic_stride).second;
+                        auto [k_current_base, k_current_stride] = this->get_global_base_and_stride(k, this->layout);
+                        std::size_t k_length = this->get_local_size(k);
 
-                        recv_start = start_offset;
-                        recv_end = my_length - 1;
-                        recv_stride = k_cyclic_stride;
+                        if (this->layout == Layout::Cyclic && to == Layout::Blocked) {
+                            recv_start = util::floor_div(k_current_base - my_target_base, k_current_stride).second;
+                            recv_end = my_length - 1;
+                        } else {
+                            recv_start = util::ceil_div(k_current_base - my_target_base, my_target_stride).first;
+                            recv_end = util::floor_div((k_current_base + (k_length - 1) * k_current_stride) - my_target_base, my_target_stride).first;
+                        }
+                        recv_stride = k_current_stride;
                     }
 
                     std::int64_t s = send_start;
@@ -205,23 +208,29 @@ namespace mage::dsl {
                 }
                 {
                     /* Shuffle the elements that need to be kept locally. */
-                    std::size_t from_start = util::ceil_div(my_blocked_base - my_cyclic_base, my_cyclic_stride).first;
-                    // std::size_t from_end = util::floor_div((my_blocked_base + my_length - 1) - my_cyclic_base, my_cyclic_stride).first;
-                    std::size_t to_start = util::floor_div(my_cyclic_base - my_blocked_base, my_cyclic_stride).second;
-                    for (std::size_t to = to_start, from = from_start; to < my_length; (to += my_cyclic_stride), from++) {
+                    std::size_t from_start;
+                    std::size_t to_start;
+                    if (this->layout == Layout::Cyclic && to == Layout::Blocked) {
+                        from_start = util::ceil_div(my_target_base - my_current_base, my_current_stride).first;
+                        to_start = util::floor_div(my_current_base - my_target_base, my_current_stride).second;
+                    } else {
+                        from_start = util::floor_div(my_target_base - my_current_base, my_target_stride).second;
+                        to_start = util::ceil_div(my_current_base - my_target_base, my_target_stride).first;
+                    }
+                    for (std::size_t to = to_start, from = from_start; to < my_length && from < my_length; (to += my_current_stride), (from += my_target_stride)) {
                         // std::cout << "Shuffling " << from << " -> " << to << std::endl;
                         array[to] = std::move(this->local_array[from]);
                     }
                 }
                 this->local_array = std::move(array);
-                this->layout = Layout::Blocked;
+                this->layout = to;
 
                 for (WorkerID k = 0; k != this->num_proc; k++) {
                     if (k != this->self_id) {
                         T::finish_receive(k);
                     }
                 }
-            } else {
+            } else if (this->layout != to) {
                 this->operation_panic("cannot switch layout");
             }
         }
