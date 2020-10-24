@@ -31,6 +31,19 @@ namespace mage::util {
         return (number & (number - 1)) == 0;
     }
 
+    static inline std::uint8_t hamming_weight(std::uint64_t number) {
+        std::uint8_t weight = 0;
+        while (number != 0) {
+            weight += (number & 0x1);
+            number >>= 1;
+        }
+        return weight;
+    }
+
+    static inline bool hamming_parity(std::uint64_t number) {
+        return (hamming_weight(number) & 0x1) != 0x0;
+    }
+
     static inline std::uint8_t log_base_2(std::uint64_t number) {
         std::uint8_t logarithm = 0;
         while ((UINT64_C(1) << logarithm) < number) {

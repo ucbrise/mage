@@ -43,22 +43,22 @@ namespace mage::programs::merge_sorted {
         });
 
         // Verify that inputs are sorted
-        Bit local_order(1);
-        inputs.for_each_pair([&](std::size_t i, auto& first, auto& second) {
-            if (i < args.problem_size - 1) {
-                Bit lte = first.get_key() <= second.get_key();
-                local_order = local_order & lte;
-            } else if (i >= args.problem_size) {
-                Bit gte = first.get_key() >= second.get_key();
-                local_order = local_order & gte;
-            }
-        });
-        std::optional<Bit> order = utils.reduce_aggregates<Bit>(0, local_order, [](Bit& first, Bit& second) -> Bit {
-            return first & second;
-        });
-        if (args.worker_index == 0) {
-            order.value().mark_output();
-        }
+        // Bit local_order(1);
+        // inputs.for_each_pair([&](std::size_t i, auto& first, auto& second) {
+        //     if (i < args.problem_size - 1) {
+        //         Bit lte = first.get_key() <= second.get_key();
+        //         local_order = local_order & lte;
+        //     } else if (i >= args.problem_size) {
+        //         Bit gte = first.get_key() >= second.get_key();
+        //         local_order = local_order & gte;
+        //     }
+        // });
+        // std::optional<Bit> order = utils.reduce_aggregates<Bit>(0, local_order, [](Bit& first, Bit& second) -> Bit {
+        //     return first & second;
+        // });
+        // if (args.worker_index == 0) {
+        //     order.value().mark_output();
+        // }
 
         // Sort inputs and switch to blocked layout
         mage::dsl::parallel_bitonic_sorter(inputs);

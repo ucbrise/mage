@@ -22,6 +22,7 @@
 #include <cstdint>
 #include <iostream>
 #include <memory>
+#include <random>
 #include <string>
 #include <vector>
 #include "util/binaryfile.hpp"
@@ -49,13 +50,18 @@ void write_record(mage::util::BinaryFileWriter* to, std::uint32_t key, std::uint
 }
 
 int main(int argc, char** argv) {
-    if (argc != 4) {
-        std::cout << "Usage: " << argv[0] << " problem_name problem_size num_workers" << std::endl;
+    if (argc != 4 && argc != 5) {
+        std::cout << "Usage: " << argv[0] << " problem_name problem_size num_workers [option]" << std::endl;
         return 0;
     }
     std::string problem_name(argv[1]);
     int input_size = std::stoi(std::string(argv[2]));
     int num_workers = std::stoi(std::string(argv[3]));
+
+    std::string option;
+    if (argc == 5) {
+        option = argv[4];
+    }
 
     std::vector<std::unique_ptr<mage::util::BinaryFileWriter>> garbler_writers(num_workers);
     std::vector<std::unique_ptr<mage::util::BinaryFileWriter>> evaluator_writers(num_workers);
@@ -96,6 +102,38 @@ int main(int argc, char** argv) {
                 write_record(evaluator_writers[cyclic_party].get(), 2 * (2 * input_size - i - 1) + 1);
             }
             write_record(expected_writers[blocked_party].get(), i);
+        }
+    } else if (problem_name == "full_sort") {
+        if (option == "") {
+            for (std::uint64_t i = 0; i != input_size * 2; i++) {
+                std::uint64_t cyclic_party = get_cyclic_party(i, num_workers, input_size * 2);
+                std::uint64_t blocked_party = get_blocked_party(i, num_workers, input_size * 2);
+                if (i < input_size) {
+                    write_record(garbler_writers[cyclic_party].get(), 2 * i);
+                } else {
+                    write_record(evaluator_writers[cyclic_party].get(), 2 * (2 * input_size - i - 1) + 1);
+                }
+                write_record(expected_writers[blocked_party].get(), i);
+            }
+        } else if (option == "random") {
+            std::vector<std::uint32_t> sorted(2 * input_size);
+            for (std::uint64_t i = 0; i != sorted.size(); i++) {
+                sorted[i] = static_cast<std::uint32_t>(i);
+            }
+            std::vector<std::uint32_t> array(sorted);
+            std::random_shuffle(array.begin(), array.end());
+            for (std::uint64_t i = 0; i != input_size * 2; i++) {
+                std::uint64_t cyclic_party = get_cyclic_party(i, num_workers, input_size * 2);
+                std::uint64_t blocked_party = get_blocked_party(i, num_workers, input_size * 2);
+                if (i < input_size) {
+                    write_record(garbler_writers[cyclic_party].get(), array[i]);
+                } else {
+                    write_record(evaluator_writers[cyclic_party].get(), array[i]);
+                }
+                write_record(expected_writers[blocked_party].get(), sorted[i]);
+            }
+        } else {
+            std::cerr << "Unkown option " << option << std::endl;
         }
     } else {
         std::cerr << "Unknown problem " << problem_name << std::endl;

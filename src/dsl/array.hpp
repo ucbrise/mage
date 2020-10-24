@@ -68,6 +68,10 @@ namespace mage::dsl {
             return this->layout;
         }
 
+        WorkerID get_self_id() const {
+            return this->self_id;
+        }
+
         WorkerID get_num_proc() const {
             return this->num_proc;
         }
