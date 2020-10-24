@@ -24,19 +24,11 @@
 #include "dsl/parallel.hpp"
 #include "dsl/sort.hpp"
 #include "programs/registry.hpp"
+#include "programs/util.hpp"
 
 using namespace mage::dsl;
 
 namespace mage::programs::aspirin_seq {
-    template <BitWidth bits>
-    using Integer = mage::dsl::Integer<bits, false, mage::memprog::BinnedPlacer, &RegisteredProgram::program_ptr>;
-
-    template <BitWidth bits>
-    using IntSlice = mage::dsl::Integer<bits, true, mage::memprog::BinnedPlacer, &RegisteredProgram::program_ptr>;
-
-    using Bit = Integer<1>;
-    using BitSlice = IntSlice<1>;
-
     template <BitWidth bits>
     struct Input {
         Integer<bits> patient_id_concat_timestamp;
@@ -73,7 +65,7 @@ namespace mage::programs::aspirin_seq {
     	order.mark_output();
 
         // Merge the two arrays, sorted ascending by patient_id_concat_timestamp
-        mage::dsl::bitonic_sorter(inputs.data(), input_array_length);
+        bitonic_sorter(inputs.data(), input_array_length);
 
         // Now, for each input, check if it and the next input have the same patient, but the first is a diagnosis and the second isn't.
         Integer<result_bits> total(0);

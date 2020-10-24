@@ -24,19 +24,11 @@
 #include "dsl/parallel.hpp"
 #include "dsl/sort.hpp"
 #include "programs/registry.hpp"
+#include "programs/util.hpp"
 
 using namespace mage::dsl;
 
 namespace mage::programs::aspirin {
-    template <BitWidth bits>
-    using Integer = mage::dsl::Integer<bits, false, memprog::BinnedPlacer, &RegisteredProgram::program_ptr>;
-
-    template <BitWidth bits>
-    using IntSlice = mage::dsl::Integer<bits, true, memprog::BinnedPlacer, &RegisteredProgram::program_ptr>;
-
-    using Bit = Integer<1>;
-    using BitSlice = IntSlice<1>;
-
     template <BitWidth bits>
     struct Input {
         Integer<bits> patient_id_concat_timestamp;
@@ -71,7 +63,7 @@ namespace mage::programs::aspirin {
     void create_parallel_aspirin_circuit(const ProgramOptions& args) {
         int input_array_length = args.problem_size * 2;
 
-        mage::dsl::ClusterUtils utils;
+        ClusterUtils utils;
         utils.self_id = args.worker_index;
         utils.num_proc = args.num_workers;
 
@@ -101,7 +93,7 @@ namespace mage::programs::aspirin {
         }
 
         // Sort inputs and switch to blocked layout
-        mage::dsl::parallel_bitonic_sorter(inputs);
+        parallel_bitonic_sorter(inputs);
 
         Integer<result_bits> local_total(0);
         inputs.for_each_pair([&local_total](std::size_t index, Input<patient_id_bits + timestamp_bits>& first, Input<patient_id_bits + timestamp_bits>& second) {

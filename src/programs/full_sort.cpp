@@ -33,7 +33,7 @@ namespace mage::programs::merge_sorted {
     void create_full_sort_circuit(const ProgramOptions& args) {
         int input_array_length = args.problem_size * 2;
 
-        mage::dsl::ClusterUtils utils;
+        ClusterUtils utils;
         utils.self_id = args.worker_index;
         utils.num_proc = args.num_workers;
 

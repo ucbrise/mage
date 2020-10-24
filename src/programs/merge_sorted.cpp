@@ -33,7 +33,7 @@ namespace mage::programs::merge_sorted {
     void create_merge_sorted_circuit(const ProgramOptions& args) {
         int input_array_length = args.problem_size * 2;
 
-        mage::dsl::ClusterUtils utils;
+        ClusterUtils utils;
         utils.self_id = args.worker_index;
         utils.num_proc = args.num_workers;
 
@@ -42,26 +42,17 @@ namespace mage::programs::merge_sorted {
             input.data.mark_input(i < args.problem_size ? Party::Garbler : Party::Evaluator);
         });
 
-        // Verify that inputs are sorted
-        // Bit local_order(1);
-        // inputs.for_each_pair([&](std::size_t i, auto& first, auto& second) {
-        //     if (i < args.problem_size - 1) {
-        //         Bit lte = first.get_key() <= second.get_key();
-        //         local_order = local_order & lte;
-        //     } else if (i >= args.problem_size) {
-        //         Bit gte = first.get_key() >= second.get_key();
-        //         local_order = local_order & gte;
-        //     }
-        // });
-        // std::optional<Bit> order = utils.reduce_aggregates<Bit>(0, local_order, [](Bit& first, Bit& second) -> Bit {
-        //     return first & second;
-        // });
-        // if (args.worker_index == 0) {
-        //     order.value().mark_output();
-        // }
+        /*
+         * For malicious MPC, we would want to check that the input is sorted
+         * as we would expect --- ascending for the first half, then
+         * descending, so that the concatenation is a bitonic sequence. The
+         * aspirin count circuit does this, but I'm skipping it here in order
+         * to isolate the cost of merging the two sorted lists. (It also isn't
+         * necessary for semi-honest MPC.)
+         */
 
         // Sort inputs and switch to blocked layout
-        mage::dsl::parallel_bitonic_sorter(inputs);
+        parallel_bitonic_sorter(inputs);
 
         // Output sorted list
         inputs.for_each([=](std::size_t i, auto& input) {

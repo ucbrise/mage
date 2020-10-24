@@ -56,6 +56,19 @@ namespace mage::dsl {
         bitonic_sorter<T>(array + half_length, half_length, increasing, max_depth - 1);
     }
 
+    /*
+     * Modified version of SORTER[length] network (see Algorithms by CLR,
+     * Section 28.5). Unlike the MERGER circuit, which modifies the first
+     * half-cleaner to effectively reverse the second half of the input, we
+     * "flip" the recursive SORTER[length/2] circuit that produces the second
+     * half of the MERGER's input to sort in the opposite direction. This
+     * allows us to just use the BITONIC-SORTER circuit to merge the two sorted
+     * arrays. This creates a more regular structure for the circuit. The "Fast
+     * Parallel Sorting under LogP" paper uses this same trick, allowing for a
+     * simpler communication schedule. That isn't important for this function,
+     * but it is important for parallel_sorter, because we use the
+     * communication schedule suggested in that paper.
+     */
     template <typename T>
     void sorter(T* array, std::uint64_t length, bool increasing = true) {
         assert(util::is_power_of_two(length));
@@ -88,9 +101,9 @@ namespace mage::dsl {
 
     /*
      * Unlike the sorter() function, we can't implement this recursively
-     * because we would want the communication barrier to be shared by both
+     * because the all-to-all communication phase to be shared by both of the
      * recursive parallel_sorter circuits; simply making a recursive call would
-     * result in each recursive call having its own all-to-all phases.
+     * result in each recursive call having its own all-to-all phase.
      */
 
     template <typename T>
