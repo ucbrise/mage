@@ -11,11 +11,11 @@ To build MAGE, first install OpenSSL. Also install version 0.63 of the yaml-cpp 
 
 On a Ubuntu install, you can install the dependencies by running `apt install build-essential clang cmake libssl-dev libaio-dev`. Then you have to install the yaml-cpp library, using the `-DYAML_BUILD_SHARED_LIBS=ON` option when running `cmake`.
 
-Once you've done this, you should be able to run `make`. I've tested this on an Ubuntu 16.04 system. You will obtain three executables: `mage`, `aspirin`, and `aspirin_input`.
+Once you've done this, you should be able to run `make`. I've tested this on an Ubuntu 16.04 system. You will obtain three executables: `mage`, `planner`, and `example_input`.
 
 How to Run
 ----------
-`aspirin` produces a memory program for the aspirin count problem. `aspirin_input` produces a file containing the input to the memory program. `mage` executes a memory program using secure multiparty computation.
+`planner` produces a memory program for one of the example programs built-in to the executable. `example_input` produces a file containing the input to a program. `mage` executes a memory program using secure multiparty computation.
 
 To run the Aspirin Count problem, first create a `config.yaml` file. Here is an example of one that should work:
 ```
@@ -42,7 +42,7 @@ evaluator:
 ```
 The internal host/port won't matter on a single machine. A page shift of 12 corresponds to 64 KiB pages, so this config will ask MAGE to run the program within 64 MiB of memory.
 
-As a quick check that everything works correctly, run `./planner aspirin ../config.yaml garbler 0 128` and `./aspirin_input 128`. Here, 128 is the size of the program. You can increase it for a larger computation, but it should be a power of 2 (the code isn't written to work with anything else). Then run, in two separate terminal windows:
+As a quick check that everything works correctly, run `./planner aspirin ../config.yaml garbler 0 128` and `./example_input 128 1`. Here, 128 is the size of the program. You can increase it for a larger computation, but it should be a power of 2 (the code isn't written to work with anything else). Then run, in two separate terminal windows:
 `./mage ../config.yaml evaluate 0 aspirin_128`
 `./mage ../config.yaml garble 0 aspirin_128`
 Make sure to start the evaluator first. If you hexdump the output file, you should see `0xff`.
