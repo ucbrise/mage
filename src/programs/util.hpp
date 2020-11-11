@@ -44,6 +44,10 @@ namespace mage::programs {
             return this->data.template slice<key_width>(0);
         }
 
+        IntSlice<record_width> get_record() {
+            return this->data.template slice<record_width>(key_width);
+        }
+
         static void comparator(Record<key_width, record_width>& arg0, Record<key_width, record_width>& arg1) {
             IntSlice<key_width> key0 = arg0.get_key();
             IntSlice<key_width> key1 = arg1.get_key();

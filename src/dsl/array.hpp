@@ -259,6 +259,10 @@ namespace mage::dsl {
             return std::make_pair(base, stride);
         }
 
+        std::pair<std::int64_t, std::int64_t> get_global_base_and_stride() const {
+            return this->get_global_base_and_stride(this->self_id, this->layout);
+        }
+
         std::size_t get_local_size(WorkerID who) const {
             if (who < num_extras) {
                 return this->num_local_base + 1;
@@ -284,12 +288,12 @@ namespace mage::dsl {
         }
 
     private:
-        void layout_panic() const {
+        [[noreturn]] void layout_panic() const {
             std::cerr << "Unknown layout " << static_cast<std::uint8_t>(this->layout) << std::endl;
             std::abort();
         }
 
-        static void operation_panic(std::string details) {
+        [[noreturn]] static void operation_panic(std::string details) {
             std::cerr << "Unsupported operation: " << details << std::endl;
             std::abort();
         }

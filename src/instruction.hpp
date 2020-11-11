@@ -30,7 +30,7 @@
 #include "opcode.hpp"
 
 namespace mage {
-    using BitWidth = std::uint8_t;
+    using BitWidth = std::uint16_t;
 
     enum InstructionFlags : std::uint8_t {
         FlagInput1Constant = 0x1,

@@ -105,14 +105,21 @@ namespace mage::dsl {
         }
 
         template <bool other_sliced>
-        void mutate(const Integer<bits, other_sliced, Placer, p>& other) const {
+        void mutate(const Integer<bits, other_sliced, Placer, p>& other) {
             Instruction& instr = (*p)->instruction();
             instr.header.operation = OpCode::Copy;
             instr.header.width = bits;
             instr.header.flags = 0;
-            instr.header.output = this->v;
             instr.one_arg.input1 = other.v;
-            (*p)->commit_instruction(0);
+            if (this->valid()) {
+                instr.header.output = this->v;
+                (*p)->commit_instruction(0);
+            } else if constexpr (!sliced) {
+                this->v = (*p)->commit_instruction(bits);
+            } else {
+                std::cerr << "Mutating uninitialized sliced Integer" << std::endl;
+                std::abort();
+            }
         }
 
         void buffer_send(WorkerID to) const {
@@ -252,6 +259,7 @@ namespace mage::dsl {
         template <BitWidth length>
         Integer<length, true, Placer, p> slice(BitWidth start) const {
             assert(start + length <= bits);
+            assert(this->valid());
             return Integer<length, true, Placer, p>(this->v, start);
         }
 
