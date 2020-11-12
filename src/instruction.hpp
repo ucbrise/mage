@@ -444,7 +444,7 @@ namespace mage {
             out << "<" << (int) p.three_args.width << ">(" << p.three_args.output << ", " << p.three_args.input1 << ", " << p.three_args.input2 << ", " << p.three_args.input3 << ")";
             break;
         case InstructionFormat::Constant:
-            out << "(" << p.constant.output << ")";
+            out << "(" << p.constant.output << ", " << p.constant.constant << ")";
             break;
         case InstructionFormat::Swap:
             out << "(" << p.swap.memory << ", " << p.swap.storage << ")";

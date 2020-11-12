@@ -225,7 +225,16 @@ int main(int argc, char** argv) {
                     fail = true;
                 }
             }
-            if (!fail) {
+            if (fail) {
+                std::cerr << "Actual:" << std::endl;
+                for (std::uint64_t i = 0; i != actual.size(); i++) {
+                    std::cerr << actual[i].first << " " << actual[i].second << std::endl;
+                }
+                std::cerr << "Expected:" << std::endl;
+                for (std::uint64_t i = 0; i != expected.size(); i++) {
+                    std::cerr << expected[i].first << " " << expected[i].second << std::endl;
+                }
+            } else {
                 std::cout << "PASS" << std::endl;
             }
         }
