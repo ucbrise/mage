@@ -55,8 +55,8 @@ namespace mage::programs::loop_join {
                 std::size_t result_index = (i * table2.size()) + j;
                 auto& result = joined[result_index];
                 result.valid = predicate(table1[i].get_key(), table2[j].get_key());
-                result.t1_record.data.mutate(table1[i].data);//Integer<t1_record_width>::select(result.valid, table1[i].data, zero1);
-                result.t2_record.data.mutate(table2[j].data);//Integer<t2_record_width>::select(result.valid, table2[j].data, zero2);
+                result.t1_record.data = Integer<t1_record_width>::select(result.valid, table1[i].data, zero1);
+                result.t2_record.data = Integer<t2_record_width>::select(result.valid, table2[j].data, zero2);
             }
         }
 
