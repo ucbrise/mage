@@ -271,6 +271,10 @@ namespace mage::dsl {
             }
         }
 
+        std::size_t get_total_size() const {
+            return this->total_length;
+        }
+
         WorkerID who(std::size_t global_index) const {
             assert(global_index < this->total_length);
             if (this->layout == Layout::Cyclic) {

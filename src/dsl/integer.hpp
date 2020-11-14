@@ -43,6 +43,8 @@ namespace mage::dsl {
         Evaluator = 1,
     };
 
+    /* TODO: reduce placement allocations by overloading on ref-qualifiers? */
+
     template <BitWidth bits, bool sliced, typename Placer, Program<Placer>** p>
     class Integer {
         template <BitWidth other_bits, bool other_sliced, typename OtherPlacer, Program<OtherPlacer>** other_p>
