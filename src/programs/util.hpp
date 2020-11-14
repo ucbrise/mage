@@ -36,6 +36,16 @@ namespace mage::programs {
     using Bit = Integer<1>;
     using BitSlice = IntSlice<1>;
 
+    template <BitWidth width = 8>
+    Integer<2 * width> dot_product(Integer<width>* vector_a, Integer<width>* vector_b, std::size_t length) {
+        assert(length != 0);
+        Integer<2 * width> total = vector_a[0] * vector_b[0];
+        for (std::size_t i = 1; i != length; i++) {
+            total = total + (vector_a[i] * vector_b[i]);
+        }
+        return total;
+    }
+
     template <BitWidth key_width, BitWidth record_width>
     struct Record {
         Integer<record_width> data;

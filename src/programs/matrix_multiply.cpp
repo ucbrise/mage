@@ -30,16 +30,6 @@ using namespace mage::dsl;
 
 namespace mage::programs::matrix_multiply {
     template <BitWidth width = 8>
-    Integer<2 * width> dot_product(Integer<width>* vector_a, Integer<width>* vector_b, std::size_t length) {
-        assert(length != 0);
-        Integer<2 * width> total = vector_a[0] * vector_b[0];
-        for (std::size_t i = 1; i != length; i++) {
-            total = total + (vector_a[i] * vector_b[i]);
-        }
-        return total;
-    }
-
-    template <BitWidth width = 8>
     std::vector<Integer<2 * width>> local_naive_matrix_multiply(Integer<width>* matrix_a, std::size_t num_rows_a, Integer<width>* matrix_b, std::size_t num_cols_b, std::size_t num_cols_a_rows_b) {
         std::vector<Integer<2 * width>> result(num_rows_a * num_cols_b);
         for (std::size_t row_a = 0; row_a != num_rows_a; row_a++) {

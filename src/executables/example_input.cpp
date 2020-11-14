@@ -32,11 +32,11 @@
 #include "util/binaryfile.hpp"
 #include "util/misc.hpp"
 
-static inline std::uint64_t get_cyclic_party(std::uint64_t i, std::uint64_t num_workers, std::uint64_t total) {
+static inline std::uint64_t get_cyclic_worker(std::uint64_t i, std::uint64_t num_workers, std::uint64_t total) {
     return i % num_workers;
 }
 
-static inline std::uint64_t get_blocked_party(std::uint64_t i, std::uint64_t num_workers, std::uint64_t total) {
+static inline std::uint64_t get_blocked_worker(std::uint64_t i, std::uint64_t num_workers, std::uint64_t total) {
     std::uint64_t per_party = total / num_workers;
     std::uint64_t extras = total % num_workers;
     std::uint64_t boundary = extras * (per_party + 1);
@@ -101,8 +101,8 @@ int main(int argc, char** argv) {
         expected_writers[0]->write32(input_size - 1);
     } else if (problem_name == "merge_sorted") {
         for (std::uint64_t i = 0; i != input_size * 2; i++) {
-            std::uint64_t cyclic_party = get_cyclic_party(i, num_workers, input_size * 2);
-            std::uint64_t blocked_party = get_blocked_party(i, num_workers, input_size * 2);
+            std::uint64_t cyclic_party = get_cyclic_worker(i, num_workers, input_size * 2);
+            std::uint64_t blocked_party = get_blocked_worker(i, num_workers, input_size * 2);
             if (i < input_size) {
                 write_record(garbler_writers[cyclic_party].get(), 2 * i);
             } else {
@@ -113,8 +113,8 @@ int main(int argc, char** argv) {
     } else if (problem_name == "full_sort") {
         if (option == "") {
             for (std::uint64_t i = 0; i != input_size * 2; i++) {
-                std::uint64_t cyclic_party = get_cyclic_party(i, num_workers, input_size * 2);
-                std::uint64_t blocked_party = get_blocked_party(i, num_workers, input_size * 2);
+                std::uint64_t cyclic_party = get_cyclic_worker(i, num_workers, input_size * 2);
+                std::uint64_t blocked_party = get_blocked_worker(i, num_workers, input_size * 2);
                 if (i < input_size) {
                     write_record(garbler_writers[cyclic_party].get(), 2 * i);
                 } else {
@@ -130,8 +130,8 @@ int main(int argc, char** argv) {
             std::vector<std::uint32_t> array(sorted);
             std::random_shuffle(array.begin(), array.end());
             for (std::uint64_t i = 0; i != input_size * 2; i++) {
-                std::uint64_t cyclic_party = get_cyclic_party(i, num_workers, input_size * 2);
-                std::uint64_t blocked_party = get_blocked_party(i, num_workers, input_size * 2);
+                std::uint64_t cyclic_party = get_cyclic_worker(i, num_workers, input_size * 2);
+                std::uint64_t blocked_party = get_blocked_worker(i, num_workers, input_size * 2);
                 if (i < input_size) {
                     write_record(garbler_writers[cyclic_party].get(), array[i]);
                 } else {
@@ -149,7 +149,7 @@ int main(int argc, char** argv) {
         std::iota(table2_keys.begin(), table2_keys.end(), 0);
         if (option == "") {
             for (std::uint64_t i = 0; i != table1_keys.size() + table2_keys.size(); i++) {
-                std::uint64_t cyclic_party = get_cyclic_party(i, num_workers, table1_keys.size() + table2_keys.size());
+                std::uint64_t cyclic_party = get_cyclic_worker(i, num_workers, table1_keys.size() + table2_keys.size());
                 if (i < table1_keys.size()) {
                     write_record(garbler_writers[cyclic_party].get(), table1_keys[i]);
                 } else {
@@ -160,7 +160,7 @@ int main(int argc, char** argv) {
             std::size_t join_size = table1_keys.size() * table2_keys.size();
             for (std::uint64_t i = 0, k = 0; i != table1_keys.size(); i++) {
                 for (std::uint64_t j = 0; j != table2_keys.size(); j++, k++) {
-                    std::uint64_t blocked_party = get_blocked_party(k, num_workers, join_size);
+                    std::uint64_t blocked_party = get_blocked_worker(k, num_workers, join_size);
                     bool valid = (table1_keys[i] < table2_keys[j]);
                     if (valid) {
                         expected_writers[blocked_party]->write1(1);
@@ -178,7 +178,7 @@ int main(int argc, char** argv) {
             std::vector<std::pair<std::uint32_t, uint32_t>> expected;
             for (std::uint64_t i = 0, k = 0; i != table1_keys.size(); i++) {
                 for (std::uint64_t j = 0; j != table2_keys.size(); j++, k++) {
-                    std::uint64_t blocked_party = get_blocked_party(k, num_workers, join_size);
+                    std::uint64_t blocked_party = get_blocked_worker(k, num_workers, join_size);
                     bool valid = (table1_keys[i] < table2_keys[j]);
                     if (valid) {
                         expected.push_back(std::make_pair(table1_keys[i], table2_keys[j]));
@@ -256,8 +256,8 @@ int main(int argc, char** argv) {
                 for (std::uint64_t j = 0; j != input_size; j++) {
                     std::uint8_t elem = (i == j) ? 1 : 0;
                     /* Identity matrix, so we don't have to worry about row-major vs. column major --- both are identical. */
-                    garbler_writers[get_blocked_party(i * input_size + j, num_workers, input_size * input_size)]->write8(elem);
-                    evaluator_writers[get_blocked_party(i * input_size + j, num_workers, input_size * input_size)]->write8(elem);
+                    garbler_writers[get_blocked_worker(i * input_size + j, num_workers, input_size * input_size)]->write8(elem);
+                    evaluator_writers[get_blocked_worker(i * input_size + j, num_workers, input_size * input_size)]->write8(elem);
 
                     /* Write to row i, col j of expected matrix. */
                     std::uint32_t a_portion = i / portion_size_a;
@@ -271,12 +271,12 @@ int main(int argc, char** argv) {
             std::vector<std::uint8_t> a(input_size * input_size);
             for (std::size_t i = 0; i != a.size(); i++) {
                 a[i] = distribution(generator);
-                garbler_writers[get_blocked_party(i, num_workers, a.size())]->write8(a[i]);
+                garbler_writers[get_blocked_worker(i, num_workers, a.size())]->write8(a[i]);
             }
             std::vector<std::uint8_t> b(input_size * input_size);
             for (std::size_t i = 0; i != b.size(); i++) {
                 b[i] = distribution(generator);
-                evaluator_writers[get_blocked_party(i, num_workers, b.size())]->write8(b[i]);
+                evaluator_writers[get_blocked_worker(i, num_workers, b.size())]->write8(b[i]);
             }
             for (std::size_t i = 0; i != input_size; i++) {
                 for (std::size_t j = 0; j != input_size; j++) {
@@ -290,6 +290,53 @@ int main(int argc, char** argv) {
                     std::uint32_t b_portion = j / portion_size_b;
                     expected_writers[a_portion * num_portions_b + b_portion]->write16(elem);
                 }
+            }
+        } else {
+            std::cerr << "Unknown option " << option << std::endl;
+        }
+    } else if (problem_name == "matrix_vector_multiply") {
+        /* Layout of A is row-major, blocked. */
+        /* Layout of B is column-major, blocked. */
+        /* Result matrix is 2D-blocked. */
+        assert(mage::util::is_power_of_two(num_workers));
+        std::uint8_t log_num_workers = mage::util::log_base_2(num_workers);
+        std::uint32_t num_portions_a = UINT32_C(1) << ((log_num_workers / 2) + (log_num_workers % 2));
+        std::uint32_t num_portions_b = UINT32_C(1) << (log_num_workers / 2);
+        std::uint32_t portion_size_a = input_size / num_portions_a;
+        std::uint32_t portion_size_b = input_size / num_portions_b;
+        if (option == "") {
+            for (std::uint64_t i = 0; i != input_size; i++) {
+                std::uint64_t w = get_blocked_worker(i, num_workers, input_size);
+                std::uint8_t elem = static_cast<std::uint8_t>(i);
+                evaluator_writers[w]->write8(elem);
+                expected_writers[w]->write16(elem);
+            }
+            for (std::uint64_t i = 0; i != input_size; i++) {
+                std::uint64_t w = get_blocked_worker(i, num_workers, input_size);
+                for (std::uint64_t j = 0; j != input_size; j++) {
+                    std::uint8_t elem = (i == j) ? 1 : 0;
+                    /* Identity matrix. */
+                    garbler_writers[w]->write8(elem);
+                }
+            }
+        } else if (option == "random") {
+            std::default_random_engine generator;
+            std::uniform_int_distribution<std::uint8_t> distribution(0, UINT8_MAX);
+            std::vector<std::uint8_t> vector(input_size);
+            for (std::size_t i = 0; i != input_size; i++) {
+                std::uint64_t w = get_blocked_worker(i, num_workers, input_size);
+                vector[i] = distribution(generator);
+                evaluator_writers[w]->write8(vector[i]);
+            }
+            for (std::size_t i = 0; i != input_size; i++) {
+                std::uint64_t w = get_blocked_worker(i, num_workers, input_size);
+                std::uint16_t expected_elem = 0;
+                for (std::size_t j = 0; j != input_size; j++) {
+                    std::uint8_t matrix_elem = distribution(generator);
+                    garbler_writers[w]->write8(matrix_elem);
+                    expected_elem += static_cast<std::uint16_t>(matrix_elem) * static_cast<std::uint16_t>(vector[j]);
+                }
+                expected_writers[w]->write16(expected_elem);
             }
         } else {
             std::cerr << "Unknown option " << option << std::endl;

@@ -166,6 +166,13 @@ namespace mage::dsl {
             }
 
             /* Barriers. */
+            this->communication_barrier<T>();
+
+            return std::make_pair(std::move(my_a), std::move(my_b));
+        }
+
+        template <typename T>
+        void communication_barrier() const {
             for (WorkerID w = 0; w != this->num_proc; w++) {
                 if (w != this->self_id) {
                     T::finish_send(w);
@@ -176,8 +183,6 @@ namespace mage::dsl {
                     T::finish_receive(w);
                 }
             }
-
-            return std::make_pair(std::move(my_a), std::move(my_b));
         }
     };
 }
