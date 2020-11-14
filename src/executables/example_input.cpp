@@ -148,13 +148,14 @@ int main(int argc, char** argv) {
         std::vector<std::uint32_t> table2_keys(input_size);
         std::iota(table2_keys.begin(), table2_keys.end(), 0);
         if (option == "") {
-            for (std::uint64_t i = 0; i != table1_keys.size() + table2_keys.size(); i++) {
-                std::uint64_t cyclic_party = get_cyclic_worker(i, num_workers, table1_keys.size() + table2_keys.size());
-                if (i < table1_keys.size()) {
-                    write_record(garbler_writers[cyclic_party].get(), table1_keys[i]);
-                } else {
-                    write_record(evaluator_writers[cyclic_party].get(), table2_keys[i - table1_keys.size()]);
-                }
+            for (std::uint64_t i = 0; i != table1_keys.size(); i++) {
+                std::uint64_t blocked_party = get_blocked_worker(i, num_workers, table1_keys.size());
+                write_record(garbler_writers[blocked_party].get(), table1_keys[i]);
+            }
+
+            for (std::uint64_t i = 0; i != table2_keys.size(); i++) {
+                std::uint64_t blocked_party = get_blocked_worker(i, num_workers, table2_keys.size());
+                write_record(evaluator_writers[blocked_party].get(), table2_keys[i]);
             }
 
             std::size_t join_size = table1_keys.size() * table2_keys.size();
