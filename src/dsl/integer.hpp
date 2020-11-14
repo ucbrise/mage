@@ -205,6 +205,11 @@ namespace mage::dsl {
         */
 
         template <bool other_sliced>
+        Integer<2 * bits, false, Placer, p> operator *(const Integer<bits, other_sliced, Placer, p>& other) const {
+            return Integer<2 * bits, false, Placer, p>(OpCode::IntMultiply, *this, other);
+        }
+
+        template <bool other_sliced>
         Bit<false, Placer, p> operator <(const Integer<bits, other_sliced, Placer, p>& other) const {
             return Bit<false, Placer, p>(OpCode::IntLess, *this, other);
         }

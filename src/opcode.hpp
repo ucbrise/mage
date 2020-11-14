@@ -47,6 +47,7 @@ namespace mage {
         IntIncrement, // 1 argument
         IntSub, // 2 arguments
         IntDecrement, // 1 argument
+        IntMultiply, // 2 arguments
         IntLess, // 2 arguments
         Equal, // 2 arguments
         IsZero, // 1 argument
@@ -96,6 +97,8 @@ namespace mage {
             return "IntSub";
         case OpCode::IntDecrement:
             return "IntDecrement";
+        case OpCode::IntMultiply:
+            return "IntMultiply";
         case OpCode::IntLess:
             return "IntLess";
         case OpCode::Equal:
@@ -240,6 +243,7 @@ namespace mage {
                 break;
             case OpCode::IntAdd:
             case OpCode::IntSub:
+            case OpCode::IntMultiply:
             case OpCode::BitAND:
             case OpCode::BitOR:
             case OpCode::BitXOR:

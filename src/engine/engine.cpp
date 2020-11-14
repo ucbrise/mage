@@ -332,6 +332,46 @@ namespace mage::engine {
         // skip computing the final output carry
     }
 
+    template <typename ProtEngine>
+    void Engine<ProtEngine>::execute_int_multiply(const PackedPhysInstruction& phys) {
+        typename ProtEngine::Wire* output = &this->memory[phys.two_args.output];
+        typename ProtEngine::Wire* input1 = &this->memory[phys.two_args.input1];
+        typename ProtEngine::Wire* input2 = &this->memory[phys.two_args.input2];
+        BitWidth operand_width = phys.two_args.width;
+        BitWidth product_width = operand_width << 1;
+
+        if (operand_width == 0) {
+            return;
+        }
+
+        for (BitWidth j = 0; j != operand_width; j++) {
+            this->protocol.op_and(output[j], input1[j], input2[0]);
+        }
+        this->protocol.zero(output[operand_width]);
+
+        for (BitWidth i = 1; i != operand_width; i++) {
+            typename ProtEngine::Wire partial_product[operand_width];
+            for (BitWidth j = 0; j != operand_width; j++) {
+                this->protocol.op_and(partial_product[j], input1[j], input2[i]);
+            }
+
+            /* Add partial_product to output starting at bit i. */
+            typename ProtEngine::Wire temp1;
+            typename ProtEngine::Wire temp2;
+            typename ProtEngine::Wire temp3;
+            typename ProtEngine::Wire carry;
+            this->protocol.zero(carry);
+            for (BitWidth j = 0; j != operand_width; j++) {
+                this->protocol.op_xor(temp1, output[i + j], carry);
+                this->protocol.op_xor(temp2, partial_product[j], carry);
+                this->protocol.op_xor(output[i + j], temp1, partial_product[j]);
+                this->protocol.op_and(temp3, temp1, temp2);
+                this->protocol.op_xor(carry, carry, temp3);
+            }
+            this->protocol.op_copy(output[i + operand_width], carry);
+        }
+    }
+
     /* Based on https://github.com/samee/obliv-c/blob/obliv-c/src/ext/oblivc/obliv_bits.c */
     template <typename ProtEngine>
     void Engine<ProtEngine>::execute_int_less(const PackedPhysInstruction& phys) {
@@ -535,6 +575,9 @@ namespace mage::engine {
         case OpCode::IntDecrement:
             this->execute_int_decrement(phys);
             return PackedPhysInstruction::size(OpCode::IntDecrement);
+        case OpCode::IntMultiply:
+            this->execute_int_multiply(phys);
+            return PackedPhysInstruction::size(OpCode::IntMultiply);
         case OpCode::IntLess:
             this->execute_int_less(phys);
             return PackedPhysInstruction::size(OpCode::IntLess);

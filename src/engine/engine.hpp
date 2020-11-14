@@ -72,6 +72,7 @@ namespace mage::engine {
         void execute_int_increment(const PackedPhysInstruction& phys);
         void execute_int_sub(const PackedPhysInstruction& phys);
         void execute_int_decrement(const PackedPhysInstruction& phys);
+        void execute_int_multiply(const PackedPhysInstruction& phys);
         void execute_int_less(const PackedPhysInstruction& phys);
         void execute_equal(const PackedPhysInstruction& phys);
         void execute_is_zero(const PackedPhysInstruction& phys);
