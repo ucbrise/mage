@@ -68,7 +68,7 @@ namespace mage::engine {
         void execute_network_finish_send(const PackedPhysInstruction& phys);
         void execute_public_constant(const PackedPhysInstruction& phys);
         void execute_copy(const PackedPhysInstruction& phys);
-        void execute_int_add(const PackedPhysInstruction& phys);
+        template <bool final_carry> void execute_int_add(const PackedPhysInstruction& phys);
         void execute_int_increment(const PackedPhysInstruction& phys);
         void execute_int_sub(const PackedPhysInstruction& phys);
         void execute_int_decrement(const PackedPhysInstruction& phys);

@@ -44,6 +44,7 @@ namespace mage {
         PublicConstant, // 0 arguments
         Copy, // 1 argument
         IntAdd, // 2 arguments
+        IntAddWithCarry, // 2 arguments
         IntIncrement, // 1 argument
         IntSub, // 2 arguments
         IntDecrement, // 1 argument
@@ -91,6 +92,8 @@ namespace mage {
             return "Copy";
         case OpCode::IntAdd:
             return "IntAdd";
+        case OpCode::IntAddWithCarry:
+            return "IntAddWithCarry";
         case OpCode::IntIncrement:
             return "IntIncrement";
         case OpCode::IntSub:
@@ -242,6 +245,7 @@ namespace mage {
                 this->has_output = true;
                 break;
             case OpCode::IntAdd:
+            case OpCode::IntAddWithCarry:
             case OpCode::IntSub:
             case OpCode::IntMultiply:
             case OpCode::BitAND:

@@ -24,6 +24,7 @@
 
 #include "addr.hpp"
 #include "dsl/array.hpp"
+#include "dsl/util.hpp"
 #include <functional>
 #include <optional>
 #include <utility>
@@ -166,23 +167,9 @@ namespace mage::dsl {
             }
 
             /* Barriers. */
-            this->communication_barrier<T>();
+            communication_barrier<T>(this->self_id, this->num_proc);
 
             return std::make_pair(std::move(my_a), std::move(my_b));
-        }
-
-        template <typename T>
-        void communication_barrier() const {
-            for (WorkerID w = 0; w != this->num_proc; w++) {
-                if (w != this->self_id) {
-                    T::finish_send(w);
-                }
-            }
-            for (WorkerID w = 0; w != this->num_proc; w++) {
-                if (w != this->self_id) {
-                    T::finish_receive(w);
-                }
-            }
         }
     };
 }

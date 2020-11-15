@@ -54,6 +54,7 @@ int main(int argc, char** argv) {
     if (prog == nullptr) {
         std::cerr << program_name << " is not a valid program name. "; // lack of std::endl is intentional
         print_valid_program_names();
+        return EXIT_FAILURE;
     }
 
     mage::util::Configuration c(argv[2]);

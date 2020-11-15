@@ -27,6 +27,9 @@
 using namespace mage::dsl;
 
 namespace mage::programs {
+    using DefaultPlacer = memprog::BinnedPlacer;
+    constexpr Program<DefaultPlacer>** default_program = &RegisteredProgram::program_ptr;
+
     template <BitWidth bits>
     using Integer = mage::dsl::Integer<bits, false, memprog::BinnedPlacer, &RegisteredProgram::program_ptr>;
 

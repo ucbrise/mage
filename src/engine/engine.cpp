@@ -239,6 +239,7 @@ namespace mage::engine {
     }
 
     template <typename ProtEngine>
+    template <bool final_carry>
     void Engine<ProtEngine>::execute_int_add(const PackedPhysInstruction& phys) {
         typename ProtEngine::Wire* output = &this->memory[phys.two_args.output];
         typename ProtEngine::Wire* input1 = &this->memory[phys.two_args.input1];
@@ -262,6 +263,10 @@ namespace mage::engine {
             this->protocol.op_xor(temp1, input1[i], carry);
             this->protocol.op_xor(temp2, input2[i], carry);
             this->protocol.op_xor(output[i], temp1, input2[i]);
+        }
+        if constexpr (final_carry) {
+            this->protocol.op_and(temp3, temp1, temp2);
+            this->protocol.op_xor(output[width], carry, temp3);
         }
     }
 
@@ -564,8 +569,11 @@ namespace mage::engine {
             this->execute_copy(phys);
             return PackedPhysInstruction::size(OpCode::Copy);
         case OpCode::IntAdd:
-            this->execute_int_add(phys);
+            this->execute_int_add<false>(phys);
             return PackedPhysInstruction::size(OpCode::IntAdd);
+        case OpCode::IntAddWithCarry:
+            this->execute_int_add<true>(phys);
+            return PackedPhysInstruction::size(OpCode::IntAddWithCarry);
         case OpCode::IntIncrement:
             this->execute_int_increment(phys);
             return PackedPhysInstruction::size(OpCode::IntIncrement);

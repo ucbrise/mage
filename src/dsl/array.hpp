@@ -31,6 +31,7 @@
 #include <utility>
 #include <vector>
 #include "addr.hpp"
+#include "dsl/util.hpp"
 #include "util/misc.hpp"
 
 namespace mage::dsl {
@@ -146,6 +147,45 @@ namespace mage::dsl {
             } else {
                 this->layout_panic();
             }
+        }
+
+        std::vector<T> materialize_global_array(bool destructive) {
+            if (this->layout != Layout::Blocked) {
+                this->layout_panic();
+            }
+
+            std::vector<T> globals(this->total_length);
+            auto [ base_size, num_extras ] = util::floor_div(this->total_length, this->num_proc);
+            for (std::uint64_t i = 0; i != base_size + 1; i++) {
+                if (i < this->local_array.size()) {
+                    for (WorkerID w = 0; w != this->num_proc; w++) {
+                        // std::cout << i << " -> " << w << std::endl;
+                        if (w != this->self_id) {
+                            this->local_array[i].buffer_send(w);
+                        }
+                    }
+                }
+                for (WorkerID w = 0; w != this->num_proc; w++) {
+                    std::uint64_t w_base = this->get_global_base_and_stride(w, Layout::Blocked).first;
+                    if (i < base_size || w < num_extras) {
+                        if (w == this->self_id) {
+                            // std::cout << "self: " << i << " -> " << (w_base + i) << std::endl;
+                            if (destructive) {
+                                globals[w_base + i] = std::move(this->local_array[i]);
+                            } else {
+                                globals[w_base + i].mutate(this->local_array[i]);
+                            }
+                        } else {
+                            // std::cout << (w_base + i) << " <- " << w << std::endl;
+                            globals[w_base + i].post_receive(w);
+                        }
+                    }
+                }
+            }
+
+            communication_barrier<T>(this->self_id, this->num_proc);
+
+            return globals;
         }
 
         void switch_layout(Layout to) {

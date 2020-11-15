@@ -49,44 +49,17 @@ namespace mage::programs::matrix_vector_multiply {
         vector_x.for_each([=](std::size_t i, auto& elem) {
             elem.mark_input(Party::Evaluator);
         });
-        std::vector<Integer<width>>& vector_x_locals = vector_x.get_locals();
 
         /* Blocked row-major matrix provided by the garbler. */
-        std::vector<Integer<width>> my_matrix_a(vector_x_locals.size() * matrix_dimension);
+        std::vector<Integer<width>> my_matrix_a(vector_x.get_locals().size() * matrix_dimension);
         for (auto& elem : my_matrix_a) {
             elem.mark_input(Party::Garbler);
         }
 
         /* Reconstruct the entire vector x for each worker. */
-        std::vector<Integer<width>> my_vector_x(vector_size);
-        auto [ base_size, num_extras ] = util::floor_div(vector_size, args.num_workers);
-        for (std::uint64_t i = 0; i != base_size + 1; i++) {
-            if (i < vector_x_locals.size()) {
-                for (WorkerID w = 0; w != args.num_workers; w++) {
-                    if (w != args.worker_index) {
-                        vector_x_locals[i].buffer_send(w);
-                    }
-                }
-            }
-            for (WorkerID w = 0; w != args.num_workers; w++) {
-                std::uint64_t w_base = vector_x.get_global_base_and_stride(w, Layout::Blocked).first;
-                if (i < base_size || w < num_extras) {
-                    if (w == args.worker_index) {
-                        my_vector_x[w_base + i] = std::move(vector_x_locals[i]);
-                    } else {
-                        my_vector_x[w_base + i].post_receive(w);
-                    }
-                }
-            }
-        }
+        std::vector<Integer<width>> my_vector_x = vector_x.materialize_global_array(true);
 
-        ClusterUtils utils;
-        utils.self_id = args.worker_index;
-        utils.num_proc = args.num_workers;
-        utils.communication_barrier<Bit>();
-
-        std::cout << my_matrix_a.size() << " " << my_vector_x.size() << std::endl;
-
+        /* Multiply my portion of the matrix by the entire vector. */
         std::vector<Integer<2 * width>> result = local_matrix_vector_multiply(my_matrix_a.data(), my_matrix_a.size() / my_vector_x.size(), my_vector_x.data(), my_vector_x.size());
         for (std::size_t i = 0; i != result.size(); i++) {
             result[i].mark_output();

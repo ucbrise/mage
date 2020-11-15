@@ -106,11 +106,30 @@ namespace mage::dsl {
             return *this;
         }
 
-        template <bool other_sliced>
-        void mutate(const Integer<bits, other_sliced, Placer, p>& other) {
+        void mutate_to_constant(std::uint32_t public_constant) {
+            Instruction& instr = (*p)->instruction();
+            instr.header.operation = OpCode::PublicConstant;
+            instr.header.width = bits;
+            instr.header.flags = 0;
+            instr.constant.constant = public_constant;
+            if (this->valid()) {
+                instr.header.output = this->v;
+                (*p)->commit_instruction(0);
+            } else if constexpr (!sliced) {
+                this->v = (*p)->commit_instruction(bits);
+            } else {
+                std::cerr << "Mutating uninitialized sliced Integer" << std::endl;
+                std::abort();
+            }
+        }
+
+        template <BitWidth other_bits, bool other_sliced>
+        void mutate(const Integer<other_bits, other_sliced, Placer, p>& other) {
+            static_assert(other_bits <= bits);
+
             Instruction& instr = (*p)->instruction();
             instr.header.operation = OpCode::Copy;
-            instr.header.width = bits;
+            instr.header.width = other_bits;
             instr.header.flags = 0;
             instr.one_arg.input1 = other.v;
             if (this->valid()) {
@@ -121,6 +140,10 @@ namespace mage::dsl {
             } else {
                 std::cerr << "Mutating uninitialized sliced Integer" << std::endl;
                 std::abort();
+            }
+
+            if constexpr (other_bits != bits) {
+                this->slice<bits - other_bits>(other_bits).mutate_to_constant(0);
             }
         }
 
@@ -157,6 +180,11 @@ namespace mage::dsl {
         template <bool other_sliced>
         Integer<bits, false, Placer, p> operator +(const Integer<bits, other_sliced, Placer, p>& other) const {
             return Integer<bits, false, Placer, p>(OpCode::IntAdd, *this, other);
+        }
+
+        template <bool other_sliced>
+        Integer<bits + 1, false, Placer, p> add_with_carry(const Integer<bits, other_sliced, Placer, p>& other) const {
+            return Integer<bits + 1, false, Placer, p>(OpCode::IntAddWithCarry, *this, other);
         }
 
         Integer<bits, false, Placer, p> increment() {
@@ -299,7 +327,6 @@ namespace mage::dsl {
             return this->v != invalid_vaddr;
         }
 
-    private:
         void recycle() {
             if constexpr (sliced) {
                 this->v = invalid_vaddr;
@@ -309,6 +336,8 @@ namespace mage::dsl {
             }
         }
 
+
+    private:
         template <BitWidth arg0_bits, bool arg0_sliced>
         Integer(OpCode operation, const Integer<arg0_bits, arg0_sliced, Placer, p>& arg0) {
             static_assert(!sliced);

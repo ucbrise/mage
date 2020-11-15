@@ -296,15 +296,6 @@ int main(int argc, char** argv) {
             std::cerr << "Unknown option " << option << std::endl;
         }
     } else if (problem_name == "matrix_vector_multiply") {
-        /* Layout of A is row-major, blocked. */
-        /* Layout of B is column-major, blocked. */
-        /* Result matrix is 2D-blocked. */
-        assert(mage::util::is_power_of_two(num_workers));
-        std::uint8_t log_num_workers = mage::util::log_base_2(num_workers);
-        std::uint32_t num_portions_a = UINT32_C(1) << ((log_num_workers / 2) + (log_num_workers % 2));
-        std::uint32_t num_portions_b = UINT32_C(1) << (log_num_workers / 2);
-        std::uint32_t portion_size_a = input_size / num_portions_a;
-        std::uint32_t portion_size_b = input_size / num_portions_b;
         if (option == "") {
             for (std::uint64_t i = 0; i != input_size; i++) {
                 std::uint64_t w = get_blocked_worker(i, num_workers, input_size);
@@ -338,6 +329,77 @@ int main(int argc, char** argv) {
                     expected_elem += static_cast<std::uint16_t>(matrix_elem) * static_cast<std::uint16_t>(vector[j]);
                 }
                 expected_writers[w]->write16(expected_elem);
+            }
+        } else {
+            std::cerr << "Unknown option " << option << std::endl;
+        }
+    } else if (problem_name == "binary_fc_layer") {
+        constexpr std::uint64_t batch_size = 256;
+        if (input_size % batch_size != 0) {
+            std::cerr << "Input size must be a multiple of the batch size (256)" << std::endl;
+            std::abort();
+        }
+        if (option == "") {
+            for (std::uint64_t i = 0; i != input_size; i++) {
+                std::uint64_t w = get_blocked_worker(i / batch_size, num_workers, input_size / batch_size);
+                std::uint8_t elem = static_cast<std::uint8_t>(i & 0x1);
+                evaluator_writers[w]->write1(elem);
+
+                /* The logic here assumes that the input_size is even. */
+                /*
+                 * Suppose that the matrix were full of zeros (which
+                 * represent -1 in the nonbinary world). The vector alternates
+                 * between 0 (-1 in nonbinary world) and 1, so the dot product
+                 * (in the nonbinary world) will be 1 - 1 + 1 - 1 + ... = 0 if
+                 * we have an even number of elements, or 1 if we have an odd
+                 * number of elements.
+                 *
+                 * But the matrix actually has a 1 in one of the entries. If
+                 * that entry corresponds to a -1 in the vector, then we've
+                 * changed a +1 in the sum to a -1, so the dot product is -2 or
+                 * -1. After applying the binary activation layer, this will be
+                 * -1. If that entry corresponds to a 1, then we've changed a
+                 * -1 in the sum to a +1, so the dot product is 2 or 3. After
+                 * applying the binary activation layer, this will be 1.
+                 *
+                 * Note that the margins are +/-2. If we have an odd input_size
+                 * the dot product assuming a matrix of zeros changes to -1,
+                 * and after taking into account the 1 in the matrix, the
+                 * possible dot products are -3 and 1. These give the same
+                 * result after applying the binary activation function.
+                 */
+
+                std::uint64_t w2 = get_blocked_worker(i, num_workers, input_size);
+                expected_writers[w2]->write1((i & 0x1) == 0 ? 0 : 1);
+            }
+            for (std::uint64_t i = 0; i != input_size; i++) {
+                std::uint64_t w = get_blocked_worker(i, num_workers, input_size);
+                for (std::uint64_t j = 0; j != input_size; j++) {
+                    std::uint8_t elem = (i == j) ? 1 : 0;
+
+                    /* Identity matrix. */
+                    garbler_writers[w]->write1(elem);
+                }
+            }
+        } else if (option == "random") {
+            std::default_random_engine generator;
+            std::uniform_int_distribution<std::uint8_t> distribution(0, 1);
+            std::vector<std::uint8_t> vector(input_size);
+            for (std::size_t i = 0; i != input_size; i++) {
+                std::uint64_t w = get_blocked_worker(i / batch_size, num_workers, input_size / batch_size);
+                vector[i] = distribution(generator);
+                evaluator_writers[w]->write1(vector[i]);
+            }
+            for (std::size_t i = 0; i != input_size; i++) {
+                std::uint64_t w = get_blocked_worker(i, num_workers, input_size);
+                std::uint32_t popcount = 0;
+                for (std::size_t j = 0; j != input_size; j++) {
+                    std::uint8_t matrix_elem = distribution(generator);
+                    garbler_writers[w]->write1(matrix_elem);
+                    popcount += (1 - (matrix_elem ^ vector[j]));
+                }
+                std::uint8_t expected_elem = (2 * popcount >= input_size) ? 1 : 0;
+                expected_writers[w]->write1(expected_elem);
             }
         } else {
             std::cerr << "Unknown option " << option << std::endl;
