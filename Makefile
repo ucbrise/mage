@@ -17,13 +17,11 @@ EXECUTABLES = $(addprefix $(BINDIR)/,$(MAGE_EXECUTABLE_NAMES))
 
 .PHONY: clean
 
-default: mage
+default: $(EXECUTABLES)
 
-all: mage tests
+all: $(EXECUTABLES) tests
 
 tests: $(BINDIR)/test
-
-mage: $(EXECUTABLES)
 
 $(BINDIR)/test: $(MAGE_OBJECTS) $(TEST_OBJECTS)
 	$(CXX) $(LDFLAGS) $+ -lboost_unit_test_framework -o $@
