@@ -32,6 +32,7 @@
 #include "opcode.hpp"
 #include "engine/halfgates.hpp"
 #include "engine/plaintext.hpp"
+#include "engine/tfhe.hpp"
 #include "platform/filesystem.hpp"
 
 namespace mage::engine {
@@ -622,4 +623,5 @@ namespace mage::engine {
     template class Engine<PlaintextEvaluationEngine>;
     template class Engine<HalfGatesGarblingEngine>;
     template class Engine<HalfGatesEvaluationEngine>;
+    template class Engine<TFHEEngine>;
 }

@@ -28,6 +28,7 @@
 #include "engine/singlecore.hpp"
 #include "engine/halfgates.hpp"
 #include "engine/plaintext.hpp"
+#include "engine/tfhe.hpp"
 #include "platform/network.hpp"
 #include "util/config.hpp"
 #include "util/resourceset.hpp"
@@ -36,7 +37,7 @@ using namespace mage;
 
 int main(int argc, char** argv) {
     if (argc != 5) {
-        std::cerr << "Usage: " << argv[0] << " config.yaml garble/evaluate worker_id program_name" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " config.yaml garble/evaluate/tfhe worker_id program_name" << std::endl;
         return 1;
     }
 
@@ -73,6 +74,7 @@ int main(int argc, char** argv) {
 
     bool plaintext = false;
     bool garble = false;
+    bool tfhe = false;
     const util::ConfigValue* party;
     const util::ConfigValue* other_party;
     if (std::strcmp(argv[2], "garble") == 0) {
@@ -85,6 +87,10 @@ int main(int argc, char** argv) {
         other_party = &c["garbler"];
     } else if (std::strcmp(argv[2], "plaintext") == 0) {
         plaintext = true;
+        party = &c["garbler"];
+        other_party = &c["evaluator"];
+    } else if (std::strcmp(argv[2], "tfhe") == 0) {
+        tfhe = true;
         party = &c["garbler"];
         other_party = &c["evaluator"];
     } else {
@@ -132,6 +138,17 @@ int main(int argc, char** argv) {
     }
 
     /* Perform the computation. */
+
+    if (tfhe) {
+        engine::TFHEEngine p(garbler_input_file.c_str(), evaluator_input_file.c_str(), output_file.c_str());
+        start = std::chrono::steady_clock::now();
+        engine::SingleCoreEngine executor(cluster, (*party)["workers"][self_id], p, prog_file.c_str());
+        executor.execute_program();
+        end = std::chrono::steady_clock::now();
+        std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        std::cerr << ms.count() << " ms" << std::endl;
+        return 0;
+    }
 
     if (garble) {
         const util::ConfigValue& opposite_worker = (*other_party)["workers"][self_id];
