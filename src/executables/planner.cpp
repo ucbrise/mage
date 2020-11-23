@@ -95,7 +95,7 @@ int main(int argc, char** argv) {
 
     mage::memprog::DefaultPipeline planner(problem_name, w);
     planner.set_verbose(true);
-    planner.plan(&RegisteredProgram::program_ptr, [prog, &args]() {
+    planner.plan(&mage::programs::program_ptr, [prog, &args]() {
         (*prog)(args);
     });
 

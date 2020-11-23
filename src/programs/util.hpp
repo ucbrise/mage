@@ -28,13 +28,13 @@ using namespace mage::dsl;
 
 namespace mage::programs {
     using DefaultPlacer = memprog::BinnedPlacer;
-    constexpr Program<DefaultPlacer>** default_program = &RegisteredProgram::program_ptr;
+    constexpr Program<DefaultPlacer>** default_program = &program_ptr;
 
     template <BitWidth bits>
-    using Integer = mage::dsl::Integer<bits, false, memprog::BinnedPlacer, &RegisteredProgram::program_ptr>;
+    using Integer = mage::dsl::Integer<bits, false, memprog::BinnedPlacer, default_program>;
 
     template <BitWidth bits>
-    using IntSlice = mage::dsl::Integer<bits, true, memprog::BinnedPlacer, &RegisteredProgram::program_ptr>;
+    using IntSlice = mage::dsl::Integer<bits, true, memprog::BinnedPlacer, default_program>;
 
     using Bit = Integer<1>;
     using BitSlice = IntSlice<1>;

@@ -27,6 +27,7 @@
 #include <string>
 #include "memprog/program.hpp"
 #include "util/config.hpp"
+#include "util/registry.hpp"
 
 namespace mage::programs {
     struct ProgramOptions {
@@ -36,33 +37,10 @@ namespace mage::programs {
         std::uint64_t problem_size;
     };
 
-    class RegisterProgram {
-    public:
-        RegisterProgram(const std::string& program_name, const std::string& program_desc, std::function<void(const ProgramOptions&)> program_function);
-    };
+    using RegisterProgram = util::Register<ProgramOptions>;
+    using RegisteredProgram = util::RegistryEntry<ProgramOptions>;
 
-    class RegisteredProgram {
-        friend class RegisterProgram;
-
-    public:
-        void operator ()(const ProgramOptions& args) const;
-        const std::string& get_description() const;
-
-        static const std::map<std::string, RegisteredProgram>& get_registry();
-
-        static const RegisteredProgram* look_up_by_name(const std::string& name);
-
-        static memprog::DefaultProgram* program_ptr;
-
-    private:
-        RegisteredProgram(const std::string& program_name, const std::string& program_desc, std::function<void(const ProgramOptions&)> program_function);
-
-        static std::map<std::string, RegisteredProgram>& get_registry_mutable();
-
-        std::string name;
-        std::string description;
-        std::function<void(const ProgramOptions&)> program;
-    };
+    extern memprog::DefaultProgram* program_ptr;
 }
 
 #endif
