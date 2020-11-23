@@ -24,157 +24,84 @@
 #include <chrono>
 #include <iostream>
 #include <string>
-#include "engine/engine.hpp"
-#include "engine/singlecore.hpp"
-#include "engine/halfgates.hpp"
-#include "engine/plaintext.hpp"
-#include "engine/tfhe.hpp"
+#include "engine/registry.hpp"
 #include "platform/network.hpp"
 #include "util/config.hpp"
-#include "util/resourceset.hpp"
 
 using namespace mage;
+using mage::engine::RegisteredProtocol;
+using mage::engine::EngineOptions;
+
+static void print_valid_protocol_names() {
+    if (RegisteredProtocol::get_registry().size() == 0) {
+        std::cerr << "There are no available protocols in this build." << std::endl;
+    } else {
+        std::cerr << "Available protocols:" << std::endl;
+        for (const auto& [name, prot] : RegisteredProtocol::get_registry()) {
+            std::cerr << name << " - " << prot.get_description() << std::endl;
+        }
+    }
+}
 
 int main(int argc, char** argv) {
-    if (argc != 5) {
-        std::cerr << "Usage: " << argv[0] << " config.yaml garble/evaluate/tfhe worker_id program_name" << std::endl;
-        return 1;
+    if (argc != 6) {
+        std::cerr << "Usage: " << argv[0] << " protocol config.yaml party_id worker_id program_name" << std::endl;
+        print_valid_protocol_names();
+        return EXIT_FAILURE;
+    }
+
+    /* Parse the protocol name. */
+
+    std::string protocol_name(argv[1]);
+    const RegisteredProtocol* prot_ptr = RegisteredProtocol::look_up_by_name(protocol_name);
+    if (prot_ptr == nullptr) {
+        std::cerr << protocol_name << " is not a valid protocol name. "; // lack of std::endl is intentional
+        print_valid_protocol_names();
+        return EXIT_FAILURE;
     }
 
     /* Parse the config.yaml file. */
 
-    util::Configuration c(argv[1]);
+    util::Configuration c(argv[2]);
+
+    /* Parse the party ID. */
+
+    std::uint32_t party_id;
+    if (std::strcmp(argv[3], "garbler") == 0) {
+        party_id = 1;
+    } else if (std::strcmp(argv[3], "evaluator") == 0) {
+        party_id = 0;
+    } else {
+        std::cerr << "The party_id must be either \"garbler\" or \"evaluator\"." << std::endl;
+        return EXIT_FAILURE;
+    }
 
     /* Parse the worker ID. */
 
     WorkerID self_id;
-    std::istringstream self_id_stream(argv[3]);
+    std::istringstream self_id_stream(argv[4]);
     self_id_stream >> self_id;
 
-    /* Validate the config.yaml file for running the computation. */
-
-    if (c.get("garbler") == nullptr) {
-        std::cerr << "Garbler not present in configuration file" << std::endl;
-        return 1;
-    }
-    if (c.get("evaluator") == nullptr) {
-        std::cerr << "Evaluator not present in configuration file" << std::endl;
-        return 1;
-    }
-    if (c["garbler"]["workers"].get_size() != c["evaluator"]["workers"].get_size()) {
-        std::cerr << "Garbler has " << c["garbler"]["workers"].get_size() << " workers but evaluator has " << c["evaluator"]["workers"].get_size() << " workers --- must be equal" << std::endl;
-        return 1;
-    }
-    if (self_id >= c["garbler"]["workers"].get_size()) {
-        std::cerr << "Worker index is " << self_id << " but only " << c["garbler"]["workers"].get_size() << " workers are specified" << std::endl;
-        return 1;
-    }
-
-    /* Decide if we're garbling or evaluating. */
-
-    bool plaintext = false;
-    bool garble = false;
-    bool tfhe = false;
-    const util::ConfigValue* party;
-    const util::ConfigValue* other_party;
-    if (std::strcmp(argv[2], "garble") == 0) {
-        garble = true;
-        party = &c["garbler"];
-        other_party = &c["evaluator"];
-    } else if (std::strcmp(argv[2], "evaluate") == 0) {
-        garble = false;
-        party = &c["evaluator"];
-        other_party = &c["garbler"];
-    } else if (std::strcmp(argv[2], "plaintext") == 0) {
-        plaintext = true;
-        party = &c["garbler"];
-        other_party = &c["evaluator"];
-    } else if (std::strcmp(argv[2], "tfhe") == 0) {
-        tfhe = true;
-        party = &c["garbler"];
-        other_party = &c["evaluator"];
-    } else {
-        std::cerr << "Third argument must be \"garble\" or \"evaluate\"" << std::endl;
-        return 1;
-    }
-
-    /* Generate the file names. */
-
-    std::string file_base(argv[4]);
-    file_base.append("_");
-    file_base.append(std::to_string(self_id));
-
-    std::string prog_file(file_base);
-    prog_file.append(".memprog");
-
-    std::string garbler_input_file(file_base);
-    garbler_input_file.append("_garbler.input");
-
-    std::string evaluator_input_file(file_base);
-    evaluator_input_file.append("_evaluator.input");
-
-    std::string output_file(file_base);
-    output_file.append(".output");
+    /* Establish cluster networking. */
 
     auto cluster = std::make_shared<mage::engine::ClusterNetwork>(self_id);
-    std::string err = cluster->establish(*party);
+    std::string err = cluster->establish(c[argv[3]]);
     if (!err.empty()) {
         std::cerr << err << std::endl;
-        std::abort();
+        return EXIT_FAILURE;
     }
 
-    std::chrono::time_point<std::chrono::steady_clock> start;
-    std::chrono::time_point<std::chrono::steady_clock> end;
+    /* Dispatch to the protocol. */
 
-    if (plaintext) {
-        engine::PlaintextEvaluationEngine p(garbler_input_file.c_str(), evaluator_input_file.c_str(), output_file.c_str());
-        start = std::chrono::steady_clock::now();
-        engine::SingleCoreEngine executor(cluster, (*party)["workers"][self_id], p, prog_file.c_str());
-        executor.execute_program();
-        end = std::chrono::steady_clock::now();
-        std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-        std::cerr << ms.count() << " ms" << std::endl;
-        return 0;
-    }
+    EngineOptions args = {};
+    args.config = &c;
+    args.party_id = party_id;
+    args.self_id = self_id;
+    args.cluster = cluster;
+    args.problem_name = argv[5];
 
-    /* Perform the computation. */
+    const RegisteredProtocol& protocol = *prot_ptr;
+    protocol(args);
 
-    if (tfhe) {
-        engine::TFHEEngine p(garbler_input_file.c_str(), evaluator_input_file.c_str(), output_file.c_str());
-        start = std::chrono::steady_clock::now();
-        engine::SingleCoreEngine executor(cluster, (*party)["workers"][self_id], p, prog_file.c_str());
-        executor.execute_program();
-        end = std::chrono::steady_clock::now();
-        std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-        std::cerr << ms.count() << " ms" << std::endl;
-        return 0;
-    }
-
-    if (garble) {
-        const util::ConfigValue& opposite_worker = (*other_party)["workers"][self_id];
-        if (opposite_worker.get("external_host") == nullptr || opposite_worker.get("external_port") == nullptr) {
-            std::cerr << "Opposite party's external network information is not specified" << std::endl;
-            return 1;
-        }
-
-        engine::HalfGatesGarblingEngine p(cluster, garbler_input_file.c_str(), output_file.c_str(), opposite_worker["external_host"].as_string().c_str(), opposite_worker["external_port"].as_string().c_str());
-        engine::SingleCoreEngine executor(cluster, (*party)["workers"][self_id], p, prog_file.c_str());
-        start = std::chrono::steady_clock::now();
-        executor.execute_program();
-    } else {
-        const util::ConfigValue& worker = (*party)["workers"][self_id];
-        if (worker.get("external_host") == nullptr || worker.get("external_port") == nullptr) {
-            std::cerr << "This party's external network information is not specified" << std::endl;
-            return 1;
-        }
-
-        engine::HalfGatesEvaluationEngine p(evaluator_input_file.c_str(), worker["external_port"].as_string().c_str());
-        engine::SingleCoreEngine executor(cluster, (*party)["workers"][self_id], p, prog_file.c_str());
-        start = std::chrono::steady_clock::now();
-        executor.execute_program();
-    }
-    end = std::chrono::steady_clock::now();
-
-    std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    std::cout << ms.count() << " ms" << std::endl;
+    return EXIT_SUCCESS;
 }

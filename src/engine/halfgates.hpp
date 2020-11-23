@@ -90,7 +90,7 @@ namespace mage::engine {
     public:
         using Wire = schemes::HalfGatesGarbler::Wire;
 
-        HalfGatesGarblingEngine(std::shared_ptr<ClusterNetwork>& network, const char* input_file, const char* output_file, const char* evaluator_host, const char* evaluator_port)
+        HalfGatesGarblingEngine(const std::shared_ptr<ClusterNetwork>& network, const char* input_file, const char* output_file, const char* evaluator_host, const char* evaluator_port)
             : input_reader(input_file), output_writer(output_file), input_daemon_threads(halfgates_num_input_daemons), evaluator_input_index(0) {
             platform::network_connect(evaluator_host, evaluator_port, this->sockets.data(), nullptr, halfgates_num_connections);
             this->conn_reader.set_file_descriptor(this->sockets[0], false);

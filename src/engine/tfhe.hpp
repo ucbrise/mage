@@ -43,10 +43,18 @@ namespace mage::engine {
             : garbler_input_reader(garbler_input_file, std::ios::binary), evaluator_input_reader(evaluator_input_file, std::ios::binary), output_writer(output_file, std::ios::binary) {
             {
                 std::ifstream params_file("params", std::ios::binary);
+                if (!params_file.is_open()) {
+                    std::cerr << "Could not open params" << std::endl;
+                    std::abort();
+                }
                 this->tfhe.set_params(params_file);
             }
             {
                 std::ifstream cloud_key_file("cloud.key", std::ios::binary);
+                if (!cloud_key_file.is_open()) {
+                    std::cerr << "Could not open cloud.key" << std::endl;
+                    std::abort();
+                }
                 this->tfhe.set_cloud_key(cloud_key_file);
             }
         }

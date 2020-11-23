@@ -22,6 +22,7 @@
 #include "engine/halfgates.hpp"
 #include <cstdint>
 #include <algorithm>
+#include <chrono>
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -29,6 +30,8 @@
 #include <utility>
 #include "crypto/block.hpp"
 #include "crypto/ot/correlated.hpp"
+#include "engine/registry.hpp"
+#include "engine/singlecore.hpp"
 #include "util/filebuffer.hpp"
 #include "util/misc.hpp"
 
@@ -202,4 +205,68 @@ namespace mage::engine {
         // });
         }
     }
+
+    void run_halfgates(const EngineOptions& args) {
+        std::string file_base = args.problem_name + "_" + std::to_string(args.self_id);
+        std::string prog_file = file_base + ".memprog";
+        std::string output_file = file_base + ".output";
+
+        std::chrono::time_point<std::chrono::steady_clock> start;
+        std::chrono::time_point<std::chrono::steady_clock> end;
+
+        /* Validate the config.yaml file for running the computation. */
+
+        util::Configuration& c = *args.config;
+        if (c.get("garbler") == nullptr) {
+            std::cerr << "Garbler not present in configuration file" << std::endl;
+            std::abort();
+        }
+        if (c.get("evaluator") == nullptr) {
+            std::cerr << "Evaluator not present in configuration file" << std::endl;
+            std::abort();
+        }
+        if (c["garbler"]["workers"].get_size() != c["evaluator"]["workers"].get_size()) {
+            std::cerr << "Garbler has " << c["garbler"]["workers"].get_size() << " workers but evaluator has " << c["evaluator"]["workers"].get_size() << " workers --- must be equal" << std::endl;
+            std::abort();
+        }
+        if (args.self_id >= c["garbler"]["workers"].get_size()) {
+            std::cerr << "Worker index is " << args.self_id << " but only " << c["garbler"]["workers"].get_size() << " workers are specified" << std::endl;
+            std::abort();
+        }
+
+        if (args.party_id == 0) {
+            const util::ConfigValue& worker = c["evaluator"]["workers"][args.self_id];
+            if (worker.get("external_host") == nullptr || worker.get("external_port") == nullptr) {
+                std::cerr << "This party's external network information is not specified" << std::endl;
+                std::abort();
+            }
+
+            std::string evaluator_input_file = file_base + "_evaluator.input";
+            engine::HalfGatesEvaluationEngine p(evaluator_input_file.c_str(), worker["external_port"].as_string().c_str());
+            engine::SingleCoreEngine executor(args.cluster, c["evaluator"]["workers"][args.self_id], p, prog_file.c_str());
+            start = std::chrono::steady_clock::now();
+            executor.execute_program();
+        } else if (args.party_id == 1) {
+            const util::ConfigValue& opposite_worker = c["evaluator"]["workers"][args.self_id];
+            if (opposite_worker.get("external_host") == nullptr || opposite_worker.get("external_port") == nullptr) {
+                std::cerr << "Opposite party's external network information is not specified" << std::endl;
+                std::abort();
+            }
+
+            std::string garbler_input_file = file_base + "_garbler.input";
+            engine::HalfGatesGarblingEngine p(args.cluster, garbler_input_file.c_str(), output_file.c_str(), opposite_worker["external_host"].as_string().c_str(), opposite_worker["external_port"].as_string().c_str());
+            engine::SingleCoreEngine executor(args.cluster, c["garbler"]["workers"][args.self_id], p, prog_file.c_str());
+            start = std::chrono::steady_clock::now();
+            executor.execute_program();
+        } else {
+            std::cerr << "Party ID must be 0 or 1 (got " << args.party_id << ")" << std::endl;
+            std::abort();
+        }
+        end = std::chrono::steady_clock::now();
+
+        std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        std::cout << ms.count() << " ms" << std::endl;
+    }
+
+    RegisterProtocol halfgates("halfgates", "Garbled Circuits with HalfGates optimizations", run_halfgates);
 }

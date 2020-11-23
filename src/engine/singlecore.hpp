@@ -35,7 +35,7 @@ namespace mage::engine {
     template <typename ProtEngine>
     class SingleCoreEngine : private Engine<ProtEngine> {
     public:
-        SingleCoreEngine(std::shared_ptr<ClusterNetwork>& network, const util::ConfigValue& worker, ProtEngine& prot, std::string program)
+        SingleCoreEngine(const std::shared_ptr<ClusterNetwork>& network, const util::ConfigValue& worker, ProtEngine& prot, std::string program)
             : Engine<ProtEngine>(network, prot), input(program.c_str()) {
             const ProgramFileHeader& header = this->input.get_header();
             if (worker.get("storage_path") == nullptr) {

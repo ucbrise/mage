@@ -44,7 +44,7 @@ namespace mage::engine {
         static const constexpr int aio_process_batch_size = 64;
 
     public:
-        Engine(std::shared_ptr<ClusterNetwork>& network, ProtEngine& prot) : protocol(prot),
+        Engine(const std::shared_ptr<ClusterNetwork>& network, ProtEngine& prot) : protocol(prot),
             memory(nullptr), memory_size(0), swap_in("SWAP-IN (ns)", true),
             swap_out("SWAP-OUT (ns)", true), swap_blocked("SWAP_BLOCKED (ns)", true),
             cluster(network), aio_ctx(0) {
