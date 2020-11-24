@@ -23,6 +23,7 @@
 #define MAGE_UTIL_MISC_HPP_
 
 #include <cstdint>
+#include <iostream>
 #include <utility>
 
 namespace mage::util {
@@ -71,6 +72,30 @@ namespace mage::util {
         }
         return std::make_pair(quotient, remainder);
     }
+
+    class MemoryBuffer : public std::streambuf {
+        MemoryBuffer(void* buffer, std::size_t length) {
+            char* base = static_cast<char*>(buffer);
+            this->setg(base, base, base + length);
+            this->setp(base, base + length);
+        }
+    };
+
+    class MemoryReadBuffer : public std::streambuf {
+    public:
+        MemoryReadBuffer(const void* buffer, std::size_t length) {
+            char* base = const_cast<char*>(static_cast<const char*>(buffer));
+            this->setg(base, base, base + length);
+        }
+    };
+
+    class MemoryWriteBuffer : public std::streambuf {
+    public:
+        MemoryWriteBuffer(void* buffer, std::size_t length) {
+            char* base = static_cast<char*>(buffer);
+            this->setp(base, base + length);
+        }
+    };
 }
 
 #endif

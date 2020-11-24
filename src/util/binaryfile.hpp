@@ -46,11 +46,21 @@ namespace mage::util {
             }
         }
 
+        void write_double(double value) {
+            std::uint64_t* ptr = reinterpret_cast<std::uint64_t*>(&value);
+            this->write64(*ptr);
+        }
+
         void write32(std::uint32_t value) {
             for (int i = 0; i != 4; i++) {
                 this->write8(static_cast<std::uint8_t>(value));
                 value >>= 8;
             }
+        }
+
+        void write_float(float value) {
+            std::uint32_t* ptr = reinterpret_cast<std::uint32_t*>(&value);
+            this->write32(*ptr);
         }
 
         void write16(std::uint16_t value) {
@@ -99,6 +109,14 @@ namespace mage::util {
             std::uint8_t bit = (this->current_byte >> this->current_bit) & 0x1;
             this->current_bit = (this->current_bit + 1) & 0x7;
             return bit;
+        }
+
+        template <typename T>
+        T read() {
+            T rv;
+            std::uint8_t* ptr = reinterpret_cast<std::uint8_t*>(&rv);
+            this->read_bytes(ptr, sizeof(T));
+            return rv;
         }
 
         void read_bytes(std::uint8_t* bytes, std::size_t num_bytes) {

@@ -38,58 +38,58 @@ TFheGateBootstrappingParameterSet* params_from_file(const char* filename) {
     TFheGateBootstrappingParameterSet* params = new_tfheGateBootstrappingParameterSet_fromFile(params_file);
     fclose(params_file);
     return params;
- }
+}
 
- TFheGateBootstrappingSecretKeySet* secret_key_from_file(const char* filename) {
-     FILE* secret_key = fopen(filename, "rb");
-     if (secret_key == nullptr) {
-         std::cerr << "Could not open " << filename << std::endl;
-         std::abort();
-     }
-     TFheGateBootstrappingSecretKeySet* key = new_tfheGateBootstrappingSecretKeySet_fromFile(secret_key);
-     fclose(secret_key);
-     return key;
- }
+TFheGateBootstrappingSecretKeySet* secret_key_from_file(const char* filename) {
+    FILE* secret_key = fopen(filename, "rb");
+    if (secret_key == nullptr) {
+        std::cerr << "Could not open " << filename << std::endl;
+        std::abort();
+    }
+    TFheGateBootstrappingSecretKeySet* key = new_tfheGateBootstrappingSecretKeySet_fromFile(secret_key);
+    fclose(secret_key);
+    return key;
+}
 
- TFheGateBootstrappingCloudKeySet* cloud_key_from_file(const char* filename) {
-     FILE* cloud_key = fopen(filename, "rb");
-     if (cloud_key == nullptr) {
-         std::cerr << "Could not open " << filename << std::endl;
-         std::abort();
-     }
-     TFheGateBootstrappingCloudKeySet* bk = new_tfheGateBootstrappingCloudKeySet_fromFile(cloud_key);
-     fclose(cloud_key);
-     return bk;
- }
+TFheGateBootstrappingCloudKeySet* cloud_key_from_file(const char* filename) {
+    FILE* cloud_key = fopen(filename, "rb");
+    if (cloud_key == nullptr) {
+        std::cerr << "Could not open " << filename << std::endl;
+        std::abort();
+    }
+    TFheGateBootstrappingCloudKeySet* bk = new_tfheGateBootstrappingCloudKeySet_fromFile(cloud_key);
+    fclose(cloud_key);
+    return bk;
+}
 
- LweSample* ciphertext_from_file(const char* filename, const TFheGateBootstrappingParameterSet* params) {
-     FILE* f = fopen(filename, "rb");
-     if (f == nullptr) {
-         std::cerr << "Could not open " << filename << std::endl;
-         std::abort();
-     }
-     LweSample* c = new_gate_bootstrapping_ciphertext(params);
-     import_gate_bootstrapping_ciphertext_fromFile(f, c, params);
-     fclose(f);
-     return c;
- }
+LweSample* ciphertext_from_file(const char* filename, const TFheGateBootstrappingParameterSet* params) {
+    FILE* f = fopen(filename, "rb");
+    if (f == nullptr) {
+        std::cerr << "Could not open " << filename << std::endl;
+        std::abort();
+    }
+    LweSample* c = new_gate_bootstrapping_ciphertext(params);
+    import_gate_bootstrapping_ciphertext_fromFile(f, c, params);
+    fclose(f);
+    return c;
+}
 
- void ciphertext_to_file(LweSample* ciphertext, const char* filename, const TFheGateBootstrappingParameterSet* params) {
-     FILE* f = fopen(filename, "wb");
-     if (f == nullptr) {
-         std::cerr << "Could not open " << filename << std::endl;
-         std::abort();
-     }
-     export_gate_bootstrapping_ciphertext_toFile(f, ciphertext, params);
-     fclose(f);
- }
+void ciphertext_to_file(LweSample* ciphertext, const char* filename, const TFheGateBootstrappingParameterSet* params) {
+    FILE* f = fopen(filename, "wb");
+    if (f == nullptr) {
+        std::cerr << "Could not open " << filename << std::endl;
+        std::abort();
+    }
+    export_gate_bootstrapping_ciphertext_toFile(f, ciphertext, params);
+    fclose(f);
+}
 
- void check_num_args(int argc, int expected) {
-     if (argc != expected) {
-         std::cerr << "Need " << expected << " arguments" << std::endl;
-         std::abort();
-     }
- }
+void check_num_args(int argc, int expected) {
+    if (argc != expected) {
+        std::cerr << "Need " << expected << " arguments" << std::endl;
+        std::abort();
+    }
+}
 
 int main(int argc, char** argv) {
     if (argc < 2) {
