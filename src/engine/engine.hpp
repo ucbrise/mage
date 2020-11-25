@@ -34,19 +34,27 @@
 #include "engine/cluster.hpp"
 #include "platform/filesystem.hpp"
 #include "platform/memory.hpp"
-#include "util/resourceset.hpp"
 #include "util/stats.hpp"
 
 namespace mage::engine {
-    template <typename ProtEngine>
+    /*
+     * The base Engine works in byte addresses, not wire addresses. If a
+     * specialized engine is working in wire addresses, the page shift should
+     * be adjusted so that the page size, in bytes, is correct. That way, page
+     * numbers will be correct and can be passed directly to the base Engine
+     * to manage transferring data between storage to memory. In cases where
+     * the base Engine works with addresses, the API is to pass in a pointer,
+     * which is probably less error prone than converting a wire address into
+     * a byte address.
+     */
     class Engine {
         static const constexpr int aio_max_events = 2048;
         static const constexpr int aio_process_batch_size = 64;
 
     public:
-        Engine(const std::shared_ptr<ClusterNetwork>& network, ProtEngine& prot) : protocol(prot),
-            memory(nullptr), memory_size(0), swap_in("SWAP-IN (ns)", true),
-            swap_out("SWAP-OUT (ns)", true), swap_blocked("SWAP_BLOCKED (ns)", true),
+        Engine(const std::shared_ptr<ClusterNetwork>& network) : memory(nullptr),
+            memory_size(0), swapfd(-1), swap_in("SWAP-IN (ns)", true),
+            swap_out("SWAP-OUT (ns)", true), swap_blocked("SWAP-BLOCKED (ns)", true),
             cluster(network), aio_ctx(0) {
         }
 
@@ -54,48 +62,50 @@ namespace mage::engine {
 
         void init(const std::string& storage_file, PageShift shift, std::uint64_t num_pages, std::uint64_t swap_pages, std::uint32_t concurrent_swaps);
 
-        std::size_t execute_instruction(const PackedPhysInstruction& phys);
+        void issue_swap_in(StoragePageNumber spn, PhysPageNumber ppn);
+        void issue_swap_out(PhysPageNumber ppn, StoragePageNumber spn);
         void wait_for_finish_swap(PhysPageNumber ppn);
+        void copy_page(PhysPageNumber from, PhysPageNumber to);
 
-        void execute_issue_swap_in(const PackedPhysInstruction& phys);
-        void execute_issue_swap_out(const PackedPhysInstruction& phys);
-        void execute_finish_swap_in(const PackedPhysInstruction& phys);
-        void execute_finish_swap_out(const PackedPhysInstruction& phys);
-        void execute_copy_swap(const PackedPhysInstruction& phys);
-        void execute_network_post_receive(const PackedPhysInstruction& phys);
-        void execute_network_finish_receive(const PackedPhysInstruction& phys);
-        void execute_network_buffer_send(const PackedPhysInstruction& phys);
-        void execute_network_finish_send(const PackedPhysInstruction& phys);
-        void execute_public_constant(const PackedPhysInstruction& phys);
-        void execute_copy(const PackedPhysInstruction& phys);
-        template <bool final_carry> void execute_int_add(const PackedPhysInstruction& phys);
-        void execute_int_increment(const PackedPhysInstruction& phys);
-        void execute_int_sub(const PackedPhysInstruction& phys);
-        void execute_int_decrement(const PackedPhysInstruction& phys);
-        void execute_int_multiply(const PackedPhysInstruction& phys);
-        void execute_int_less(const PackedPhysInstruction& phys);
-        void execute_equal(const PackedPhysInstruction& phys);
-        void execute_is_zero(const PackedPhysInstruction& phys);
-        void execute_non_zero(const PackedPhysInstruction& phys);
-        void execute_bit_not(const PackedPhysInstruction& phys);
-        void execute_bit_and(const PackedPhysInstruction& phys);
-        void execute_bit_or(const PackedPhysInstruction& phys);
-        void execute_bit_xor(const PackedPhysInstruction& phys);
-        void execute_value_select(const PackedPhysInstruction& phys);
+        template <typename Wire = std::uint8_t>
+        void network_post_receive(WorkerID who, Wire* into, std::size_t num_wires) {
+            MessageChannel& c = this->contact_worker_checked(who);
+            AsyncRead& ar = c.start_post_read();
+            ar.into = into;
+            ar.length = num_wires * sizeof(Wire);
+            c.finish_post_read();
+        }
+
+        void network_finish_receive(WorkerID who) {
+            MessageChannel& c = this->contact_worker_checked(who);
+            c.wait_until_reads_finished();
+        }
+
+        template <typename Wire = std::uint8_t>
+        void network_buffer_send(WorkerID who, Wire* from, std::size_t num_wires) {
+            MessageChannel& c = this->contact_worker_checked(who);
+            // typename ProtEngine::Wire* buffer = c.write<typename ProtEngine::Wire>(num_wires);
+            Wire* buffer = c.write<Wire>(num_wires);
+            std::copy(from, from + num_wires, buffer);
+        }
+
+        void network_finish_send(WorkerID who) {
+            this->contact_worker_checked(who).flush();
+        }
+
+    protected:
+        std::uint8_t* get_memory() const {
+            return this->memory;
+        }
+
+    private:
+        MessageChannel& contact_worker_checked(WorkerID worker_id);
 
         util::StreamStats swap_in;
         util::StreamStats swap_out;
         util::StreamStats swap_blocked;
 
-    private:
-        /*
-         * There is nothing protocol-specific about this method --- perhaps
-         * move to a non-template superclass?
-         */
-        MessageChannel& contact_worker_checked(WorkerID worker_id);
-
-        ProtEngine& protocol;
-        typename ProtEngine::Wire* memory;
+        std::uint8_t* memory;
         PageShift page_shift;
         std::size_t memory_size;
         int swapfd;

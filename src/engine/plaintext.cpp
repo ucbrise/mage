@@ -20,9 +20,9 @@
  */
 
 #include <chrono>
+#include "engine/andxor.hpp"
 #include "engine/plaintext.hpp"
 #include "engine/registry.hpp"
-#include "engine/singlecore.hpp"
 
 namespace mage::engine {
     void run_plaintext(const EngineOptions& args) {
@@ -38,7 +38,7 @@ namespace mage::engine {
         util::Configuration& c = *args.config;
         engine::PlaintextEvaluationEngine p(garbler_input_file.c_str(), evaluator_input_file.c_str(), output_file.c_str());
         start = std::chrono::steady_clock::now();
-        engine::SingleCoreEngine executor(args.cluster, c["garbler"]["workers"][args.self_id], p, prog_file.c_str());
+        engine::ANDXOREngine executor(args.cluster, c["garbler"]["workers"][args.self_id], p, prog_file.c_str());
         executor.execute_program();
         end = std::chrono::steady_clock::now();
         std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);

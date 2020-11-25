@@ -30,8 +30,8 @@
 #include <utility>
 #include "crypto/block.hpp"
 #include "crypto/ot/correlated.hpp"
+#include "engine/andxor.hpp"
 #include "engine/registry.hpp"
-#include "engine/singlecore.hpp"
 #include "util/filebuffer.hpp"
 #include "util/misc.hpp"
 
@@ -243,7 +243,7 @@ namespace mage::engine {
 
             std::string evaluator_input_file = file_base + "_evaluator.input";
             engine::HalfGatesEvaluationEngine p(evaluator_input_file.c_str(), worker["external_port"].as_string().c_str());
-            engine::SingleCoreEngine executor(args.cluster, c["evaluator"]["workers"][args.self_id], p, prog_file.c_str());
+            engine::ANDXOREngine executor(args.cluster, c["evaluator"]["workers"][args.self_id], p, prog_file.c_str());
             start = std::chrono::steady_clock::now();
             executor.execute_program();
         } else if (args.party_id == 1) {
@@ -255,7 +255,7 @@ namespace mage::engine {
 
             std::string garbler_input_file = file_base + "_garbler.input";
             engine::HalfGatesGarblingEngine p(args.cluster, garbler_input_file.c_str(), output_file.c_str(), opposite_worker["external_host"].as_string().c_str(), opposite_worker["external_port"].as_string().c_str());
-            engine::SingleCoreEngine executor(args.cluster, c["garbler"]["workers"][args.self_id], p, prog_file.c_str());
+            engine::ANDXOREngine executor(args.cluster, c["garbler"]["workers"][args.self_id], p, prog_file.c_str());
             start = std::chrono::steady_clock::now();
             executor.execute_program();
         } else {
