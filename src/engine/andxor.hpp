@@ -44,8 +44,9 @@ namespace mage::engine {
                 std::abort();
             }
             PageShift wire_page_shift = header.page_shift;
-            PageShift byte_page_shift = wire_page_shift + util::log_base_2(sizeof(typename ProtEngine::Wire));
-            this->init(worker["storage_path"].as_string(), byte_page_shift, header.num_pages, header.num_swap_pages, header.max_concurrent_swaps);
+            PageSize wire_page_size = pg_size(header.page_shift);
+            PageSize byte_page_size = wire_page_size * sizeof(typename ProtEngine::Wire);
+            this->init(worker["storage_path"].as_string(), byte_page_size, header.num_pages, header.num_swap_pages, header.max_concurrent_swaps);
             this->input.enable_stats("READ-INSTR (ns)");
             this->wires = reinterpret_cast<typename ProtEngine::Wire*>(this->get_memory());
         }

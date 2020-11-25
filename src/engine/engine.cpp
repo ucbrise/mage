@@ -35,7 +35,7 @@
 #include "util/stats.hpp"
 
 namespace mage::engine {
-    void Engine::init(const std::string& storage_file, PageShift shift, std::uint64_t num_pages, std::uint64_t swap_pages, std::uint32_t concurrent_swaps) {
+    void Engine::init(const std::string& storage_file, PageSize page_size_in_bytes, std::uint64_t num_pages, std::uint64_t swap_pages, std::uint32_t concurrent_swaps) {
         assert(this->memory == nullptr);
 
         if (io_setup(concurrent_swaps, &this->aio_ctx) != 0) {
@@ -43,9 +43,9 @@ namespace mage::engine {
             std::abort();
         }
 
-        this->memory_size = pg_addr(num_pages, shift);
+        this->memory_size = num_pages * page_size_in_bytes;
         this->memory = platform::allocate_resident_memory<std::uint8_t>(this->memory_size);
-        std::uint64_t required_size = pg_addr(swap_pages, shift);
+        std::uint64_t required_size = swap_pages * page_size_in_bytes;
         if (storage_file.rfind("/dev/", 0) != std::string::npos) {
             std::uint64_t length;
             this->swapfd = platform::open_file(storage_file.c_str(), &length, true);
@@ -56,7 +56,7 @@ namespace mage::engine {
         } else {
             this->swapfd = platform::create_file(storage_file.c_str(), required_size, true, true);
         }
-        this->page_shift = shift;
+        this->page_size_bytes = page_size_in_bytes;
     }
 
     Engine::~Engine()  {
@@ -74,15 +74,15 @@ namespace mage::engine {
 
     void Engine::issue_swap_in(StoragePageNumber spn, PhysPageNumber ppn) {
         /* These are byte addresses (not wire addresses). */
-        StorageAddr saddr = pg_addr(spn, this->page_shift);
-        PhysAddr paddr = pg_addr(ppn, this->page_shift);
+        StorageAddr saddr = spn * this->page_size_bytes;
+        PhysAddr paddr = ppn * this->page_size_bytes;
 
         auto start = std::chrono::steady_clock::now();
-        assert(this->in_flight_swaps.find(ppn) == this->in_flight_swaps.end());
-        struct iocb& op = this->in_flight_swaps[ppn];
+        assert(this->in_flight_swaps.find(paddr) == this->in_flight_swaps.end());
+        struct iocb& op = this->in_flight_swaps[paddr];
         struct iocb* op_ptr = &op;
         // io_prep_pread(op_ptr, this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename ProtEngine::Wire), saddr * sizeof(typename ProtEngine::Wire));
-        io_prep_pread(op_ptr, this->swapfd, &this->memory[paddr], pg_size(this->page_shift), saddr);
+        io_prep_pread(op_ptr, this->swapfd, &this->memory[paddr], this->page_size_bytes, saddr);
         op_ptr->data = &this->memory[paddr];
         int rv = io_submit(this->aio_ctx, 1, &op_ptr);
         if (rv != 1) {
@@ -96,15 +96,15 @@ namespace mage::engine {
 
     void Engine::issue_swap_out(PhysPageNumber ppn, StoragePageNumber spn) {
         /* These are byte addresses (not wire addresses). */
-        PhysAddr paddr = pg_addr(ppn, this->page_shift);
-        StorageAddr saddr = pg_addr(spn, this->page_shift);
+        PhysAddr paddr = ppn * this->page_size_bytes;
+        StorageAddr saddr = spn * this->page_size_bytes;
 
         auto start = std::chrono::steady_clock::now();
-        assert(this->in_flight_swaps.find(ppn) == this->in_flight_swaps.end());
-        struct iocb& op = this->in_flight_swaps[ppn];
+        assert(this->in_flight_swaps.find(paddr) == this->in_flight_swaps.end());
+        struct iocb& op = this->in_flight_swaps[paddr];
         struct iocb* op_ptr = &op;
         // io_prep_pwrite(op_ptr, this->swapfd, &this->memory[paddr], pg_size(this->page_shift) * sizeof(typename ProtEngine::Wire), saddr * sizeof(typename ProtEngine::Wire));
-        io_prep_pwrite(op_ptr, this->swapfd, &this->memory[paddr], pg_size(this->page_shift), saddr);
+        io_prep_pwrite(op_ptr, this->swapfd, &this->memory[paddr], this->page_size_bytes, saddr);
         op_ptr->data = &this->memory[paddr];
         int rv = io_submit(this->aio_ctx, 1, &op_ptr);
         if (rv != 1) {
@@ -117,7 +117,9 @@ namespace mage::engine {
     }
 
     void Engine::wait_for_finish_swap(PhysPageNumber ppn) {
-        auto iter = this->in_flight_swaps.find(ppn);
+        PhysAddr paddr = ppn * this->page_size_bytes;
+
+        auto iter = this->in_flight_swaps.find(paddr);
         if (iter == this->in_flight_swaps.end()) {
             return;
         }
@@ -136,9 +138,9 @@ namespace mage::engine {
                 struct io_event& event = events[i];
                 std::uint8_t* page_start = reinterpret_cast<std::uint8_t*>(event.data);
                 assert(page_start != nullptr);
-                PhysPageNumber found_ppn = pg_num(page_start - this->memory, this->page_shift);
+                PhysAddr found_paddr = page_start - this->memory;
 
-                iter = this->in_flight_swaps.find(found_ppn);
+                iter = this->in_flight_swaps.find(found_paddr);
                 assert(iter != this->in_flight_swaps.end());
                 assert(event.obj == &iter->second);
                 this->in_flight_swaps.erase(iter);
@@ -147,7 +149,7 @@ namespace mage::engine {
                     std::abort();
                 }
 
-                found = (found || (found_ppn == ppn));
+                found = (found || (found_paddr == paddr));
             }
         } while (!found);
 
@@ -156,10 +158,10 @@ namespace mage::engine {
     }
 
     void Engine::copy_page(PhysPageNumber from, PhysPageNumber to) {
-        PhysAddr to_paddr = pg_addr(to, this->page_shift);
-        PhysAddr from_paddr = pg_addr(from, this->page_shift);
+        PhysAddr to_paddr = to * this->page_size_bytes;
+        PhysAddr from_paddr = from * this->page_size_bytes;
 
-        std::copy(&this->memory[from_paddr], &this->memory[from_paddr + pg_size(this->page_shift)], &this->memory[to_paddr]);
+        std::copy(&this->memory[from_paddr], &this->memory[from_paddr + this->page_size_bytes], &this->memory[to_paddr]);
     }
 
     MessageChannel& Engine::contact_worker_checked(WorkerID worker_id) {

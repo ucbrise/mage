@@ -39,13 +39,10 @@
 namespace mage::engine {
     /*
      * The base Engine works in byte addresses, not wire addresses. If a
-     * specialized engine is working in wire addresses, the page shift should
-     * be adjusted so that the page size, in bytes, is correct. That way, page
-     * numbers will be correct and can be passed directly to the base Engine
-     * to manage transferring data between storage to memory. In cases where
-     * the base Engine works with addresses, the API is to pass in a pointer,
-     * which is probably less error prone than converting a wire address into
-     * a byte address.
+     * specialized engine is working in wire addresses, the addresses should be
+     * converted to byte addresses before passing them to the base engine. The
+     * provided page size is assumed to be in bytes; that way, page numbers can
+     * be passed to the base engine unmodified.
      */
     class Engine {
         static const constexpr int aio_max_events = 2048;
@@ -60,7 +57,7 @@ namespace mage::engine {
 
         virtual ~Engine();
 
-        void init(const std::string& storage_file, PageShift shift, std::uint64_t num_pages, std::uint64_t swap_pages, std::uint32_t concurrent_swaps);
+        void init(const std::string& storage_file, PageSize page_size_in_bytes, std::uint64_t num_pages, std::uint64_t swap_pages, std::uint32_t concurrent_swaps);
 
         void issue_swap_in(StoragePageNumber spn, PhysPageNumber ppn);
         void issue_swap_out(PhysPageNumber ppn, StoragePageNumber spn);
@@ -106,14 +103,14 @@ namespace mage::engine {
         util::StreamStats swap_blocked;
 
         std::uint8_t* memory;
-        PageShift page_shift;
+        PageSize page_size_bytes;
         std::size_t memory_size;
         int swapfd;
 
         std::shared_ptr<ClusterNetwork> cluster;
 
         io_context_t aio_ctx;
-        std::unordered_map<PhysPageNumber, struct iocb> in_flight_swaps;
+        std::unordered_map<PhysAddr, struct iocb> in_flight_swaps;
     };
 }
 
