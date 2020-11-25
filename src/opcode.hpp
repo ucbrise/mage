@@ -57,7 +57,9 @@ namespace mage {
         BitAND, // 2 arguments
         BitOR, // 2 arguments
         BitXOR, // 2 arguments
-        ValueSelect // 3 arguments
+        ValueSelect, // 3 arguments
+        SwitchLevel, // 1 argument
+        MultiplyPlaintext, // 2 arguments
     };
 
     constexpr const char* opcode_to_string(OpCode op) {
@@ -120,6 +122,10 @@ namespace mage {
             return "BitXOR";
         case OpCode::ValueSelect:
             return "ValueSelect";
+        case OpCode::SwitchLevel:
+            return "SwitchLevel";
+        case OpCode::MultiplyPlaintext:
+            return "MultiplyPlaintext";
         default:
             std::abort();
         }
@@ -251,6 +257,7 @@ namespace mage {
             case OpCode::BitAND:
             case OpCode::BitOR:
             case OpCode::BitXOR:
+            case OpCode::MultiplyPlaintext:
                 this->layout = InstructionFormat::TwoArgs;
                 this->single_bit = false;
                 this->has_output = true;
@@ -258,6 +265,7 @@ namespace mage {
             case OpCode::IntIncrement:
             case OpCode::IntDecrement:
             case OpCode::BitNOT:
+            case OpCode::SwitchLevel:
                 this->layout = InstructionFormat::OneArg;
                 this->single_bit = false;
                 this->has_output = true;

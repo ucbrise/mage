@@ -22,6 +22,7 @@
 #ifndef MAGE_PROGRAMS_UTIL_HPP_
 #define MAGE_PROGRAMS_UTIL_HPP_
 
+#include "dsl/leveledbatch.hpp"
 #include "dsl/integer.hpp"
 
 using namespace mage::dsl;
@@ -38,6 +39,9 @@ namespace mage::programs {
 
     using Bit = Integer<1>;
     using BitSlice = IntSlice<1>;
+
+    template <std::uint32_t level>
+    using LeveledBatch = mage::dsl::LeveledBatch<level, memprog::BinnedPlacer, default_program>;
 
     template <BitWidth width = 8>
     Integer<2 * width> dot_product(Integer<width>* vector_a, Integer<width>* vector_b, std::size_t length) {
