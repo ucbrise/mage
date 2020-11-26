@@ -26,7 +26,7 @@
 #include <cstdint>
 #include "instruction.hpp"
 #include "memprog/program.hpp"
-#include "schemes/ckks_constants.hpp"
+#include "protocols/ckks_constants.hpp"
 #include "addr.hpp"
 #include "opcode.hpp"
 

@@ -19,8 +19,8 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef MAGE_ENGINE_HALFGATES_HPP_
-#define MAGE_ENGINE_HALFGATES_HPP_
+#ifndef MAGE_PROTOCOLS_HALFGATES_HPP_
+#define MAGE_PROTOCOLS_HALFGATES_HPP_
 
 #include <cstddef>
 #include <cstdint>
@@ -34,11 +34,11 @@
 #include "crypto/block.hpp"
 #include "engine/cluster.hpp"
 #include "platform/network.hpp"
-#include "schemes/halfgates.hpp"
+#include "protocols/halfgates_scheme.hpp"
 #include "util/binaryfile.hpp"
 #include "util/userpipe.hpp"
 
-namespace mage::engine {
+namespace mage::protocols::halfgates {
     const constexpr std::uint64_t halfgates_max_batch_size = 4 * crypto::block_num_bits;
     constexpr const std::size_t halfgates_num_input_daemons = 3;
     constexpr const std::size_t halfgates_num_connections = 1 + halfgates_num_input_daemons;
@@ -88,9 +88,9 @@ namespace mage::engine {
 
     class HalfGatesGarblingEngine {
     public:
-        using Wire = schemes::HalfGatesGarbler::Wire;
+        using Wire = HalfGatesGarbler::Wire;
 
-        HalfGatesGarblingEngine(const std::shared_ptr<ClusterNetwork>& network, const char* input_file, const char* output_file, const char* evaluator_host, const char* evaluator_port)
+        HalfGatesGarblingEngine(const std::shared_ptr<engine::ClusterNetwork>& network, const char* input_file, const char* output_file, const char* evaluator_host, const char* evaluator_port)
             : input_reader(input_file), output_writer(output_file), input_daemon_threads(halfgates_num_input_daemons), evaluator_input_index(0) {
             platform::network_connect(evaluator_host, evaluator_port, this->sockets.data(), nullptr, halfgates_num_connections);
             this->conn_reader.set_file_descriptor(this->sockets[0], false);
@@ -107,12 +107,12 @@ namespace mage::engine {
                 Wire delta_precursor;
                 input_seed = this->garbler.initialize(delta_precursor);
                 for (WorkerID i = 1; i != num_workers; i++) {
-                    MessageChannel* c = network->contact_worker(i);
+                    engine::MessageChannel* c = network->contact_worker(i);
                     *(c->write<Wire>(1)) = delta_precursor;
                     c->flush();
                 }
             } else {
-                MessageChannel* c = network->contact_worker(0);
+                engine::MessageChannel* c = network->contact_worker(0);
                 Wire buffer;
                 c->read<Wire>(&buffer, 1);
                 input_seed = this->garbler.initialize_with_delta(buffer);
@@ -206,7 +206,7 @@ namespace mage::engine {
     private:
         void start_input_daemon();
 
-        schemes::HalfGatesGarbler garbler;
+        HalfGatesGarbler garbler;
 
         util::BinaryFileReader input_reader;
         util::BinaryFileWriter output_writer;
@@ -221,7 +221,7 @@ namespace mage::engine {
 
     class HalfGatesEvaluationEngine {
     public:
-        using Wire = schemes::HalfGatesEvaluator::Wire;
+        using Wire = HalfGatesEvaluator::Wire;
 
         HalfGatesEvaluationEngine(const char* input_file, const char* evaluator_port)
             : input_reader(input_file), input_daemon_threads(halfgates_num_input_daemons), evaluator_input_index(0) {
@@ -312,7 +312,7 @@ namespace mage::engine {
     private:
         void start_input_daemon();
 
-        schemes::HalfGatesEvaluator evaluator;
+        HalfGatesEvaluator evaluator;
         util::BinaryFileReader input_reader;
         std::array<int, halfgates_num_connections> sockets;
         util::BufferedFileReader<false> conn_reader;

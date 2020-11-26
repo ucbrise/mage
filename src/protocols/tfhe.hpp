@@ -19,8 +19,8 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef MAGE_ENGINE_TFHE_HPP_
-#define MAGE_ENGINE_TFHE_HPP_
+#ifndef MAGE_PROTOCOLS_TFHE_HPP_
+#define MAGE_PROTOCOLS_TFHE_HPP_
 
 #include <cstddef>
 #include <cstdint>
@@ -30,14 +30,14 @@
 #include <string>
 #include "engine/cluster.hpp"
 #include "platform/network.hpp"
-#include "schemes/tfhe.hpp"
+#include "protocols/tfhe_scheme.hpp"
 #include "util/binaryfile.hpp"
 #include "util/userpipe.hpp"
 
-namespace mage::engine {
+namespace mage::protocols::tfhe {
     class TFHEEngine {
     public:
-        using Wire = schemes::TFHEScheme::Wire;
+        using Wire = TFHEScheme::Wire;
 
         TFHEEngine(const char* garbler_input_file, const char* evaluator_input_file, const char* output_file)
             : garbler_input_reader(garbler_input_file, std::ios::binary), evaluator_input_reader(evaluator_input_file, std::ios::binary), output_writer(output_file, std::ios::binary) {
@@ -108,7 +108,7 @@ namespace mage::engine {
         }
 
     private:
-        schemes::TFHEScheme tfhe;
+        TFHEScheme tfhe;
 
         std::ifstream garbler_input_reader;
         std::ifstream evaluator_input_reader;

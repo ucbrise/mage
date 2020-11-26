@@ -10,7 +10,7 @@ LDFLAGS += -ltfhe-spqlios-fma
 CXXFLAGS += -DCKKS -I/usr/local/include/SEAL-3.6
 LDFLAGS += -lseal
 
-MAGE_DIRS = src src/dsl src/platform src/crypto src/crypto/ot src/memprog src/engine src/programs src/schemes src/util
+MAGE_DIRS = src src/dsl src/platform src/crypto src/crypto/ot src/memprog src/engine src/programs src/protocols src/util
 MAGE_CPP_SOURCES = $(foreach dir,$(MAGE_DIRS),$(wildcard $(dir)/*.cpp))
 MAGE_HEADERS = $(foreach dir,$(MAGE_DIRS),$(wildcard $(dir)/*.hpp))
 

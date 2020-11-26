@@ -19,8 +19,8 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef MAGE_SCHEMES_TFHE_HPP_
-#define MAGE_SCHEMES_TFHE_HPP_
+#ifndef MAGE_PROTOCOLS_TFHE_SCHEME_HPP_
+#define MAGE_PROTOCOLS_TFHE_SCHEME_HPP_
 
 #include <cstdint>
 #include <cstdlib>
@@ -29,7 +29,7 @@
 #include <tfhe/tfhe.h>
 #include <tfhe/tfhe_io.h>
 
-namespace mage::schemes {
+namespace mage::protocols::tfhe {
     constexpr const std::size_t tfhe_ciphertext_size = 2536;
     constexpr const int tfhe_num_temp_ciphertexts = 3;
 

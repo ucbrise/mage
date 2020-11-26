@@ -24,13 +24,13 @@
 #include <chrono>
 #include <iostream>
 #include <string>
-#include "engine/registry.hpp"
+#include "protocols/registry.hpp"
 #include "platform/network.hpp"
 #include "util/config.hpp"
 
 using namespace mage;
-using mage::engine::RegisteredProtocol;
-using mage::engine::EngineOptions;
+using mage::protocols::RegisteredProtocol;
+using mage::protocols::EngineOptions;
 
 static void print_valid_protocol_names() {
     if (RegisteredProtocol::get_registry().size() == 0) {

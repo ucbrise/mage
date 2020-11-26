@@ -25,8 +25,8 @@
  * work with the rest of MAGE.
  */
 
-#ifndef MAGE_SCHEMES_HALFGATES_HPP_
-#define MAGE_SCHEMES_HALFGATES_HPP_
+#ifndef MAGE_PROTOCOLS_HALFGATES_SCHEME_HPP_
+#define MAGE_PROTOCOLS_HALFGATES_SCHEME_HPP_
 
 #include <cstdint>
 #include <string>
@@ -36,7 +36,7 @@
 #include "crypto/prg.hpp"
 #include "crypto/prp.hpp"
 
-namespace mage::schemes {
+namespace mage::protocols::halfgates {
     class HalfGatesGarbler {
     public:
         using Wire = crypto::block;

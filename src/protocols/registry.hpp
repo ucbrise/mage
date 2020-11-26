@@ -27,12 +27,12 @@
 #include "util/config.hpp"
 #include "util/registry.hpp"
 
-namespace mage::engine {
+namespace mage::protocols {
     struct EngineOptions {
         util::Configuration* config;
         std::uint32_t party_id;
         WorkerID self_id;
-        std::shared_ptr<ClusterNetwork> cluster;
+        std::shared_ptr<engine::ClusterNetwork> cluster;
         std::string problem_name;
     };
 

@@ -21,10 +21,10 @@
 
 #include <chrono>
 #include "engine/andxor.hpp"
-#include "engine/plaintext.hpp"
-#include "engine/registry.hpp"
+#include "protocols/plaintext.hpp"
+#include "protocols/registry.hpp"
 
-namespace mage::engine {
+namespace mage::protocols::plaintext {
     void run_plaintext(const EngineOptions& args) {
         std::string file_base = args.problem_name + "_" + std::to_string(args.self_id);
         std::string prog_file = file_base + ".memprog";
@@ -36,7 +36,7 @@ namespace mage::engine {
         std::chrono::time_point<std::chrono::steady_clock> end;
 
         util::Configuration& c = *args.config;
-        engine::PlaintextEvaluationEngine p(garbler_input_file.c_str(), evaluator_input_file.c_str(), output_file.c_str());
+        PlaintextEvaluationEngine p(garbler_input_file.c_str(), evaluator_input_file.c_str(), output_file.c_str());
         start = std::chrono::steady_clock::now();
         engine::ANDXOREngine executor(args.cluster, c["garbler"]["workers"][args.self_id], p, prog_file.c_str());
         executor.execute_program();

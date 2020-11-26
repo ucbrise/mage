@@ -19,14 +19,14 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef MAGE_ENGINE_PLAINTEXT_HPP_
-#define MAGE_ENGINE_PLAINTEXT_HPP_
+#ifndef MAGE_PROTOCOLS_PLAINTEXT_HPP_
+#define MAGE_PROTOCOLS_PLAINTEXT_HPP_
 
 #include <iostream>
 #include <string>
 #include "util/binaryfile.hpp"
 
-namespace mage::engine {
+namespace mage::protocols::plaintext {
     class PlaintextEvaluationEngine {
     public:
         using Wire = unsigned __int128;
