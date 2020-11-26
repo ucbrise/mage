@@ -432,7 +432,7 @@ namespace mage {
         OpInfo info(p.header.operation);
         switch (info.format()) {
         case InstructionFormat::NoArgs:
-            out << "(" << p.no_args.output << ")";
+            out << "<" << (int) p.no_args.width << ">(" << p.no_args.output << ")";
             break;
         case InstructionFormat::OneArg:
             out << "<" << (int) p.one_arg.width << ">(" << p.one_arg.output << ", " << p.one_arg.input1 << ")";

@@ -26,6 +26,7 @@
 #include <memory>
 #include <string>
 #include "addr.hpp"
+#include "opcode.hpp"
 #include "engine/engine.hpp"
 #include "programfile.hpp"
 #include "util/config.hpp"
@@ -444,6 +445,7 @@ namespace mage::engine {
                 this->execute_value_select(phys);
                 return PackedPhysInstruction::size(OpCode::ValueSelect);
             default:
+                std::cerr << "Instruction " << opcode_to_string(phys.header.operation) << " is not supported." << std::endl;
                 std::abort();
             }
         }

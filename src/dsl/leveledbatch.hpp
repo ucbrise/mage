@@ -152,7 +152,7 @@ namespace mage::dsl {
         }
 
         static constexpr std::size_t get_size() {
-            return schemes::ckks_ciphertext_size(level);
+            return protocols::ckks::ckks_ciphertext_size(level);
         }
 
     private:

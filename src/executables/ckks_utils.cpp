@@ -127,7 +127,7 @@ int main(int argc, char** argv) {
         }
     } else if (std::strcmp(argv[1], "encrypt_file") == 0) {
         if (argc < 3) {
-            std::cerr << "Usage: " << argv[0] << " encrypt_file batch_size [file1] ..." << std::endl;
+            std::cerr << "Usage: " << argv[0] << " encrypt_file batch_size level [file1] ..." << std::endl;
             std::abort();
         }
         seal::EncryptionParameters parms = parms_from_file("parms.ckks");
@@ -141,9 +141,24 @@ int main(int argc, char** argv) {
             std::abort();
         }
 
+        int level = std::stoi(argv[3]);
+        if (level < 0) {
+            std::cerr << "Level must be nonnegative" << std::endl;
+            std::abort();
+        }
+        auto context_data = context.first_context_data();
+        while (context_data->chain_index() > level) {
+            context_data = context_data->next_context_data();
+        }
+        if (context_data->chain_index() != level) {
+            std::cout << "Could not find params for level " << level << " (max level is " << context.first_context_data()->chain_index() << ")" << std::endl;
+            std::abort();
+        }
+        auto target_level_parms_id = context_data->parms_id();
+
         seal::CKKSEncoder encoder(context);
 
-        for (int i = 3; i != argc; i++) {
+        for (int i = 4; i != argc; i++) {
             std::string filename(argv[i]);
 
             std::string temp_name = filename + ".plain";
@@ -161,11 +176,12 @@ int main(int argc, char** argv) {
                 batch_data.push_back(value);
                 if (batch_data.size() == batch_size || i + 1 == num_uint32s) {
                     seal::Plaintext plaintext;
-                    encoder.encode(batch_data, ckks_scale, plaintext);
+                    encoder.encode(batch_data, target_level_parms_id, ckks_scale, plaintext);
 
                     seal::Ciphertext ciphertext;
                     encryptor.encrypt(plaintext, ciphertext);
                     ciphertext.save(target);
+
 
                     batch_data.clear();
                 }

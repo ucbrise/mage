@@ -25,7 +25,9 @@
 #include <cstdint>
 #include <cstdlib>
 
-namespace mage::schemes {
+namespace mage::protocols::ckks {
+    inline double ckks_scale = std::pow(2.0, 40);
+
     constexpr std::uint64_t ckks_ciphertext_size(std::int32_t level) {
         if (level == -1) {
             // Plaintext: Measure this!

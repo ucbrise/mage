@@ -51,7 +51,7 @@ namespace mage::memprog {
             return this->current;
         }
 
-        VirtAddr commit_instruction(BitWidth output_width) {
+        VirtAddr commit_instruction(memprog::AllocationSize output_width) {
             if (output_width != 0) {
                 bool fresh_page;
                 this->current.header.output = this->placer.allocate_virtual(output_width, fresh_page);

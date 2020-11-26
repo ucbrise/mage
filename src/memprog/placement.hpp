@@ -24,6 +24,7 @@
 
 #include <cassert>
 #include <cstdint>
+#include <iostream>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -32,10 +33,12 @@
 #include "util/prioqueue.hpp"
 
 namespace mage::memprog {
+    using AllocationSize = std::uint64_t;
+
     class Placer {
     public:
-        virtual VirtAddr allocate_virtual(BitWidth width, bool& fresh_page) = 0;
-        virtual void deallocate_virtual(VirtAddr addr, BitWidth width) = 0;
+        virtual VirtAddr allocate_virtual(AllocationSize width, bool& fresh_page) = 0;
+        virtual void deallocate_virtual(VirtAddr addr, AllocationSize width) = 0;
         virtual VirtPageNumber get_num_pages() const = 0;
     };
 
@@ -44,7 +47,7 @@ namespace mage::memprog {
         SimplePlacer(PageShift shift) : next_free_address(0), page_shift(shift) {
         }
 
-        VirtAddr allocate_virtual(BitWidth width, bool& fresh_page) {
+        VirtAddr allocate_virtual(AllocationSize width, bool& fresh_page) {
             VirtAddr addr;
             assert(width != 0);
             if (pg_num(this->next_free_address, this->page_shift) == pg_num(this->next_free_address + width - 1, this->page_shift)) {
@@ -57,7 +60,7 @@ namespace mage::memprog {
             return addr;
         }
 
-        void deallocate_virtual(VirtAddr addr, BitWidth width) {
+        void deallocate_virtual(VirtAddr addr, AllocationSize width) {
             // No-op: don't reclaim free space
         }
 
@@ -79,7 +82,7 @@ namespace mage::memprog {
         FIFOPlacer(PageShift shift) : next_page(0), page_shift(shift) {
         }
 
-        VirtAddr allocate_virtual(BitWidth width, bool& fresh_page) {
+        VirtAddr allocate_virtual(AllocationSize width, bool& fresh_page) {
             std::vector<VirtAddr>& free_slots = this->slot_map[width];
 
             VirtAddr result;
@@ -104,7 +107,7 @@ namespace mage::memprog {
             return result;
         }
 
-        void deallocate_virtual(VirtAddr addr, BitWidth width) {
+        void deallocate_virtual(VirtAddr addr, AllocationSize width) {
             assert(this->allocated.contains(addr));
             this->allocated.erase(addr);
             this->slot_map[width].push_back(addr);
@@ -115,7 +118,7 @@ namespace mage::memprog {
         }
 
     private:
-        std::unordered_map<BitWidth, std::vector<VirtAddr>> slot_map;
+        std::unordered_map<AllocationSize, std::vector<VirtAddr>> slot_map;
         std::unordered_set<VirtAddr> allocated;
         VirtPageNumber next_page;
         PageShift page_shift;
@@ -126,9 +129,13 @@ namespace mage::memprog {
         std::uint64_t next_free_offset;
     };
 
-    struct BitWidthInfo {
-        BitWidthInfo(PageShift shift, BitWidth width) {
+    struct AllocationSizeInfo {
+        AllocationSizeInfo(PageShift shift, AllocationSize width) {
             this->fresh_page_free_slots = pg_size(shift) / width;
+            if (this->fresh_page_free_slots == 0) {
+                std::cerr << "Page size must be greater than largest allocation size" << std::endl;
+                std::abort();
+            }
         }
         util::PriorityQueue<std::uint64_t, VirtPageNumber> unfilled_pages;
         std::unordered_map<VirtPageNumber, PageInfo> page_info;
@@ -140,8 +147,8 @@ namespace mage::memprog {
         BinnedPlacer(PageShift shift) : next_page(0), page_shift(shift) {
         }
 
-        VirtAddr allocate_virtual(BitWidth width, bool& fresh_page) {
-            BitWidthInfo& bwi = this->get_info(width);
+        VirtAddr allocate_virtual(AllocationSize width, bool& fresh_page) {
+            AllocationSizeInfo& bwi = this->get_info(width);
 
             VirtAddr result;
             if (bwi.unfilled_pages.empty()) {
@@ -194,8 +201,8 @@ namespace mage::memprog {
             return result;
         }
 
-        void deallocate_virtual(VirtAddr addr, BitWidth width) {
-            BitWidthInfo& bwi = this->get_info(width);
+        void deallocate_virtual(VirtAddr addr, AllocationSize width) {
+            AllocationSizeInfo& bwi = this->get_info(width);
             VirtPageNumber page = pg_num(addr, this->page_shift);
 
             std::uint64_t num_free_slots;
@@ -248,7 +255,7 @@ namespace mage::memprog {
         }
 
     private:
-        BitWidthInfo& get_info(BitWidth width) {
+        AllocationSizeInfo& get_info(AllocationSize width) {
             auto iter = this->slot_map.find(width);
             if (iter != this->slot_map.end()) {
                 return iter->second;
@@ -257,7 +264,7 @@ namespace mage::memprog {
             return p.first->second;
         }
 
-        std::unordered_map<BitWidth, BitWidthInfo> slot_map;
+        std::unordered_map<AllocationSize, AllocationSizeInfo> slot_map;
         VirtPageNumber next_page;
         PageShift page_shift;
     };
