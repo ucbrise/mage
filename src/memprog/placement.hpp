@@ -74,15 +74,6 @@ namespace mage::memprog {
         PageShift page_shift;
     };
 
-    struct BitWidthInfo {
-        BitWidthInfo(PageShift shift, BitWidth width) {
-            this->fresh_page_free_slots = pg_size(shift) / width;
-        }
-        util::PriorityQueue<std::uint64_t, VirtPageNumber> unfilled_pages;
-        std::unordered_map<VirtPageNumber, std::vector<VirtAddr>> free_slots_by_page;
-        std::uint64_t fresh_page_free_slots;
-    };
-
     class FIFOPlacer {
     public:
         FIFOPlacer(PageShift shift) : next_page(0), page_shift(shift) {
@@ -130,6 +121,20 @@ namespace mage::memprog {
         PageShift page_shift;
     };
 
+    struct PageInfo {
+        std::vector<VirtAddr> reusable_slots;
+        std::uint64_t next_free_offset;
+    };
+
+    struct BitWidthInfo {
+        BitWidthInfo(PageShift shift, BitWidth width) {
+            this->fresh_page_free_slots = pg_size(shift) / width;
+        }
+        util::PriorityQueue<std::uint64_t, VirtPageNumber> unfilled_pages;
+        std::unordered_map<VirtPageNumber, PageInfo> page_info;
+        std::uint64_t fresh_page_free_slots;
+    };
+
     class BinnedPlacer {
     public:
         BinnedPlacer(PageShift shift) : next_page(0), page_shift(shift) {
@@ -143,24 +148,40 @@ namespace mage::memprog {
                 VirtPageNumber page = this->next_page++;
                 VirtAddr page_addr = pg_addr(page, this->page_shift);
 
-                std::vector<VirtAddr>& free_slots = bwi.free_slots_by_page[page];
-                std::uint64_t offset;
-                for (offset = pg_size(this->page_shift) - width; offset >= width; offset -= width) {
-                    free_slots.push_back(page_addr + offset);
-                }
-                result = page_addr + offset;
+                PageInfo& page_info = bwi.page_info[page];
+                page_info.next_free_offset = width;
+                result = page_addr;
                 fresh_page = true;
 
-                if (free_slots.size() != 0) {
-                    bwi.unfilled_pages.insert(free_slots.size(), page);
+                // std::vector<VirtAddr>& free_slots = bwi.free_slots_by_page[page];
+                // free_slots.reserve(pg_size(this->page_shift) / width);
+                // std::uint64_t offset;
+                // for (offset = pg_size(this->page_shift) - width; offset >= width; offset -= width) {
+                //     free_slots.push_back(page_addr + offset);
+                // }
+                // result = page_addr + offset;
+                // fresh_page = true;
+
+                std::uint64_t num_free_slots = (pg_size(this->page_shift) - page_info.next_free_offset) / width;
+                if (num_free_slots > 0) {
+                    bwi.unfilled_pages.insert(num_free_slots, page);
                 }
             } else {
                 std::pair<std::uint64_t, VirtPageNumber>& rv = bwi.unfilled_pages.min();
                 VirtPageNumber page = rv.second;
                 std::uint64_t num_free_slots = rv.first;
-                std::vector<VirtAddr>& free_slots = bwi.free_slots_by_page[page];
-                result = free_slots.back();
-                free_slots.pop_back();
+                PageInfo& page_info = bwi.page_info[page];
+                if (page_info.reusable_slots.size() > 0) {
+                    result = page_info.reusable_slots.back();
+                    page_info.reusable_slots.pop_back();
+                } else {
+                    result = pg_addr(page, this->page_shift) + page_info.next_free_offset;
+                    page_info.next_free_offset += width;
+                    assert(pg_size(this->page_shift) >= page_info.next_free_offset);
+                }
+                // std::vector<VirtAddr>& free_slots = bwi.free_slots_by_page[page];
+                // result = free_slots.back();
+                // free_slots.pop_back();
                 fresh_page = false;
 
                 if (num_free_slots == 1) {
@@ -180,23 +201,45 @@ namespace mage::memprog {
             std::uint64_t num_free_slots;
             if (!bwi.unfilled_pages.contains(page)) {
                 num_free_slots = 1;
-                if (num_free_slots == bwi.fresh_page_free_slots) {
-                    bwi.free_slots_by_page.erase(page);
+                if (num_free_slots == bwi.fresh_page_free_slots && bwi.unfilled_pages.size() > 0) {
+                    bwi.page_info.erase(page);
                 } else {
                     bwi.unfilled_pages.insert(num_free_slots, page);
-                    bwi.free_slots_by_page[page].push_back(addr);
+                    bwi.page_info[page].reusable_slots.push_back(addr);
                 }
                 return;
             }
 
             num_free_slots = bwi.unfilled_pages.get_key(page);
             num_free_slots++;
-            if (num_free_slots == pg_size(this->page_shift) / width) {
+            /*
+             * Both here and above, the criterion for deciding when to remove
+             * the entry for the page is that (1) it is completely empty, and
+             * (2) there will remain an entry for at least one unfilled page
+             * once we remove it. The second part is an optimization, for cases
+             * where an element of a particular size is repeatedly allocated
+             * and deallocated. For example, in merge_sorted, I've observed the
+             * number of allocated Integer<1> objects oscillate between 0 and
+             * 1, which would cause an entirely new page entry to be
+             * initialized and freed on every allocation. I've observed that
+             * adding condition (2) improved placement performance by 10-20%.
+             * But it could potentially result in wasted memory when planning
+             * if many item widths have this extra page entry. For the programs
+             * I've seen, there are very few different object widths allocated,
+             * so this is not a problem. (There are other problems if we have a
+             * large number of widths, since objects of different widths cannot
+             * share a page). I'm putting in this note in case this extra
+             * memory used during placement becomes important later.
+             * If it's ever necessary to revert to condition (1) only, the
+             * correct "if" predicate, both here and above, is
+             * num_free_slots == bwi.fresh_page_free_slots.
+             */
+            if (num_free_slots == bwi.fresh_page_free_slots && bwi.unfilled_pages.size() > 1) {
                 bwi.unfilled_pages.erase(page);
-                bwi.free_slots_by_page.erase(page);
+                bwi.page_info.erase(page);
             } else {
                 bwi.unfilled_pages.increase_key(num_free_slots, page);
-                bwi.free_slots_by_page[page].push_back(addr);
+                bwi.page_info[page].reusable_slots.push_back(addr);
             }
         }
 
