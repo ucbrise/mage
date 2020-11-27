@@ -29,6 +29,7 @@
 #include <seal/seal.h>
 #include "protocols/ckks_constants.hpp"
 #include "util/misc.hpp"
+#include "util/stats.hpp"
 
 namespace mage::protocols::ckks {
     seal::EncryptionParameters parms_from_file(const char* filename) {
@@ -52,7 +53,8 @@ namespace mage::protocols::ckks {
 
         CKKSEngine(const char* input_file, const char* output_file)
             : parms(parms_from_file("parms.ckks")), context(parms), evaluator(context), encoder(context),
-              input_reader(input_file, std::ios::binary), output_writer(output_file, std::ios::binary) {
+              input_reader(input_file, std::ios::binary), output_writer(output_file, std::ios::binary),
+              serialize_stats("CKKS-SERIALIZE", true), deserialize_stats("CKKS-DESERIALIZE", true) {
             std::ifstream relin_file("relinkeys.ckks");
             this->relin_keys.load(this->context, relin_file);
         }
@@ -94,12 +96,19 @@ namespace mage::protocols::ckks {
         }
 
         void op_multiply(std::uint8_t* output, const std::uint8_t* input1, const std::uint8_t* input2, std::int32_t level) {
-            seal::Ciphertext a, b;
-            this->deserialize(a, input1, level + 1, true);
-            this->deserialize(b, input2, level + 1, true);
-
             seal::Ciphertext c;
-            this->evaluator.multiply(a, b, c);
+
+            seal::Ciphertext a;
+            this->deserialize(a, input1, level + 1, true);
+
+            if (input1 == input2) {
+                this->evaluator.square(a, c);
+            } else {
+                seal::Ciphertext b;
+                this->deserialize(b, input2, level + 1, true);
+                this->evaluator.multiply(a, b, c);
+            }
+
             this->evaluator.relinearize_inplace(c, this->relin_keys);
             this->evaluator.rescale_to_next_inplace(c);
             c.scale() = ckks_scale;
@@ -122,12 +131,18 @@ namespace mage::protocols::ckks {
         }
 
         void op_multiply_raw(std::uint8_t* output, const std::uint8_t* input1, const std::uint8_t* input2, std::int32_t level) {
-            seal::Ciphertext a, b;
-            this->deserialize(a, input1, level, true);
-            this->deserialize(b, input2, level, true);
-
             seal::Ciphertext c;
-            this->evaluator.multiply(a, b, c);
+
+            seal::Ciphertext a;
+            this->deserialize(a, input1, level, true);
+
+            if (input1 == input2) {
+                this->evaluator.square(a, c);
+            } else {
+                seal::Ciphertext b;
+                this->deserialize(b, input2, level, true);
+                this->evaluator.multiply(a, b, c);
+            }
             this->serialize(c, output, level, false);
         }
 
@@ -173,6 +188,7 @@ namespace mage::protocols::ckks {
 
     private:
         void serialize(seal::Ciphertext& c, std::uint8_t* buffer, std::int32_t level, bool normalized) {
+            auto start = std::chrono::steady_clock::now();
             std::size_t buffer_size = ciphertext_size(level, normalized);
             std::size_t written = c.save(reinterpret_cast<seal::seal_byte*>(buffer), buffer_size, seal::compr_mode_type::none);
             if (written > buffer_size) {
@@ -180,9 +196,12 @@ namespace mage::protocols::ckks {
                 std::cerr << "Upper bound on level " << level << " ciphertext size is " << c.save_size(seal::compr_mode_type::none) << " bytes" << std::endl;
                 std::abort();
             }
+            auto end = std::chrono::steady_clock::now();
+            this->serialize_stats.event(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count());
         }
 
         void serialize(seal::Plaintext& c, std::uint8_t* buffer, std::int32_t level) {
+            auto start = std::chrono::steady_clock::now();
             std::size_t buffer_size = plaintext_size(level);
             std::size_t written = c.save(reinterpret_cast<seal::seal_byte*>(buffer), buffer_size, seal::compr_mode_type::none);
             if (written > buffer_size) {
@@ -190,14 +209,22 @@ namespace mage::protocols::ckks {
                 std::cerr << "Upper bound on level " << level << " plaintext size is " << c.save_size(seal::compr_mode_type::none) << " bytes" << std::endl;
                 std::abort();
             }
+            auto end = std::chrono::steady_clock::now();
+            this->serialize_stats.event(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count());
         }
 
         void deserialize(seal::Ciphertext& c, const std::uint8_t* buffer, std::int32_t level, bool normalized) {
+            auto start = std::chrono::steady_clock::now();
             c.unsafe_load(this->context, reinterpret_cast<const seal::seal_byte*>(buffer), ciphertext_size(level, normalized));
+            auto end = std::chrono::steady_clock::now();
+            this->deserialize_stats.event(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count());
         }
 
         void deserialize(seal::Plaintext& c, const std::uint8_t* buffer, std::int32_t level) {
+            auto start = std::chrono::steady_clock::now();
             c.unsafe_load(this->context, reinterpret_cast<const seal::seal_byte*>(buffer), plaintext_size(level));
+            auto end = std::chrono::steady_clock::now();
+            this->deserialize_stats.event(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count());
         }
 
         seal::EncryptionParameters parms;
@@ -208,6 +235,9 @@ namespace mage::protocols::ckks {
 
         std::ifstream input_reader;
         std::ofstream output_writer;
+
+        util::StreamStats serialize_stats;
+        util::StreamStats deserialize_stats;
     };
 }
 
