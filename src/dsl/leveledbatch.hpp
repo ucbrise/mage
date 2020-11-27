@@ -33,29 +33,88 @@
 namespace mage::dsl {
     using memprog::Program;
 
+    template <std::int32_t level, bool normalized, typename Placer, Program<Placer>** p>
+    class LeveledBatch;
+
     template <std::int32_t level, typename Placer, Program<Placer>** p>
-    class LeveledBatch {
-        template <std::int32_t other_level, typename OtherPlacer, Program<OtherPlacer>** other_p>
+    class LeveledPlaintextBatch {
+        static_assert(level >= 0 && level <= 2);
+
+        template <std::int32_t other_level, bool other_normalized, typename OtherPlacer, Program<OtherPlacer>** other_p>
         friend class LeveledBatch;
 
-        static_assert(level >= -1 && level <= 2);
+    public:
+        LeveledPlaintextBatch() : v(invalid_vaddr) {
+        }
+
+        LeveledPlaintextBatch(double public_constant) {
+            Instruction& instr = (*p)->instruction();
+            instr.header.operation = OpCode::Encode;
+            instr.header.width = level;
+            instr.header.flags = 0;
+            instr.constant.constant = *reinterpret_cast<std::uint64_t*>(&public_constant);
+            this->v = (*p)->commit_instruction(this->get_size());
+        }
+
+        LeveledPlaintextBatch(LeveledPlaintextBatch<level, Placer, p>& other) = delete;
+
+        LeveledPlaintextBatch(LeveledPlaintextBatch<level, Placer, p>&& other) : v(other.v) {
+            other.v = invalid_vaddr;
+        }
+
+        ~LeveledPlaintextBatch() {
+            this->recycle();
+        }
+
+        LeveledPlaintextBatch<level, Placer, p>& operator =(LeveledPlaintextBatch<level, Placer, p>& other) = delete;
+
+        LeveledPlaintextBatch<level, Placer, p>& operator =(LeveledPlaintextBatch<level, Placer, p>&& other) {
+            this->recycle();
+            this->v = other.v;
+            other.v = invalid_vaddr;
+            return *this;
+        }
+
+    private:
+        void recycle() {
+            if (this->v != invalid_vaddr) {
+                (*p)->recycle(this->v, this->get_size());
+                this->v = invalid_vaddr;
+            }
+        }
+
+        static constexpr std::size_t get_size() {
+            return protocols::ckks::ckks_plaintext_size(level);
+        }
+
+        VirtAddr v;
+    };
+
+    template <std::int32_t level, bool normalized, typename Placer, Program<Placer>** p>
+    class LeveledBatch {
+        template <std::int32_t other_level, bool other_normalized, typename OtherPlacer, Program<OtherPlacer>** other_p>
+        friend class LeveledBatch;
+
+        static_assert(level >= 0 && level <= 2);
 
     public:
         LeveledBatch() : v(invalid_vaddr) {
         }
 
-        LeveledBatch(float public_constant) {
+        LeveledBatch(double public_constant) {
+            static_assert(normalized);
+
             Instruction& instr = (*p)->instruction();
             instr.header.operation = OpCode::PublicConstant;
             instr.header.width = level;
             instr.header.flags = 0;
-            instr.constant.constant = *reinterpret_cast<std::uint32_t*>(&public_constant);
+            instr.constant.constant = *reinterpret_cast<std::uint64_t*>(&public_constant);
             this->v = (*p)->commit_instruction(this->get_size());
         }
 
-        LeveledBatch(const LeveledBatch<level, Placer, p>& other) = delete;
+        LeveledBatch(const LeveledBatch<level, normalized, Placer, p>& other) = delete;
 
-        LeveledBatch(LeveledBatch<level, Placer, p>&& other) : v(other.v) {
+        LeveledBatch(LeveledBatch<level, normalized, Placer, p>&& other) : v(other.v) {
             other.v = invalid_vaddr;
         }
 
@@ -69,7 +128,7 @@ namespace mage::dsl {
             Instruction& instr = (*p)->instruction();
             instr.header.operation = OpCode::Input;
             instr.header.width = level;
-            instr.header.flags = 0;
+            instr.header.flags = normalized ? 0x0 : FlagNotNormalized;
             this->v = (*p)->commit_instruction(this->get_size());
         }
 
@@ -77,14 +136,14 @@ namespace mage::dsl {
             Instruction& instr = (*p)->instruction();
             instr.header.operation = OpCode::Output;
             instr.header.width = level;
-            instr.header.flags = 0;
+            instr.header.flags = normalized ? 0x0 : FlagNotNormalized;
             instr.header.output = this->v;
             (*p)->commit_instruction(0);
         }
 
-        LeveledBatch<level, Placer, p>& operator =(const LeveledBatch<level, Placer, p>& other) = delete;
+        LeveledBatch<level, normalized, Placer, p>& operator =(const LeveledBatch<level, normalized, Placer, p>& other) = delete;
 
-        LeveledBatch<level, Placer, p>& operator =(LeveledBatch<level, Placer, p>&& other) {
+        LeveledBatch<level, normalized, Placer, p>& operator =(LeveledBatch<level, normalized, Placer, p>&& other) {
             this->recycle();
             this->v = other.v;
             other.v = invalid_vaddr;
@@ -95,7 +154,7 @@ namespace mage::dsl {
             Instruction& instr = (*p)->instruction();
             instr.header.operation = OpCode::NetworkBufferSend;
             instr.header.width = level;
-            instr.header.flags = 0;
+            instr.header.flags = normalized ? 0x0 : FlagNotNormalized;;
             instr.header.output = this->v;
             instr.constant.constant = to;
             (*p)->commit_instruction(0);
@@ -107,7 +166,7 @@ namespace mage::dsl {
             Instruction& instr = (*p)->instruction();
             instr.header.operation = OpCode::NetworkPostReceive;
             instr.header.width = level;
-            instr.header.flags = 0;
+            instr.header.flags = normalized ? 0x0 : FlagNotNormalized;;
             instr.constant.constant = from;
             this->v = (*p)->commit_instruction(this->get_size());
         }
@@ -120,24 +179,49 @@ namespace mage::dsl {
             (*p)->finish_receive(from);
         }
 
-        LeveledBatch<level, Placer, p> operator +(const LeveledBatch<level, Placer, p>& other) {
-            static_assert(level > -1);
-            return LeveledBatch<level, Placer, p>(OpCode::IntAdd, *this, other);
+        LeveledBatch<level, normalized, Placer, p> operator +(const LeveledBatch<level, normalized, Placer, p>& other) {
+            static_assert(level >= 0);
+            return LeveledBatch<level, normalized, Placer, p>(OpCode::IntAdd, *this, other);
         }
 
-        LeveledBatch<level - 1, Placer, p> operator *(const LeveledBatch<level, Placer, p>& other) {
-            static_assert(level > 0);
-            return LeveledBatch<level - 1, Placer, p>(OpCode::IntMultiply, *this, other);
+        LeveledBatch<level, normalized, Placer, p> operator -(const LeveledBatch<level, normalized, Placer, p>& other) {
+            static_assert(level >= 0);
+            return LeveledBatch<level, normalized, Placer, p>(OpCode::IntSub, *this, other);
         }
 
-        LeveledBatch<level - 1, Placer, p> operator *(const LeveledBatch<-1, Placer, p>& plaintext) {
-            static_assert(level > 0);
-            return LeveledBatch<level - 1, Placer, p>(OpCode::MultiplyPlaintext, *this, plaintext);
+        LeveledBatch<level, normalized, Placer, p> operator +(const LeveledPlaintextBatch<level, Placer, p>& other) {
+            static_assert(level >= 0);
+            return LeveledBatch<level, normalized, Placer, p>(OpCode::AddPlaintext, *this, other);
         }
 
-        LeveledBatch<level - 1, Placer, p> switch_level() {
+        LeveledBatch<level - 1, true, Placer, p> operator *(const LeveledBatch<level, true, Placer, p>& other) {
             static_assert(level > 0);
-            return LeveledBatch<level - 1, Placer, p>(OpCode::SwitchLevel, *this);
+            static_assert(normalized);
+            return LeveledBatch<level - 1, normalized, Placer, p>(OpCode::IntMultiply, *this, other);
+        }
+
+        LeveledBatch<level, false, Placer, p> multiply_without_normalizing(const LeveledBatch<level, true, Placer, p>& other) {
+            static_assert(level > 0);
+            static_assert(normalized);
+            return LeveledBatch<level, false, Placer, p>(OpCode::MultiplyRaw, *this, other);
+        }
+
+        LeveledBatch<level - 1, true, Placer, p> operator *(const LeveledPlaintextBatch<level, Placer, p>& plaintext) {
+            static_assert(level > 0);
+            static_assert(normalized);
+            return LeveledBatch<level - 1, normalized, Placer, p>(OpCode::MultiplyPlaintext, *this, plaintext);
+        }
+
+        LeveledBatch<level - 1, true, Placer, p> renormalize() {
+            static_assert(level > 0);
+            static_assert(!normalized);
+            return LeveledBatch<level - 1, true, Placer, p>(OpCode::Renormalize, *this);
+        }
+
+        LeveledBatch<level - 1, true, Placer, p> switch_level() {
+            static_assert(level > 0);
+            static_assert(normalized);
+            return LeveledBatch<level - 1, normalized, Placer, p>(OpCode::SwitchLevel, *this);
         }
 
         bool valid() const {
@@ -152,26 +236,26 @@ namespace mage::dsl {
         }
 
         static constexpr std::size_t get_size() {
-            return protocols::ckks::ckks_ciphertext_size(level);
+            return protocols::ckks::ckks_ciphertext_size(level, normalized);
         }
 
     private:
-        template <std::int32_t arg0_level>
-        LeveledBatch(OpCode operation, const LeveledBatch<arg0_level, Placer, p>& arg0) {
+        template <std::int32_t arg0_level, bool arg0_normalized>
+        LeveledBatch(OpCode operation, const LeveledBatch<arg0_level, arg0_normalized, Placer, p>& arg0) {
             Instruction& instr = (*p)->instruction();
             instr.header.operation = operation;
             instr.header.width = level;
-            instr.header.flags = 0;
+            instr.header.flags = normalized ? 0x0 : FlagNotNormalized;
             instr.one_arg.input1 = arg0.v;
             this->v = (*p)->commit_instruction(this->get_size());
         }
 
-        template <std::int32_t arg0_level, std::int32_t arg1_level>
-        LeveledBatch(OpCode operation, const LeveledBatch<arg0_level, Placer, p>& arg0, const LeveledBatch<arg1_level, Placer, p>& arg1) {
+        template <std::int32_t arg0_level, bool arg0_normalized, typename Arg1>
+        LeveledBatch(OpCode operation, const LeveledBatch<arg0_level, arg0_normalized, Placer, p>& arg0, const Arg1& arg1) {
             Instruction& instr = (*p)->instruction();
             instr.header.operation = operation;
             instr.header.width = level;
-            instr.header.flags = 0;
+            instr.header.flags = normalized ? 0x0 : FlagNotNormalized;
             instr.two_args.input1 = arg0.v;
             instr.two_args.input2 = arg1.v;
             this->v = (*p)->commit_instruction(this->get_size());

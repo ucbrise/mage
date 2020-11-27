@@ -38,6 +38,7 @@ namespace mage {
         FlagInput3Constant = 0x4,
         FlagOutputPageFirstUse = 0x8,
         FlagEvaluatorInput = 0x10,
+        FlagNotNormalized = 0x20,
     };
 
     template <InstructionFlags... flags>

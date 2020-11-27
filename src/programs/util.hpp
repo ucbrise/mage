@@ -40,8 +40,11 @@ namespace mage::programs {
     using Bit = Integer<1>;
     using BitSlice = IntSlice<1>;
 
+    template <std::uint32_t level, bool normalized>
+    using LeveledBatch = mage::dsl::LeveledBatch<level, normalized, memprog::BinnedPlacer, default_program>;
+
     template <std::uint32_t level>
-    using LeveledBatch = mage::dsl::LeveledBatch<level, memprog::BinnedPlacer, default_program>;
+    using LeveledPlaintextBatch = mage::dsl::LeveledPlaintextBatch<level, memprog::BinnedPlacer, default_program>;
 
     template <BitWidth width = 8>
     Integer<2 * width> dot_product(Integer<width>* vector_a, Integer<width>* vector_b, std::size_t length) {

@@ -59,7 +59,11 @@ namespace mage {
         BitXOR, // 2 arguments
         ValueSelect, // 3 arguments
         SwitchLevel, // 1 argument
+        AddPlaintext, // 2 arguments
         MultiplyPlaintext, // 2 arguments
+        MultiplyRaw, // 2 arguments
+        Renormalize, // 1 argument
+        Encode, // 1 argument
     };
 
     constexpr const char* opcode_to_string(OpCode op) {
@@ -124,8 +128,16 @@ namespace mage {
             return "ValueSelect";
         case OpCode::SwitchLevel:
             return "SwitchLevel";
+        case OpCode::AddPlaintext:
+            return "AddPlaintext";
         case OpCode::MultiplyPlaintext:
             return "MultiplyPlaintext";
+        case OpCode::MultiplyRaw:
+            return "MultiplyRaw";
+        case OpCode::Renormalize:
+            return "Renormalize";
+        case OpCode::Encode:
+            return "Encode";
         default:
             std::abort();
         }
@@ -241,6 +253,7 @@ namespace mage {
                 this->has_output = false;
                 break;
             case OpCode::PublicConstant:
+            case OpCode::Encode:
                 this->layout = InstructionFormat::Constant;
                 this->single_bit = false;
                 this->has_output = true;
@@ -257,7 +270,9 @@ namespace mage {
             case OpCode::BitAND:
             case OpCode::BitOR:
             case OpCode::BitXOR:
+            case OpCode::AddPlaintext:
             case OpCode::MultiplyPlaintext:
+            case OpCode::MultiplyRaw:
                 this->layout = InstructionFormat::TwoArgs;
                 this->single_bit = false;
                 this->has_output = true;
@@ -266,6 +281,7 @@ namespace mage {
             case OpCode::IntDecrement:
             case OpCode::BitNOT:
             case OpCode::SwitchLevel:
+            case OpCode::Renormalize:
                 this->layout = InstructionFormat::OneArg;
                 this->single_bit = false;
                 this->has_output = true;

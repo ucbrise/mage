@@ -414,6 +414,21 @@ int main(int argc, char** argv) {
             }
             expected_writers[0]->write_float(static_cast<float>(sum) / 100.0);
         }
+    } else if (problem_name == "real_statistics") {
+        if (option == "") {
+            std::size_t sum = 0;
+            std::size_t sum_squares = 0;
+            for (std::size_t i = 0; i != input_size; i++) {
+                std::uint64_t w = get_blocked_worker(i, num_workers, input_size);
+                garbler_writers[w]->write_float(static_cast<float>(i) / 100.0);
+                sum += i;
+                sum_squares += i * i;
+            }
+            float mean = (static_cast<float>(sum) / 100.0) / input_size;
+            float variance = ((static_cast<float>(sum_squares) / 10000.0) / input_size) - mean * mean;
+            expected_writers[0]->write_float(mean);
+            expected_writers[0]->write_float(variance);
+        }
     } else {
         std::cerr << "Unknown problem " << problem_name << std::endl;
     }

@@ -28,11 +28,33 @@
 namespace mage::protocols::ckks {
     inline double ckks_scale = std::pow(2.0, 40);
 
-    constexpr std::uint64_t ckks_ciphertext_size(std::int32_t level) {
-        if (level == -1) {
-            // Plaintext: Measure this!
-            return 10000;
-        } else if (level == 0) {
+    constexpr std::uint64_t ckks_ciphertext_size(std::int32_t level, bool normalized) {
+        if (normalized) {
+            if (level == 0) {
+                return 131689;
+            } else if (level == 1) {
+                return 263273;
+            } else if (level == 2) {
+                return 394857;
+            } else {
+                return UINT64_MAX;
+            }
+        } else {
+            if (level == 0) {
+                return UINT64_MAX;
+            } else if (level == 1) {
+                return 394857;
+            } else if (level == 2) {
+                return 592233;
+            } else {
+                return UINT64_MAX;
+            }
+        }
+    }
+
+    constexpr std::uint64_t ckks_plaintext_size(std::int32_t level) {
+        /* For now, I've just taken the ciphertext sizes... */
+        if (level == 0) {
             return 131689;
         } else if (level == 1) {
             return 263273;

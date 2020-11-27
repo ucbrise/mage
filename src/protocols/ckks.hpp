@@ -51,73 +51,159 @@ namespace mage::protocols::ckks {
         using Wire = std::uint8_t;
 
         CKKSEngine(const char* input_file, const char* output_file)
-            : parms(parms_from_file("parms.ckks")), context(parms), evaluator(context),
+            : parms(parms_from_file("parms.ckks")), context(parms), evaluator(context), encoder(context),
               input_reader(input_file, std::ios::binary), output_writer(output_file, std::ios::binary) {
             std::ifstream relin_file("relinkeys.ckks");
             this->relin_keys.load(this->context, relin_file);
         }
 
-        void input(std::uint8_t* buffer, std::int32_t level) {
+        void input(std::uint8_t* buffer, std::int32_t level, bool normalized) {
             if (level == -1) {
                 std::cerr << "TODO: handle plaintext" << std::endl;
                 std::abort();
             }
             seal::Ciphertext c;
             c.load(this->context, this->input_reader);
-            this->serialize(c, buffer, level);
+            this->serialize(c, buffer, level, normalized);
         }
 
-        void output(const std::uint8_t* buffer, std::int32_t level) {
+        void output(const std::uint8_t* buffer, std::int32_t level, bool normalized) {
             seal::Ciphertext c;
-            this->deserialize(c, buffer, level);
+            this->deserialize(c, buffer, level, normalized);
             c.save(this->output_writer, seal::compr_mode_type::none);
         }
 
-        void op_add(std::uint8_t* output, const std::uint8_t* input1, const std::uint8_t* input2, std::int32_t level) {
+        void op_add(std::uint8_t* output, const std::uint8_t* input1, const std::uint8_t* input2, std::int32_t level, bool normalized) {
             seal::Ciphertext a, b;
-            this->deserialize(a, input1, level);
-            this->deserialize(b, input2, level);
+            this->deserialize(a, input1, level, normalized);
+            this->deserialize(b, input2, level, normalized);
 
             seal::Ciphertext c;
             this->evaluator.add(a, b, c);
-            this->serialize(c, output, level);
+            this->serialize(c, output, level, normalized);
+        }
+
+        void op_sub(std::uint8_t* output, const std::uint8_t* input1, const std::uint8_t* input2, std::int32_t level, bool normalized) {
+            seal::Ciphertext a, b;
+            this->deserialize(a, input1, level, normalized);
+            this->deserialize(b, input2, level, normalized);
+
+            seal::Ciphertext c;
+            this->evaluator.sub(a, b, c);
+            this->serialize(c, output, level, normalized);
         }
 
         void op_multiply(std::uint8_t* output, const std::uint8_t* input1, const std::uint8_t* input2, std::int32_t level) {
             seal::Ciphertext a, b;
-            this->deserialize(a, input1, level + 1);
-            this->deserialize(b, input2, level + 1);
+            this->deserialize(a, input1, level + 1, true);
+            this->deserialize(b, input2, level + 1, true);
 
             seal::Ciphertext c;
             this->evaluator.multiply(a, b, c);
             this->evaluator.relinearize_inplace(c, this->relin_keys);
             this->evaluator.rescale_to_next_inplace(c);
             c.scale() = ckks_scale;
-            this->serialize(c, output, level);
+            this->serialize(c, output, level, true);
         }
 
-        static std::size_t level_size(std::int32_t level) {
-            return ckks_ciphertext_size(level);
+        void op_multiply_plaintext(std::uint8_t* output, const std::uint8_t* input1, const std::uint8_t* input2, std::int32_t level) {
+            seal::Ciphertext a;
+            this->deserialize(a, input1, level + 1, true);
+
+            seal::Plaintext b;
+            this->deserialize(b, input2, level + 1);
+
+            seal::Ciphertext c;
+            this->evaluator.multiply_plain(a, b, c);
+            this->evaluator.relinearize_inplace(c, this->relin_keys);
+            this->evaluator.rescale_to_next_inplace(c);
+            c.scale() = ckks_scale;
+            this->serialize(c, output, level, true);
+        }
+
+        void op_multiply_raw(std::uint8_t* output, const std::uint8_t* input1, const std::uint8_t* input2, std::int32_t level) {
+            seal::Ciphertext a, b;
+            this->deserialize(a, input1, level, true);
+            this->deserialize(b, input2, level, true);
+
+            seal::Ciphertext c;
+            this->evaluator.multiply(a, b, c);
+            this->serialize(c, output, level, false);
+        }
+
+        void op_normalize(std::uint8_t* output, const std::uint8_t* input, std::int32_t level) {
+            seal::Ciphertext c;
+            this->deserialize(c, input, level + 1, false);
+            this->evaluator.relinearize_inplace(c, this->relin_keys);
+            this->evaluator.rescale_to_next_inplace(c);
+            c.scale() = ckks_scale;
+            this->serialize(c, output, level, true);
+        }
+
+        void op_switch_level(std::uint8_t* output, const std::uint8_t* input1, std::int32_t level) {
+            seal::Ciphertext a;
+            this->deserialize(a, input1, level + 1, true);
+            this->evaluator.rescale_to_next_inplace(a);
+            this->serialize(a, output, level, true);
+        }
+
+        void op_encode(std::uint8_t* output, std::uint64_t value, std::int32_t level) {
+            double real = *reinterpret_cast<double*>(&value);
+            seal::Plaintext p;
+            auto context_data = context.first_context_data();
+            while (context_data->chain_index() > level) {
+                context_data = context_data->next_context_data();
+            }
+            if (context_data->chain_index() != level) {
+                std::cout << "Could not find params for level " << level << " (max level is " << context.first_context_data()->chain_index() << ")" << std::endl;
+                std::abort();
+            }
+            auto target_level_parms_id = context_data->parms_id();
+            encoder.encode(real, target_level_parms_id, ckks_scale, p);
+            this->serialize(p, output, level);
+        }
+
+        static std::size_t ciphertext_size(std::int32_t level, bool normalized) {
+            return ckks_ciphertext_size(level, normalized);
+        }
+
+        static std::size_t plaintext_size(std::int32_t level) {
+            return ckks_plaintext_size(level);
         }
 
     private:
-        void serialize(seal::Ciphertext& c, std::uint8_t* buffer, std::int32_t level) {
-            std::size_t buffer_size = level_size(level);
+        void serialize(seal::Ciphertext& c, std::uint8_t* buffer, std::int32_t level, bool normalized) {
+            std::size_t buffer_size = ciphertext_size(level, normalized);
             std::size_t written = c.save(reinterpret_cast<seal::seal_byte*>(buffer), buffer_size, seal::compr_mode_type::none);
             if (written > buffer_size) {
-                std::cerr << "Buffer overflow: wrote " << written << " bytes for level " << level << " but allocated " << buffer_size << " bytes" << std::endl;
+                std::cerr << "Buffer overflow: wrote " << written << " bytes for level " << level << " ciphertext but allocated " << buffer_size << " bytes" << std::endl;
                 std::cerr << "Upper bound on level " << level << " ciphertext size is " << c.save_size(seal::compr_mode_type::none) << " bytes" << std::endl;
                 std::abort();
             }
         }
 
-        void deserialize(seal::Ciphertext& c, const std::uint8_t* buffer, std::int32_t level) {
-            c.unsafe_load(this->context, reinterpret_cast<const seal::seal_byte*>(buffer), level_size(level));
+        void serialize(seal::Plaintext& c, std::uint8_t* buffer, std::int32_t level) {
+            std::size_t buffer_size = plaintext_size(level);
+            std::size_t written = c.save(reinterpret_cast<seal::seal_byte*>(buffer), buffer_size, seal::compr_mode_type::none);
+            if (written > buffer_size) {
+                std::cerr << "Buffer overflow: wrote " << written << " bytes for level " << level << " plaintext but allocated " << buffer_size << " bytes" << std::endl;
+                std::cerr << "Upper bound on level " << level << " plaintext size is " << c.save_size(seal::compr_mode_type::none) << " bytes" << std::endl;
+                std::abort();
+            }
+        }
+
+        void deserialize(seal::Ciphertext& c, const std::uint8_t* buffer, std::int32_t level, bool normalized) {
+            c.unsafe_load(this->context, reinterpret_cast<const seal::seal_byte*>(buffer), ciphertext_size(level, normalized));
+        }
+
+        void deserialize(seal::Plaintext& c, const std::uint8_t* buffer, std::int32_t level) {
+            c.unsafe_load(this->context, reinterpret_cast<const seal::seal_byte*>(buffer), plaintext_size(level));
         }
 
         seal::EncryptionParameters parms;
         seal::SEALContext context;
         seal::Evaluator evaluator;
+        seal::CKKSEncoder encoder;
         seal::RelinKeys relin_keys;
 
         std::ifstream input_reader;

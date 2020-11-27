@@ -287,6 +287,7 @@ int main(int argc, char** argv) {
         } else if (std::strcmp(argv[1], "multiply") == 0) {
             seal::RelinKeys relin_keys = from_file<seal::RelinKeys>(context, "relinkeys.ckks");
             evaluator.multiply(a, b, c);
+            std::cout << "Nonlinear size: up to " << c.save_size() << " bytes" << std::endl;
             evaluator.relinearize_inplace(c, relin_keys);
             evaluator.rescale_to_next_inplace(c);
             c.scale() = ckks_scale; // the examples say to do this
@@ -296,6 +297,72 @@ int main(int argc, char** argv) {
             std::cout << "Up to " << c.save_size() << " bytes" << std::endl;
             std::ofstream ciphertext_file(argv[2], std::ios::binary);
             c.save(ciphertext_file);
+        }
+    } else if (std::strcmp(argv[1], "abpluscd") == 0) {
+        check_num_args(argc, 8);
+
+        seal::EncryptionParameters parms = parms_from_file("parms.ckks");
+        seal::SEALContext context(parms);
+        seal::Evaluator evaluator(context);
+
+        seal::Ciphertext a = from_file<seal::Ciphertext>(context, argv[4]);
+        seal::Ciphertext b = from_file<seal::Ciphertext>(context, argv[5]);
+        seal::Ciphertext c = from_file<seal::Ciphertext>(context, argv[6]);
+        seal::Ciphertext d = from_file<seal::Ciphertext>(context, argv[7]);
+
+        seal::Ciphertext e;
+        seal::RelinKeys relin_keys = from_file<seal::RelinKeys>(context, "relinkeys.ckks");
+        std::chrono::time_point<std::chrono::steady_clock> start, end, add_start, add_end;
+        {
+            start = std::chrono::steady_clock::now();
+            seal::Ciphertext temp1;
+            seal::Ciphertext temp2;
+            evaluator.multiply(a, b, temp1);
+            evaluator.multiply(c, d, temp2);
+            add_start = std::chrono::steady_clock::now();
+            evaluator.add(temp1, temp2, e);
+            add_end = std::chrono::steady_clock::now();
+            evaluator.relinearize_inplace(e, relin_keys);
+            evaluator.rescale_to_next_inplace(e);
+            e.scale() = ckks_scale; // the examples say to do this
+            end = std::chrono::steady_clock::now();
+            std::chrono::microseconds us = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+            std::cerr << "Strategy 1: " << us.count() << " us" << std::endl;
+            std::chrono::microseconds add_us = std::chrono::duration_cast<std::chrono::microseconds>(add_end - add_start);
+            std::cerr << "Strategy 1 (add): " << add_us.count() << " us" << std::endl;
+        }
+        {
+            std::cout << "Up to " << e.save_size() << " bytes" << std::endl;
+            std::ofstream ciphertext_file(argv[2], std::ios::binary);
+            e.save(ciphertext_file);
+        }
+        {
+            start = std::chrono::steady_clock::now();
+            seal::Ciphertext temp1;
+            evaluator.multiply(a, b, temp1);
+            evaluator.relinearize_inplace(temp1, relin_keys);
+            evaluator.rescale_to_next_inplace(temp1);
+            temp1.scale() = ckks_scale;
+
+            seal::Ciphertext temp2;
+            evaluator.multiply(c, d, temp2);
+            evaluator.relinearize_inplace(temp2, relin_keys);
+            evaluator.rescale_to_next_inplace(temp2);
+            temp2.scale() = ckks_scale;
+            end = std::chrono::steady_clock::now();
+            std::chrono::microseconds us = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+            std::cerr << "Strategy 2: " << us.count() << " us" << std::endl;
+
+            add_start = std::chrono::steady_clock::now();
+            evaluator.add(temp1, temp2, e);
+            add_end = std::chrono::steady_clock::now();
+            std::chrono::microseconds add_us = std::chrono::duration_cast<std::chrono::microseconds>(add_end - add_start);
+            std::cerr << "Strategy 2 (add): " << add_us.count() << " us" << std::endl;
+        }
+        {
+            std::cout << "Up to " << e.save_size() << " bytes" << std::endl;
+            std::ofstream ciphertext_file(argv[3], std::ios::binary);
+            e.save(ciphertext_file);
         }
     } else {
         std::cerr << "Unknown command " << argv[1] << std::endl;
