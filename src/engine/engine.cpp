@@ -37,6 +37,7 @@
 namespace mage::engine {
     void Engine::init(const std::string& storage_file, PageSize page_size_in_bytes, std::uint64_t num_pages, std::uint64_t swap_pages, std::uint32_t concurrent_swaps) {
         assert(this->memory == nullptr);
+        auto start = std::chrono::steady_clock::now();
 
         if (io_setup(concurrent_swaps, &this->aio_ctx) != 0) {
             std::perror("io_setup");
@@ -44,7 +45,9 @@ namespace mage::engine {
         }
 
         this->memory_size = num_pages * page_size_in_bytes;
+        auto mem_start = std::chrono::steady_clock::now();
         this->memory = platform::allocate_resident_memory<std::uint8_t>(this->memory_size);
+        auto mem_end = std::chrono::steady_clock::now();
         std::uint64_t required_size = swap_pages * page_size_in_bytes;
         if (storage_file.rfind("/dev/", 0) != std::string::npos) {
             std::uint64_t length;
@@ -57,6 +60,10 @@ namespace mage::engine {
             this->swapfd = platform::create_file(storage_file.c_str(), required_size, true, true);
         }
         this->page_size_bytes = page_size_in_bytes;
+
+        auto end = std::chrono::steady_clock::now();
+        std::cout << "Memory alloc time: " << std::chrono::duration_cast<std::chrono::milliseconds>(mem_end - mem_start).count() << " ms" << std::endl;
+        std::cout << "Total init time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms" << std::endl;
     }
 
     Engine::~Engine()  {
