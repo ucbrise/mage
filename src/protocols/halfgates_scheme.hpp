@@ -35,6 +35,7 @@
 #include "crypto/mitccrh.hpp"
 #include "crypto/prg.hpp"
 #include "crypto/prp.hpp"
+#include "util/binaryfile.hpp"
 
 namespace mage::protocols::halfgates {
     class HalfGatesGarbler {
@@ -80,10 +81,10 @@ namespace mage::protocols::halfgates {
         }
 
         // HACK: assume all output goes to the garbler
-        void output(std::uint8_t* into, const Wire* data, unsigned int length) {
+        void output(std::vector<bool>* into, const Wire* data, unsigned int length) {
             for (unsigned int i = 0; i != length; i++) {
                 bool lsb = crypto::getLSB(data[i]);
-                into[i] = lsb ? 0x1 : 0x0;
+                into->push_back(lsb);
             }
         }
 
@@ -231,10 +232,10 @@ namespace mage::protocols::halfgates {
         }
 
         // HACK: assume all output goes to the garbler
-        void output(std::uint8_t* into, const Wire* data, unsigned int length) {
+        void output(util::BinaryWriter* into, const Wire* data, unsigned int length) {
             for (unsigned int i = 0; i != length; i++) {
                 bool lsb = crypto::getLSB(data[i]);
-                into[i] = lsb ? 0x1 : 0x0;
+                into->write1(lsb ? 0x1 : 0x0);
             }
         }
 

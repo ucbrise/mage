@@ -42,6 +42,7 @@ namespace mage::protocols::halfgates {
     const constexpr std::uint64_t halfgates_max_batch_size = 4 * crypto::block_num_bits;
     constexpr const std::size_t halfgates_num_input_daemons = 3;
     constexpr const std::size_t halfgates_num_connections = 1 + halfgates_num_input_daemons;
+    constexpr const std::size_t halfgates_output_batch_size = 1 << 21; // number of bits to buffer before completing a round and writing it to a file
 
     template <typename T, std::size_t batch_size>
     class InputBatchPipe : public util::UserPipe<std::array<T, batch_size>> {
@@ -91,7 +92,7 @@ namespace mage::protocols::halfgates {
         using Wire = HalfGatesGarbler::Wire;
 
         HalfGatesGarblingEngine(const std::shared_ptr<engine::ClusterNetwork>& network, const char* input_file, const char* output_file, const char* evaluator_host, const char* evaluator_port)
-            : input_reader(input_file), output_writer(output_file), input_daemon_threads(halfgates_num_input_daemons), evaluator_input_index(0) {
+            : input_reader(input_file), output_writer(output_file), conn_output_reader(this->conn_reader), input_daemon_threads(halfgates_num_input_daemons), evaluator_input_index(0) {
             platform::network_connect(evaluator_host, evaluator_port, this->sockets.data(), nullptr, halfgates_num_connections);
             this->conn_reader.set_file_descriptor(this->sockets[0], false);
             this->conn_writer.set_file_descriptor(this->sockets[0], false);
@@ -125,11 +126,7 @@ namespace mage::protocols::halfgates {
         }
 
         ~HalfGatesGarblingEngine() {
-            this->conn_writer.flush(); // otherwise we may deadlock
-            for (std::uint64_t i = 0; i != this->output_label_lsbs.size(); i++) {
-                std::uint8_t evaluator_lsb = this->conn_reader.read<std::uint8_t>();
-                this->output_writer.write1(this->output_label_lsbs[i] ^ evaluator_lsb);
-            }
+            this->write_pending_output_data();
             this->conn_reader.relinquish_file_descriptor();
             this->conn_writer.relinquish_file_descriptor();
             for (int i = 0; i != halfgates_num_input_daemons; i++) {
@@ -166,11 +163,26 @@ namespace mage::protocols::halfgates {
             }
         }
 
+        void write_pending_output_data() {
+            this->conn_writer.flush(); // otherwise we may deadlock
+            for (std::uint64_t i = 0; i != this->output_label_lsbs.size(); i++) {
+                bool evaluator_lsb = this->conn_output_reader.read1();
+                this->output_writer.write1((this->output_label_lsbs[i] == evaluator_lsb) ? 0x0 : 0x1);
+            }
+        }
+
         // HACK: assume all output goes to the garbler
         void output(const Wire* data, unsigned int length) {
-            std::size_t current_length = this->output_label_lsbs.size();
-            this->output_label_lsbs.resize(current_length + length);
-            this->garbler.output(&this->output_label_lsbs.data()[current_length], data, length);
+            while (length != 0) {
+                unsigned int length_to_process = std::min(static_cast<unsigned int>(halfgates_output_batch_size - this->output_label_lsbs.size()), length);
+                this->garbler.output(&this->output_label_lsbs, data, length_to_process);
+                data += length_to_process;
+                length -= length_to_process;
+                if (this->output_label_lsbs.size() == halfgates_output_batch_size) {
+                    this->write_pending_output_data();
+                    this->output_label_lsbs.clear();
+                }
+            }
         }
 
         void op_and(Wire& output, const Wire& input1, const Wire& input2) {
@@ -213,7 +225,8 @@ namespace mage::protocols::halfgates {
         std::array<int, halfgates_num_connections> sockets;
         util::BufferedFileReader<false> conn_reader;
         util::BufferedFileWriter<false> conn_writer;
-        std::vector<std::uint8_t> output_label_lsbs;
+        util::BinaryReader conn_output_reader;
+        std::vector<bool> output_label_lsbs;
 
         std::vector<InputDaemonThread> input_daemon_threads;
         std::size_t evaluator_input_index;
@@ -224,7 +237,8 @@ namespace mage::protocols::halfgates {
         using Wire = HalfGatesEvaluator::Wire;
 
         HalfGatesEvaluationEngine(const char* input_file, const char* evaluator_port)
-            : input_reader(input_file), input_daemon_threads(halfgates_num_input_daemons), evaluator_input_index(0) {
+            : input_reader(input_file), conn_output_writer(this->conn_writer), input_daemon_threads(halfgates_num_input_daemons), evaluator_input_index(0),
+            bits_left_in_output_batch(halfgates_output_batch_size) {
             platform::network_accept(evaluator_port, this->sockets.data(), halfgates_num_connections);
             this->conn_reader.set_file_descriptor(this->sockets[0], false);
             this->conn_writer.set_file_descriptor(this->sockets[0], false);
@@ -274,9 +288,17 @@ namespace mage::protocols::halfgates {
         }
 
         void output(const Wire* data, unsigned int length) {
-            std::uint8_t* into = reinterpret_cast<std::uint8_t*>(this->conn_writer.start_write(length));
-            this->evaluator.output(into, data, length);
-            this->conn_writer.finish_write(length);
+            while (length != 0) {
+                unsigned int to_write_this_iteration = std::min(static_cast<unsigned int>(this->bits_left_in_output_batch), length);
+                this->evaluator.output(&this->conn_output_writer, data, length);
+                length -= to_write_this_iteration;
+                data += to_write_this_iteration;
+                this->bits_left_in_output_batch -= length;
+                if (this->bits_left_in_output_batch == 0) {
+                    this->conn_writer.flush();
+                    this->bits_left_in_output_batch = halfgates_output_batch_size;
+                }
+            }
         }
 
         void op_and(Wire& output, const Wire& input1, const Wire& input2) {
@@ -317,10 +339,12 @@ namespace mage::protocols::halfgates {
         std::array<int, halfgates_num_connections> sockets;
         util::BufferedFileReader<false> conn_reader;
         util::BufferedFileWriter<false> conn_writer;
+        util::BinaryWriter conn_output_writer;
 
         /* For the input daemon. */
         std::vector<InputDaemonThread> input_daemon_threads;
         std::size_t evaluator_input_index;
+        std::size_t bits_left_in_output_batch;
     };
 }
 

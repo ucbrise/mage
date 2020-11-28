@@ -28,14 +28,16 @@
 #include "util/filebuffer.hpp"
 
 namespace mage::util {
-    class BinaryFileWriter : private BufferedFileWriter<false> {
+    class BinaryWriter {
     public:
-        BinaryFileWriter(const char* output_file) : BufferedFileWriter<false>(output_file), total_num_bits(0), current_byte(0) {
+        BinaryWriter(BufferedFileWriter<false>& output_writer) : output(output_writer), total_num_bits(0), current_byte(0) {
         }
 
-        ~BinaryFileWriter() {
+        BinaryWriter(BinaryWriter& other) = delete;
+
+        ~BinaryWriter() {
             if ((static_cast<std::uint8_t>(this->total_num_bits) & 0x7) != 0) {
-                this->write<std::uint8_t>() = this->current_byte;
+                this->output.write<std::uint8_t>() = this->current_byte;
             }
         }
 
@@ -73,7 +75,7 @@ namespace mage::util {
         void write8(std::uint8_t byte) {
             std::uint8_t current_bit = static_cast<std::uint8_t>(this->total_num_bits) & 0x7;
             this->current_byte |= (byte << current_bit);
-            this->write<std::uint8_t>() = this->current_byte;
+            this->output.write<std::uint8_t>() = this->current_byte;
             this->current_byte = (byte >> (8 - current_bit));
             this->total_num_bits += 8;
         }
@@ -83,7 +85,7 @@ namespace mage::util {
             this->current_byte |= (bit << current_bit);
             this->total_num_bits++;
             if (current_bit == 7) {
-                this->write<std::uint8_t>() = this->current_byte;
+                this->output.write<std::uint8_t>() = this->current_byte;
                 this->current_byte = 0;
             }
         }
@@ -91,16 +93,21 @@ namespace mage::util {
     private:
         std::uint64_t total_num_bits;
         std::uint8_t current_byte;
+        BufferedFileWriter<false>& output;
     };
 
-    class BinaryFileReader : private BufferedFileReader<false> {
+    class BinaryFileWriter : private BufferedFileWriter<false>, public BinaryWriter {
     public:
-        BinaryFileReader(const char* input_file, std::size_t buffer_size = 1 << 18) : BufferedFileReader<false>(input_file, buffer_size), current_bit(0), current_byte(0) {
+        BinaryFileWriter(const char* output_file) : BufferedFileWriter<false>(output_file), BinaryWriter(*static_cast<BufferedFileWriter*>(this)) {
+        }
+    };
+
+    class BinaryReader {
+    public:
+        BinaryReader(BufferedFileReader<false>& input_reader) : input(input_reader), current_bit(0), current_byte(0) {
         }
 
-        std::uint64_t get_file_length() const {
-            return platform::length_file(this->fd);
-        }
+        BinaryReader(BinaryReader& other) = delete;
 
         std::uint8_t read1() {
             if (this->current_bit == 0) {
@@ -121,14 +128,14 @@ namespace mage::util {
 
         void read_bytes(std::uint8_t* bytes, std::size_t num_bytes) {
             if (this->current_bit == 0) {
-                void* from = this->start_read(num_bytes);
+                void* from = this->input.start_read(num_bytes);
                 std::uint8_t* from_bytes = static_cast<std::uint8_t*>(from);
                 std::copy(from_bytes, from_bytes + num_bytes, bytes);
-                this->finish_read(num_bytes);
+                this->input.finish_read(num_bytes);
             } else {
                 for (std::uint32_t i = 0; i != num_bytes; i++) {
                     bytes[i] = (this->current_byte >> this->current_bit);
-                    this->current_byte = this->BufferedFileReader<false>::read<std::uint8_t>();
+                    this->current_byte = this->input.read<std::uint8_t>();
                     bytes[i] |= (this->current_byte << (8 - this->current_bit));
                 }
             }
@@ -144,11 +151,11 @@ namespace mage::util {
                  * but that's OK and cheaper to do.
                  */
                 if (this->current_bit == 0) {
-                    this->current_byte = this->read<std::uint8_t>();
+                    this->current_byte = this->input.read<std::uint8_t>();
                 }
                 bytes[num_bytes] = (this->current_byte >> this->current_bit);
                 if (leftover_bits > (8 - this->current_bit)) {
-                    this->current_byte = this->read<std::uint8_t>();
+                    this->current_byte = this->input.read<std::uint8_t>();
                     bytes[num_bytes] |= (this->current_byte << (8 - this->current_bit));
                 }
                 this->current_bit = (this->current_bit + leftover_bits) & 0x7;
@@ -158,6 +165,17 @@ namespace mage::util {
     private:
         std::uint8_t current_bit;
         std::uint8_t current_byte;
+        BufferedFileReader<false>& input;
+    };
+
+    class BinaryFileReader : private BufferedFileReader<false>, public BinaryReader {
+    public:
+        BinaryFileReader(const char* input_file, std::size_t buffer_size = 1 << 18) : BufferedFileReader<false>(input_file, buffer_size), BinaryReader(*static_cast<BufferedFileReader*>(this)) {
+        }
+
+        std::uint64_t get_file_length() const {
+            return platform::length_file(this->fd);
+        }
     };
 }
 

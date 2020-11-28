@@ -172,7 +172,7 @@ int main(int argc, char** argv) {
             std::uint64_t num_bytes = reader.get_file_length();
             std::uint64_t num_uint32s = num_bytes >> 2;
             for (std::uint64_t i = 0; i != num_uint32s; i++) {
-                double value = reader.read<float>();
+                double value = reader.BinaryReader::read<float>();
                 batch_data.push_back(value);
                 if (batch_data.size() == batch_size || i + 1 == num_uint32s) {
                     seal::Plaintext plaintext;
