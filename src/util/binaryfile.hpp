@@ -128,7 +128,7 @@ namespace mage::util {
             } else {
                 for (std::uint32_t i = 0; i != num_bytes; i++) {
                     bytes[i] = (this->current_byte >> this->current_bit);
-                    this->current_byte = this->read<std::uint8_t>();
+                    this->current_byte = this->BufferedFileReader<false>::read<std::uint8_t>();
                     bytes[i] |= (this->current_byte << (8 - this->current_bit));
                 }
             }
