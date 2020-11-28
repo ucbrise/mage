@@ -41,6 +41,8 @@ namespace mage::programs::real_sum {
             input.mark_input();
         });
 
+        program_ptr->print_stats();
+        program_ptr->start_timer();
 
         std::vector<LeveledBatch<0, true>>& locals = inputs.get_locals();
 
@@ -57,6 +59,9 @@ namespace mage::programs::real_sum {
         std::optional<LeveledBatch<0, true>> global_result = utils.reduce_aggregates<LeveledBatch<0, true>>(0, local_result, [](LeveledBatch<0, true>& a, LeveledBatch<0, true>& b) -> LeveledBatch<0, true> {
             return a + b;
         });
+
+        program_ptr->stop_timer();
+        program_ptr->print_stats();
 
         if (args.worker_index == 0) {
             global_result->mark_output();

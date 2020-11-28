@@ -59,6 +59,11 @@ namespace mage::protocols::ckks {
             this->relin_keys.load(this->context, relin_file);
         }
 
+        void print_stats() {
+            std::cout << this->serialize_stats << std::endl;
+            std::cout << this->deserialize_stats << std::endl;
+        }
+
         void input(std::uint8_t* buffer, std::int32_t level, bool normalized) {
             if (level == -1) {
                 std::cerr << "TODO: handle plaintext" << std::endl;

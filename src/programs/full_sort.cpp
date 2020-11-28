@@ -42,7 +42,13 @@ namespace mage::programs::merge_sorted {
             elem.data.mark_input(i < args.problem_size ? Party::Garbler : Party::Evaluator);
         });
 
+        program_ptr->print_stats();
+        program_ptr->start_timer();
+
         parallel_sorter(list);
+
+        program_ptr->stop_timer();
+        program_ptr->print_stats();
 
         list.for_each([=](std::size_t i, auto& elem) {
             elem.data.mark_output();

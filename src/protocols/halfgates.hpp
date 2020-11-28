@@ -139,6 +139,10 @@ namespace mage::protocols::halfgates {
             }
         }
 
+        void print_stats() {
+            std::cout << this->conn_writer.get_stats() << std::endl;
+        }
+
         void input(Wire* data, unsigned int length, bool garbler) {
             if (garbler) {
                 bool input_bits[length];
@@ -266,6 +270,10 @@ namespace mage::protocols::halfgates {
             for (std::size_t i = 0; i != halfgates_num_connections; i++) {
                 platform::network_close(this->sockets[i]);
             }
+        }
+
+        void print_stats() {
+            std::cout << this->conn_reader.get_stats() << std::endl;
         }
 
         void input(Wire* data, unsigned int length, bool garbler) {

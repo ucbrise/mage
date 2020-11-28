@@ -35,6 +35,9 @@ namespace mage::protocols::plaintext {
             : garbler_input_reader(garbler_input_file.c_str()), evaluator_input_reader(evaluator_input_file.c_str()), output_writer(output_file.c_str()) {
         }
 
+        void print_stats() {
+        }
+
         void input(Wire* data, unsigned int length, bool garbler) {
             util::BinaryFileReader& input_reader = garbler ? this->garbler_input_reader : this->evaluator_input_reader;
             for (unsigned int i = 0; i != length; i++) {

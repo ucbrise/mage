@@ -42,6 +42,9 @@ namespace mage::programs::merge_sorted {
             input.data.mark_input(i < args.problem_size ? Party::Garbler : Party::Evaluator);
         });
 
+        program_ptr->print_stats();
+        program_ptr->start_timer();
+
         /*
          * For malicious MPC, we would want to check that the input is sorted
          * as we would expect --- ascending for the first half, then
@@ -53,6 +56,9 @@ namespace mage::programs::merge_sorted {
 
         // Sort inputs and switch to blocked layout
         parallel_bitonic_sorter(inputs);
+
+        program_ptr->stop_timer();
+        program_ptr->print_stats();
 
         // Output sorted list
         inputs.for_each([=](std::size_t i, auto& input) {

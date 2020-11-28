@@ -44,6 +44,9 @@ namespace mage::programs::matrix_vector_multiply {
         std::uint64_t matrix_dimension = vector_size;
         std::uint64_t matrix_size = matrix_dimension * matrix_dimension;
 
+        program_ptr->print_stats();
+        program_ptr->start_timer();
+
         /* Blocked vector provided by the evaluator. */
         ShardedArray<Integer<width>> vector_x(vector_size, args.worker_index, args.num_workers, Layout::Blocked);
         vector_x.for_each([=](std::size_t i, auto& elem) {
@@ -61,6 +64,10 @@ namespace mage::programs::matrix_vector_multiply {
 
         /* Multiply my portion of the matrix by the entire vector. */
         std::vector<Integer<2 * width>> result = local_matrix_vector_multiply(my_matrix_a.data(), my_matrix_a.size() / my_vector_x.size(), my_vector_x.data(), my_vector_x.size());
+
+        program_ptr->stop_timer();
+        program_ptr->print_stats();
+
         for (std::size_t i = 0; i != result.size(); i++) {
             result[i].mark_output();
         }

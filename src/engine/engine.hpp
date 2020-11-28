@@ -26,6 +26,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <libaio.h>
+#include <chrono>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -90,6 +91,21 @@ namespace mage::engine {
             this->contact_worker_checked(who).flush();
         }
 
+        void print_stats() {
+            std::cout << this->swap_in << std::endl;
+            std::cout << this->swap_out << std::endl;
+            std::cout << this->swap_blocked << std::endl;
+        }
+
+        void start_timer() {
+            this->current_timer_value = std::chrono::steady_clock::now();
+        }
+
+        void stop_timer() {
+            auto end = std::chrono::steady_clock::now();
+            std::cout << "Timer: " << std::chrono::duration_cast<std::chrono::nanoseconds>(end - this->current_timer_value).count() << " ns" << std::endl;
+        }
+
     protected:
         std::uint8_t* get_memory() const {
             return this->memory;
@@ -106,6 +122,8 @@ namespace mage::engine {
         PageSize page_size_bytes;
         std::size_t memory_size;
         int swapfd;
+
+        std::chrono::steady_clock::time_point current_timer_value;
 
         std::shared_ptr<ClusterNetwork> cluster;
 

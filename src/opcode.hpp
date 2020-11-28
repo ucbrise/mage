@@ -30,6 +30,9 @@
 namespace mage {
     enum class OpCode : std::uint8_t {
         Undefined = 0,
+        PrintStats,
+        StartTimer,
+        StopTimer,
         IssueSwapIn,
         IssueSwapOut,
         FinishSwapIn,
@@ -70,6 +73,12 @@ namespace mage {
         switch (op) {
         case OpCode::Undefined:
             return "Undefined";
+        case OpCode::PrintStats:
+            return "PrintStats";
+        case OpCode::StartTimer:
+            return "StartTimer";
+        case OpCode::StopTimer:
+            return "StopTimer";
         case OpCode::IssueSwapIn:
             return "IssueSwapIn";
         case OpCode::IssueSwapOut:
@@ -205,6 +214,13 @@ namespace mage {
 
         constexpr void set(OpCode op)  {
             switch (op) {
+            case OpCode::PrintStats:
+            case OpCode::StartTimer:
+            case OpCode::StopTimer:
+                this->layout = InstructionFormat::Control;
+                this->single_bit = false;
+                this->has_output = false;
+                break;
             case OpCode::Input:
                 this->layout = InstructionFormat::NoArgs;
                 this->single_bit = false;

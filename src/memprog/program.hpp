@@ -84,6 +84,30 @@ namespace mage::memprog {
             this->append_instruction(instr);
         }
 
+        void print_stats() {
+            Instruction instr;
+            instr.header.operation = OpCode::PrintStats;
+            instr.header.flags = 0;
+            instr.control.data = 0;
+            this->append_instruction(instr);
+        }
+
+        void start_timer() {
+            Instruction instr;
+            instr.header.operation = OpCode::StartTimer;
+            instr.header.flags = 0;
+            instr.control.data = 0;
+            this->append_instruction(instr);
+        }
+
+        void stop_timer() {
+            Instruction instr;
+            instr.header.operation = OpCode::StopTimer;
+            instr.header.flags = 0;
+            instr.control.data = 0;
+            this->append_instruction(instr);
+        }
+
         static Program<Placer>* set_current_working_program(Program<Placer>* cwp) {
             Program<Placer>* old_cwp = Program<Placer>::current_working_program;
             Program<Placer>::current_working_program = cwp;

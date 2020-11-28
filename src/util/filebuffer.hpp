@@ -94,6 +94,10 @@ namespace mage::util {
             this->stats.set_label(label);
         }
 
+        util::StreamStats& get_stats() {
+            return this->stats;
+        }
+
         template <typename T>
         T& write(std::size_t size = sizeof(T)) {
             void* rv = this->start_write(size);
@@ -204,6 +208,10 @@ namespace mage::util {
         void enable_stats(const std::string& label) {
             this->use_stats = true;
             this->stats.set_label(label);
+        }
+
+        util::StreamStats& get_stats() {
+            return this->stats;
         }
 
         template <typename T>

@@ -59,12 +59,19 @@ namespace mage::programs::matrix_multiply {
             elem.mark_input(Party::Evaluator);
         });
 
+        program_ptr->print_stats();
+        program_ptr->start_timer();
+
         ClusterUtils utils;
         utils.self_id = args.worker_index;
         utils.num_proc = args.num_workers;
         auto [ my_matrix_a, my_matrix_b ] = utils.cross_product(matrix_a, matrix_b);
 
         std::vector<Integer<2 * width>> result = local_naive_matrix_multiply(my_matrix_a.data(), my_matrix_a.size() / matrix_dimension, my_matrix_b.data(), my_matrix_b.size() / matrix_dimension, matrix_dimension);
+
+        program_ptr->stop_timer();
+        program_ptr->print_stats();
+
         for (std::size_t i = 0; i != result.size(); i++) {
             result[i].mark_output();
         }

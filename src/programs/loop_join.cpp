@@ -81,6 +81,9 @@ namespace mage::programs::loop_join {
             input.data.mark_input(Party::Evaluator);
         });
 
+        program_ptr->print_stats();
+        program_ptr->start_timer();
+
         auto [ my_table1, my_table2 ] = utils.cross_product(table1, table2);
 
         // std::vector<Record<key_width, record_width>> my_table1;
@@ -184,6 +187,9 @@ namespace mage::programs::loop_join {
         std::vector<JoinedRecords<key_width, record_width, key_width, record_width>> joined = local_naive_loop_join<key_width, record_width, key_width, record_width>(args, my_table1, my_table2, [](IntSlice<key_width> key1, IntSlice<key_width> key2) -> Bit {
             return key1 < key2;
         });
+
+        program_ptr->stop_timer();
+        program_ptr->print_stats();
 
         for (int i = 0; i != joined.size(); i++) {
             joined[i].valid.mark_output();

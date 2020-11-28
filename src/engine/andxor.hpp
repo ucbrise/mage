@@ -360,6 +360,17 @@ namespace mage::engine {
 
         std::size_t execute_instruction(const PackedPhysInstruction& phys) {
             switch (phys.header.operation) {
+            case OpCode::PrintStats:
+                std::cout << this->input.get_stats() << std::endl;
+                this->print_stats();
+                this->protocol.print_stats();
+                return PackedPhysInstruction::size(OpCode::PrintStats);
+            case OpCode::StartTimer:
+                this->start_timer();
+                return PackedPhysInstruction::size(OpCode::StartTimer);
+            case OpCode::StopTimer:
+                this->stop_timer();
+                return PackedPhysInstruction::size(OpCode::StartTimer);
             case OpCode::IssueSwapIn:
                 this->issue_swap_in(phys.swap.storage, phys.swap.memory);
                 return PackedPhysInstruction::size(OpCode::IssueSwapIn);

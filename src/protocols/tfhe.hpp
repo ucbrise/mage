@@ -59,6 +59,9 @@ namespace mage::protocols::tfhe {
             }
         }
 
+        void print_stats() {
+        }
+
         void input(Wire* data, unsigned int length, bool garbler) {
             std::ifstream* reader_ptr = garbler ? &this->garbler_input_reader : &this->evaluator_input_reader;
             reader_ptr->read(reinterpret_cast<char*>(data), length * sizeof(Wire));

@@ -64,6 +64,9 @@ namespace mage::programs::real_sum {
             input.mark_input();
         });
 
+        program_ptr->print_stats();
+        program_ptr->start_timer();
+
         std::vector<LeveledBatch<2, true>>& locals = inputs.get_locals();
 
         Stats local;
@@ -91,8 +94,15 @@ namespace mage::programs::real_sum {
             LeveledBatch<1, true> mean = global_stats->sum * LeveledPlaintextBatch<2>(1 / static_cast<double>(input_array_length));
             LeveledBatch<0, true> mean_squares = global_stats->sum_squares * LeveledPlaintextBatch<1>(1 / static_cast<double>(input_array_length));
             LeveledBatch<0, true> variance = mean_squares - (mean * mean);
+
+            program_ptr->stop_timer();
+            program_ptr->print_stats();
+
             mean.mark_output();
             variance.mark_output();
+        } else {
+            program_ptr->stop_timer();
+            program_ptr->print_stats();
         }
     }
 

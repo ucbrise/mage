@@ -129,6 +129,10 @@ namespace mage {
             return this->header;
         }
 
+        util::StreamStats& get_stats() {
+            return this->util::BufferedFileReader<backwards_readable>::get_stats();
+        }
+
     private:
         ProgramFileHeader header;
     };
