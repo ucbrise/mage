@@ -57,7 +57,12 @@ namespace mage::engine {
                 std::abort();
             }
         } else {
-            this->swapfd = platform::create_file(storage_file.c_str(), required_size, true, true);
+            std::uint64_t length;
+            this->swapfd = platform::open_file(storage_file.c_str(), &length, true);
+            if (length < required_size) {
+                platform::close_file(this->swapfd);
+                this->swapfd = platform::create_file(storage_file.c_str(), required_size, true, true);
+            }
         }
         this->page_size_bytes = page_size_in_bytes;
 
