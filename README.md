@@ -9,7 +9,12 @@ This is still in progress, but it's far enough along that you can run the code.
 
 To build MAGE, first install OpenSSL. Also install version 0.63 of the yaml-cpp library (https://github.com/jbeder/yaml-cpp).
 
-On a Ubuntu install, you can install the dependencies by running `apt install build-essential clang cmake libssl-dev libaio-dev`. Then you have to install the yaml-cpp library, using the `-DYAML_BUILD_SHARED_LIBS=ON` option when running `cmake`.
+On a Ubuntu install, you can install the dependencies as follows:
+1. Run `apt install build-essential clang cmake libssl-dev libaio-dev`.
+2. Install version 0.63 of the the yaml-cpp library (https://github.com/jbeder/yaml-cpp), using the `-DYAML_BUILD_SHARED_LIBS=ON` option when running `cmake`.
+3. Install the tfhe library (https://github.com/tfhe/tfhe).
+4. Install version 3.6.0 of the Microsoft SEAL library (https://github.com/Microsoft/SEAL), using the `-DSEAL_USE_ZLIB=OFF -DBUILD_SHARED_LIBS=ON` option when running `cmake`.
+5. You may need to run `sudo ldconfig` to refresh the shared library cache.
 
 Once you've done this, you should be able to run `make`. I've tested this on an Ubuntu 16.04 system. You will obtain three executables: `mage`, `planner`, and `example_input`.
 
