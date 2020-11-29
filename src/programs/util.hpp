@@ -56,6 +56,16 @@ namespace mage::programs {
         return total;
     }
 
+    template <std::int32_t level>
+    LeveledBatch<level, true> real_dot_product(LeveledBatch<level + 1, true>* vector_a, LeveledBatch<level + 1, true>* vector_b, std::size_t length) {
+        assert(length != 0);
+        LeveledBatch<level + 1, false> total = vector_a[0].multiply_without_normalizing(vector_b[0]);
+        for (std::size_t i = 1; i != length; i++) {
+            total = total + vector_a[i].multiply_without_normalizing(vector_b[i]);
+        }
+        return total.renormalize();
+    }
+
     template <BitWidth key_width, BitWidth record_width>
     struct Record {
         Integer<record_width> data;

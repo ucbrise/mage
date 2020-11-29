@@ -28,7 +28,7 @@
 
 using namespace mage::dsl;
 
-namespace mage::programs::real_sum {
+namespace mage::programs::real_statistics {
     struct Stats {
         LeveledBatch<2, true> sum;
         LeveledBatch<1, true> sum_squares;

@@ -364,6 +364,14 @@ int main(int argc, char** argv) {
             std::ofstream ciphertext_file(argv[3], std::ios::binary);
             e.save(ciphertext_file);
         }
+    } else if (std::strcmp(argv[1], "float_file_decode") == 0) {
+        check_num_args(argc, 3);
+        mage::util::BinaryFileReader reader(argv[2]);
+        std::size_t total_length = reader.get_file_length();
+        for (std::size_t amount_read = 0; amount_read < total_length; amount_read += 4) {
+            float value = reader.BinaryReader::read<float>();
+            std::cout << value << std::endl;
+        }
     } else {
         std::cerr << "Unknown command " << argv[1] << std::endl;
         std::abort();

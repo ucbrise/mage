@@ -150,6 +150,20 @@ namespace mage::dsl {
             return *this;
         }
 
+        void mutate(LeveledBatch<level, normalized, Placer, p>& other) {
+            Instruction& instr = (*p)->instruction();
+            instr.header.operation = OpCode::Copy;
+            instr.header.width = level;
+            instr.header.flags = 0;
+            instr.one_arg.input1 = other.v;
+            if (this->valid()) {
+                instr.header.output = this->v;
+                (*p)->commit_instruction(0);
+            } else {
+                this->v = (*p)->commit_instruction(this->get_size());
+            }
+        }
+
         void buffer_send(WorkerID to) const {
             Instruction& instr = (*p)->instruction();
             instr.header.operation = OpCode::NetworkBufferSend;

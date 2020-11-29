@@ -429,6 +429,44 @@ int main(int argc, char** argv) {
             expected_writers[0]->write_float(mean);
             expected_writers[0]->write_float(variance);
         }
+    } else if (problem_name == "real_matrix_vector_multiply") {
+        if (option == "") {
+            for (std::uint64_t i = 0; i != input_size; i++) {
+                std::uint64_t w = get_blocked_worker(i, num_workers, input_size);
+                float elem = i / 100.0;
+                garbler_writers[w]->write_float(elem);
+                expected_writers[w]->write_float(elem);
+            }
+            for (std::uint64_t i = 0; i != input_size; i++) {
+                std::uint64_t w = get_blocked_worker(i, num_workers, input_size);
+                for (std::uint64_t j = 0; j != input_size; j++) {
+                    float elem = (i == j) ? 1.0 : 0.0;
+                    /* Identity matrix. */
+                    garbler_writers[w]->write_float(elem);
+                }
+            }
+        } else if (option == "random") {
+            std::default_random_engine generator;
+            std::uniform_int_distribution<std::uint8_t> distribution(0, UINT8_MAX);
+            std::vector<float> vector(input_size);
+            for (std::size_t i = 0; i != input_size; i++) {
+                std::uint64_t w = get_blocked_worker(i, num_workers, input_size);
+                vector[i] = distribution(generator) / 100.0;
+                garbler_writers[w]->write_float(vector[i]);
+            }
+            for (std::size_t i = 0; i != input_size; i++) {
+                std::uint64_t w = get_blocked_worker(i, num_workers, input_size);
+                float expected_elem = 0;
+                for (std::size_t j = 0; j != input_size; j++) {
+                    float matrix_elem = distribution(generator) / 100.0;
+                    garbler_writers[w]->write_float(matrix_elem);
+                    expected_elem += matrix_elem * vector[j];
+                }
+                expected_writers[w]->write_float(expected_elem);
+            }
+        } else {
+            std::cerr << "Unknown option " << option << std::endl;
+        }
     } else {
         std::cerr << "Unknown problem " << problem_name << std::endl;
     }
