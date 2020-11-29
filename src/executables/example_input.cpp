@@ -467,6 +467,66 @@ int main(int argc, char** argv) {
         } else {
             std::cerr << "Unknown option " << option << std::endl;
         }
+    } else if (problem_name == "real_matrix_multiply") {
+        /* Layout of A is row-major, blocked. */
+        /* Layout of B is column-major, blocked. */
+        /* Result matrix is 2D-blocked. */
+        assert(mage::util::is_power_of_two(num_workers));
+        std::uint8_t log_num_workers = mage::util::log_base_2(num_workers);
+        std::uint32_t num_portions_a = UINT32_C(1) << ((log_num_workers / 2) + (log_num_workers % 2));
+        std::uint32_t num_portions_b = UINT32_C(1) << (log_num_workers / 2);
+        std::uint32_t portion_size_a = input_size / num_portions_a;
+        std::uint32_t portion_size_b = input_size / num_portions_b;
+        if (option == "") {
+            for (std::uint64_t i = 0; i != input_size; i++) {
+                for (std::uint64_t j = 0; j != input_size; j++) {
+                    float elem = (i == j) ? 1.0 : 0.0;
+                    /* Identity matrix, so we don't have to worry about row-major vs. column major --- both are identical. */
+                    garbler_writers[get_blocked_worker(i * input_size + j, num_workers, input_size * input_size)]->write_float(elem);
+
+                    /* Write to row i, col j of expected matrix. */
+                    std::uint32_t a_portion = i / portion_size_a;
+                    std::uint32_t b_portion = j / portion_size_b;
+                    expected_writers[a_portion * num_portions_b + b_portion]->write_float(elem);
+                }
+            }
+
+            for (std::uint64_t i = 0; i != input_size; i++) {
+                for (std::uint64_t j = 0; j != input_size; j++) {
+                    float elem = (i == j) ? 1.0 : 0.0;
+                    /* Identity matrix, so we don't have to worry about row-major vs. column major --- both are identical. */
+                    garbler_writers[get_blocked_worker(i * input_size + j, num_workers, input_size * input_size)]->write_float(elem);
+                }
+            }
+        } else if (option == "random") {
+            std::default_random_engine generator;
+            std::uniform_int_distribution<std::uint8_t> distribution(0, UINT8_MAX);
+            std::vector<float> a(input_size * input_size);
+            for (std::size_t i = 0; i != a.size(); i++) {
+                a[i] = distribution(generator) / 100.0;
+                garbler_writers[get_blocked_worker(i, num_workers, a.size())]->write_float(a[i]);
+            }
+            std::vector<float> b(input_size * input_size);
+            for (std::size_t i = 0; i != b.size(); i++) {
+                b[i] = distribution(generator) / 100.0;
+                garbler_writers[get_blocked_worker(i, num_workers, b.size())]->write_float(b[i]);
+            }
+            for (std::size_t i = 0; i != input_size; i++) {
+                for (std::size_t j = 0; j != input_size; j++) {
+                    float elem = 0.0;
+                    for (std::size_t k = 0; k != input_size; k++) {
+                        elem += a[i * input_size + k] * b[j * input_size + k];
+                    }
+
+                    /* Write to row i, col j of expected matrix. */
+                    std::uint32_t a_portion = i / portion_size_a;
+                    std::uint32_t b_portion = j / portion_size_b;
+                    expected_writers[a_portion * num_portions_b + b_portion]->write_float(elem);
+                }
+            }
+        } else {
+            std::cerr << "Unknown option " << option << std::endl;
+        }
     } else {
         std::cerr << "Unknown problem " << problem_name << std::endl;
     }
