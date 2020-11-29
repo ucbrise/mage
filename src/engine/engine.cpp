@@ -27,6 +27,7 @@
 #include <cstring>
 #include <libaio.h>
 #include <chrono>
+#include <filesystem>
 #include <string>
 #include "addr.hpp"
 #include "instruction.hpp"
@@ -57,10 +58,18 @@ namespace mage::engine {
                 std::abort();
             }
         } else {
-            std::uint64_t length;
-            this->swapfd = platform::open_file(storage_file.c_str(), &length, true);
-            if (length < required_size) {
-                platform::close_file(this->swapfd);
+            bool create = false;
+            if (std::filesystem::exists(storage_file)) {
+                std::uint64_t length;
+                this->swapfd = platform::open_file(storage_file.c_str(), &length, true);
+                if (length < required_size) {
+                    platform::close_file(this->swapfd);
+                    create = true;
+                }
+            } else {
+                create = true;
+            }
+            if (create) {
                 this->swapfd = platform::create_file(storage_file.c_str(), required_size, true, true);
             }
         }
