@@ -43,7 +43,7 @@ namespace mage::protocols::ckks {
             end = std::chrono::steady_clock::now();
         }
         std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-        std::cerr << ms.count() << " ms" << std::endl;
+        std::cout << ms.count() << " ms" << std::endl;
     }
 
     RegisterProtocol ckks("ckks", "Homomorphic Encryption for Arithmetic of Approximate Numbers", run_ckks);
