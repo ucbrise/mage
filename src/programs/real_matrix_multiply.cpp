@@ -43,7 +43,40 @@ namespace mage::programs::real_matrix_multiply {
         return result;
     }
 
-    template <std::int32_t level>
+    template <std::int32_t level = 0>
+    std::vector<LeveledBatch<level, true>> local_tiled_matrix_multiply(std::size_t batch_dimension, LeveledBatch<level + 1, true>* matrix_a, std::size_t num_rows_a, LeveledBatch<level + 1, true>* matrix_b, std::size_t num_cols_b, std::size_t num_cols_a_rows_b) {
+        std::vector<LeveledBatch<level, true>> result(num_rows_a * num_cols_b);
+        // for (std::size_t i = 0; i != num_rows_a * num_cols_b; i++) {
+        //     result[i] = LeveledBatch<level, true>(0);
+        // }
+        std::size_t num_rows_a_batches = util::ceil_div(num_rows_a, batch_dimension).first;
+        std::size_t num_cols_b_batches = util::ceil_div(num_cols_b, batch_dimension).first;
+        std::size_t num_cols_a_rows_b_batches = util::ceil_div(num_cols_a_rows_b, batch_dimension).first;
+
+        for (std::size_t batch_row_a = 0; batch_row_a < num_rows_a; batch_row_a += batch_dimension) {
+            for (std::size_t batch_col_b = 0; batch_col_b < num_cols_b; batch_col_b += batch_dimension) {
+                for (std::size_t batch_cols_a_rows_b = 0; batch_cols_a_rows_b < num_cols_a_rows_b; batch_cols_a_rows_b += batch_dimension) {
+                    /* Multiply the submatrices. */
+                    for (std::size_t row_a = batch_row_a; row_a < num_rows_a && row_a < batch_row_a + batch_dimension; row_a++) {
+                        for (std::size_t col_b = batch_col_b; col_b < num_cols_b && col_b < batch_col_b + batch_dimension; col_b++) {
+                            /* This goes in result at row row_a and column col_b. */
+                            std::size_t i = row_a * num_cols_b + col_b;
+                            std::size_t dot_product_size = std::min(batch_dimension, num_cols_a_rows_b - batch_cols_a_rows_b);
+                            LeveledBatch<level, true> dot_product_result = real_dot_product<level>(&matrix_a[row_a * num_cols_a_rows_b + batch_cols_a_rows_b], &matrix_b[col_b * num_cols_a_rows_b + batch_cols_a_rows_b], dot_product_size);
+                            if (result[i].valid()) {
+                                result[i] = result[i] + dot_product_result;
+                            } else {
+                                result[i] = std::move(dot_product_result);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    template <std::int32_t level, bool tiled>
     void create_real_matrix_multiply_circuit(const ProgramOptions& args) {
         int matrix_dimension = args.problem_size;
         int matrix_size = matrix_dimension * matrix_dimension;
@@ -68,7 +101,14 @@ namespace mage::programs::real_matrix_multiply {
         utils.num_proc = args.num_workers;
         auto [ my_matrix_a, my_matrix_b ] = utils.cross_product(matrix_a, matrix_b);
 
-        std::vector<LeveledBatch<level, true>> result = local_naive_matrix_multiply(my_matrix_a.data(), my_matrix_a.size() / matrix_dimension, my_matrix_b.data(), my_matrix_b.size() / matrix_dimension, matrix_dimension);
+        std::vector<LeveledBatch<level, true>> result;
+        if constexpr (tiled) {
+            /* Hardcode tile size to work well for 1 GiB of memory. */
+            std::size_t tile_dimension = 32;
+            result = local_tiled_matrix_multiply(tile_dimension, my_matrix_a.data(), my_matrix_a.size() / matrix_dimension, my_matrix_b.data(), my_matrix_b.size() / matrix_dimension, matrix_dimension);
+        } else {
+            result = local_naive_matrix_multiply(my_matrix_a.data(), my_matrix_a.size() / matrix_dimension, my_matrix_b.data(), my_matrix_b.size() / matrix_dimension, matrix_dimension);
+        }
 
         program_ptr->stop_timer();
         program_ptr->print_stats();
@@ -78,5 +118,6 @@ namespace mage::programs::real_matrix_multiply {
         }
     }
 
-    RegisterProgram real_matrix_multiply("real_matrix_multiply", "Matrix Multiply with real numbers (problem_size = number of elements in one side of matrix)", create_real_matrix_multiply_circuit<0>);
+    RegisterProgram real_naive_matrix_multiply("real_naive_matrix_multiply", "Naive matrix multiply with real numbers (problem_size = number of elements in one side of matrix)", create_real_matrix_multiply_circuit<0, false>);
+    RegisterProgram real_tiled_matrix_multiply("real_tiled_matrix_multiply", "Tiled matrix multiply with real numbers (problem_size = number of elements in one side of matrix)", create_real_matrix_multiply_circuit<0, true>);
 }
