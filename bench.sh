@@ -32,7 +32,7 @@ function run_benchmark {
 	# $2 is the problem name
 	# $3 is the problem size
 	# $4 is the number of trials
-    # $5 is the regular config file
+	# $5 is the regular config file
 	# $6 is the unbounded config file
 	# $7 is a boolean specifying whether to generate new input each time
 	# $8 is a boolean specifying whether to sleep between iterations
@@ -45,26 +45,24 @@ function run_benchmark {
 		fi
 		./planner $2 $6 $ROLE 0 $3
 		sudo swapon ${SWAP_DEVICE}
-		invoke "sudo cgexec -g memory:memprog" $1 $6 $ROLE ${2}_${3} os t$trial $8
+		invoke "sudo cgexec -g memory:memprog1gb" $1 $6 $ROLE ${2}_${3} os t$trial $8
 		sudo swapoff -a
 		invoke "sudo" $1 $6 $ROLE ${2}_${3} unbounded t$trial $8
 		./planner $2 $5 $ROLE 0 $3
-		invoke "sudo cgexec -g memory:memprog" $1 $5 $ROLE ${2}_${3} mage t$trial $8
+		invoke "sudo cgexec -g memory:memprog1gb" $1 $5 $ROLE ${2}_${3} mage t$trial $8
 	done
 }
 
 mkdir -p ~/work/logs
 
-# run_benchmark halfgates merge_sorted 1048576 10 ../config.yaml ../config_unbounded.yaml true true
-# run_benchmark halfgates full_sort 1048576 10 ../config.yaml ../config_unbounded.yaml true true
-# run_benchmark halfgates loop_join 2048 10 ../config.yaml ../config_unbounded.yaml true true
-# run_benchmark halfgates matrix_vector_mult 8192 10 ../config.yaml ../config_unbounded.yaml true true
-# run_benchmark halfgates binary_fc_layer 16384 10 ../config.yaml ../config_unbounded.yaml true true
+run_benchmark halfgates merge_sorted 1048576 1 ../config.yaml ../config_unbounded.yaml true true
+run_benchmark halfgates full_sort 1048576 1 ../config.yaml ../config_unbounded.yaml true true
+run_benchmark halfgates loop_join 2048 1 ../config.yaml ../config_unbounded.yaml true true
+run_benchmark halfgates matrix_vector_multiply 8192 1 ../config.yaml ../config_unbounded.yaml true true
+run_benchmark halfgates binary_fc_layer 16384 1 ../config.yaml ../config_unbounded.yaml true true
 
-# run_benchmark halfgates merge_sorted 1024 3
-# run_benchmark halfgates full_sort 1024 3
-# run_benchmark halfgates loop_join 256 3
-# run_benchmark halfgates matrix_vector_mult 256 3
-# run_benchmark halfgates binary_fc_layer 512 3
-
-run_benchmark ckks real_matrix_vector_multiply 256 3 ../config_ckks.yaml ../config_ckks_unbounded.yaml false false
+run_benchmark ckks real_sum 65536 1 ../config_ckks.yaml ../config_ckks_unbounded.yaml false false
+run_benchmark ckks real_statistics 16384 1 ../config_ckks.yaml ../config_ckks_unbounded.yaml false false
+run_benchmark ckks real_matrix_vector_multiply 256 1 ../config_ckks.yaml ../config_ckks_unbounded.yaml false false
+run_benchmark ckks real_naive_matrix_multiply 128 1 ../config_ckks.yaml ../config_ckks_unbounded.yaml false false
+run_benchmark ckks real_tiled_matrix_multiply 128 1 ../config_ckks.yaml ../config_ckks_unbounded.yaml false false
