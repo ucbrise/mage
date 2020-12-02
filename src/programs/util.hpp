@@ -57,12 +57,18 @@ namespace mage::programs {
     }
 
     template <std::int32_t level>
-    LeveledBatch<level, true> real_dot_product(LeveledBatch<level + 1, true>* vector_a, LeveledBatch<level + 1, true>* vector_b, std::size_t length) {
+    LeveledBatch<level + 1, false> real_dot_product_not_normalized(LeveledBatch<level + 1, true>* vector_a, LeveledBatch<level + 1, true>* vector_b, std::size_t length) {
         assert(length != 0);
         LeveledBatch<level + 1, false> total = vector_a[0].multiply_without_normalizing(vector_b[0]);
         for (std::size_t i = 1; i != length; i++) {
             total = total + vector_a[i].multiply_without_normalizing(vector_b[i]);
         }
+        return total;
+    }
+
+    template <std::int32_t level>
+    LeveledBatch<level, true> real_dot_product(LeveledBatch<level + 1, true>* vector_a, LeveledBatch<level + 1, true>* vector_b, std::size_t length) {
+        LeveledBatch<level + 1, false> total = real_dot_product_not_normalized<level>(vector_a, vector_b, length);
         return total.renormalize();
     }
 

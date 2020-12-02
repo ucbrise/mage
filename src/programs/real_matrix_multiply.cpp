@@ -55,18 +55,24 @@ namespace mage::programs::real_matrix_multiply {
 
         for (std::size_t batch_row_a = 0; batch_row_a < num_rows_a; batch_row_a += batch_dimension) {
             for (std::size_t batch_col_b = 0; batch_col_b < num_cols_b; batch_col_b += batch_dimension) {
+                std::vector<LeveledBatch<level + 1, false>> result_batch(batch_dimension * batch_dimension);
                 for (std::size_t batch_cols_a_rows_b = 0; batch_cols_a_rows_b < num_cols_a_rows_b; batch_cols_a_rows_b += batch_dimension) {
                     /* Multiply the submatrices. */
                     for (std::size_t row_a = batch_row_a; row_a < num_rows_a && row_a < batch_row_a + batch_dimension; row_a++) {
                         for (std::size_t col_b = batch_col_b; col_b < num_cols_b && col_b < batch_col_b + batch_dimension; col_b++) {
                             /* This goes in result at row row_a and column col_b. */
-                            std::size_t i = row_a * num_cols_b + col_b;
+                            std::size_t i_batch = (row_a - batch_row_a) * batch_dimension + (col_b - batch_col_b);
                             std::size_t dot_product_size = std::min(batch_dimension, num_cols_a_rows_b - batch_cols_a_rows_b);
-                            LeveledBatch<level, true> dot_product_result = real_dot_product<level>(&matrix_a[row_a * num_cols_a_rows_b + batch_cols_a_rows_b], &matrix_b[col_b * num_cols_a_rows_b + batch_cols_a_rows_b], dot_product_size);
-                            if (result[i].valid()) {
-                                result[i] = result[i] + dot_product_result;
+                            LeveledBatch<level + 1, false> dot_product_result = real_dot_product_not_normalized<level>(&matrix_a[row_a * num_cols_a_rows_b + batch_cols_a_rows_b], &matrix_b[col_b * num_cols_a_rows_b + batch_cols_a_rows_b], dot_product_size);
+                            if (result_batch[i_batch].valid()) {
+                                result_batch[i_batch] = result_batch[i_batch] + dot_product_result;
                             } else {
-                                result[i] = std::move(dot_product_result);
+                                result_batch[i_batch] = std::move(dot_product_result);
+                            }
+                            if (batch_cols_a_rows_b + batch_dimension >= num_cols_a_rows_b) {
+                                std::size_t i = row_a * num_cols_b + col_b;
+                                result[i] = result_batch[i_batch].renormalize();
+                                result_batch[i_batch].recycle();
                             }
                         }
                     }
@@ -104,7 +110,7 @@ namespace mage::programs::real_matrix_multiply {
         std::vector<LeveledBatch<level, true>> result;
         if constexpr (tiled) {
             /* Hardcode tile size to work well for 1 GiB of memory. */
-            std::size_t tile_dimension = 32;
+            std::size_t tile_dimension = 16;
             result = local_tiled_matrix_multiply(tile_dimension, my_matrix_a.data(), my_matrix_a.size() / matrix_dimension, my_matrix_b.data(), my_matrix_b.size() / matrix_dimension, matrix_dimension);
         } else {
             result = local_naive_matrix_multiply(my_matrix_a.data(), my_matrix_a.size() / matrix_dimension, my_matrix_b.data(), my_matrix_b.size() / matrix_dimension, matrix_dimension);
