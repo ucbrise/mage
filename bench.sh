@@ -4,15 +4,22 @@ set -x
 
 SWAP_DEVICE=$1
 ROLE=$2
+WORKER_ID=$3
+
+if [[ -z $WORKER_ID ]]
+then
+	echo "Usage:" $0 "os_swap_device garbler/evaluator worker_id"
+	exit
+fi
 
 function invoke {
 	if [[ $8 = true ]]
 	then
 		if [ $ROLE == "garbler" ]
 		then
-			sleep 160
+			sleep $(expr 160 + $(expr 20 "*" $WORKER_ID))
 		else
-			sleep 125
+			sleep $(expr 125 + $(expr 20 "*" $WORKER_ID))
 		fi
 	fi
 
@@ -20,7 +27,7 @@ function invoke {
 	sudo sync
 	echo 3 | sudo tee /proc/sys/vm/drop_caches
 	sudo free
-	$1 ./mage $2 $3 $4 0 $5 > ~/work/logs/${5}_${6}_${7}.log
+	$1 ./mage $2 $3 $4 $WORKER_ID $5 > ~/work/logs/${5}_${6}_${7}.log
 	if [ $ROLE == "garbler" ]
 	then
 		diff ${5}_0.output ${5}_0.expected > ~/work/logs/${5}_${6}_${7}.result
@@ -43,12 +50,12 @@ function run_benchmark {
 		then
 			./example_input $2 $3 1
 		fi
-		./planner $2 $6 $ROLE 0 $3
+		./planner $2 $6 $ROLE $WORKER_ID $3
 		sudo swapon ${SWAP_DEVICE}
 		invoke "sudo cgexec -g memory:memprog1gb" $1 $6 $ROLE ${2}_${3} os t$trial $8
 		sudo swapoff -a
 		invoke "sudo" $1 $6 $ROLE ${2}_${3} unbounded t$trial $8
-		./planner $2 $5 $ROLE 0 $3
+		./planner $2 $5 $ROLE $WORKER_ID $3
 		invoke "sudo cgexec -g memory:memprog1gb" $1 $5 $ROLE ${2}_${3} mage t$trial $8
 	done
 }
