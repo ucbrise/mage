@@ -5,10 +5,11 @@ set -x
 SWAP_DEVICE=$1
 ROLE=$2
 WORKER_ID=$3
+NUM_WORKERS=$4
 
-if [[ -z $WORKER_ID ]]
+if [[ -z $NUM_WORKERS ]]
 then
-	echo "Usage:" $0 "os_swap_device garbler/evaluator worker_id"
+	echo "Usage:" $0 "os_swap_device garbler/evaluator worker_id num_workers"
 	exit
 fi
 
@@ -30,7 +31,7 @@ function invoke {
 	$1 ./mage $2 $3 $4 $WORKER_ID $5 > ~/work/logs/${5}_${6}_${7}.log
 	if [ $ROLE == "garbler" ]
 	then
-		diff ${5}_0.output ${5}_0.expected > ~/work/logs/${5}_${6}_${7}.result
+		diff ${5}_${WORKER_ID}.output ${5}_${WORKER_ID}.expected > ~/work/logs/${5}_${6}_${7}.result
 	fi
 }
 
@@ -48,7 +49,7 @@ function run_benchmark {
 		sudo swapoff -a
 		if [[ $7 = true ]]
 		then
-			./example_input $2 $3 1
+			./example_input $2 $3 $NUM_WORKERS
 		fi
 		./planner $2 $6 $ROLE $WORKER_ID $3
 		sudo swapon ${SWAP_DEVICE}
