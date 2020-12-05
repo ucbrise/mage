@@ -40,7 +40,7 @@
 #include "util/userpipe.hpp"
 
 namespace mage::engine {
-    MessageChannel::MessageChannel(int fd) : reader(fd), writer(fd), socket_fd(fd),
+    MessageChannel::MessageChannel(int fd, std::size_t buffer_size) : reader(fd, buffer_size), writer(fd, buffer_size), socket_fd(fd),
         posted_reads(14), num_posted_reads(0) {
         if (fd != -1) {
             this->start_reading_daemon();
@@ -85,7 +85,7 @@ namespace mage::engine {
     const std::uint32_t ClusterNetwork::max_connection_tries = 20;
     const std::chrono::duration<std::uint32_t, std::milli> ClusterNetwork::delay_between_connection_tries(3000);
 
-    ClusterNetwork::ClusterNetwork(WorkerID self) : channels(), self_id(self) {
+    ClusterNetwork::ClusterNetwork(WorkerID self, std::size_t buffer_size) : channels(), channel_buffer_size(buffer_size), self_id(self) {
     }
 
     WorkerID ClusterNetwork::get_self() const {
@@ -186,7 +186,7 @@ namespace mage::engine {
         if (overall_success) {
             this->channels.resize(num_workers);
             for (WorkerID i = 0; i != num_workers; i++) {
-                this->channels[i] = std::make_unique<MessageChannel>(fds[i]);
+                this->channels[i] = std::make_unique<MessageChannel>(fds[i], this->channel_buffer_size);
             }
         } else {
             for (WorkerID i = 0; i != num_workers; i++) {

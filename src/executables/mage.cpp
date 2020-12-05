@@ -84,7 +84,14 @@ int main(int argc, char** argv) {
 
     /* Establish cluster networking. */
 
-    auto cluster = std::make_shared<mage::engine::ClusterNetwork>(self_id);
+    std::size_t buffer_size = 1 << 18;
+
+    /* TODO: do this more systematically. */
+    if (protocol_name == "ckks") {
+        buffer_size = 1 << 20;
+    }
+
+    auto cluster = std::make_shared<mage::engine::ClusterNetwork>(self_id, buffer_size);
     std::string err = cluster->establish(c[argv[3]]);
     if (!err.empty()) {
         std::cerr << err << std::endl;

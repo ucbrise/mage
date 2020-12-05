@@ -47,7 +47,7 @@ namespace mage::engine {
      */
     class MessageChannel {
     public:
-        MessageChannel(int fd);
+        MessageChannel(int fd, std::size_t buffer_size = 1 << 18);
         MessageChannel();
         virtual ~MessageChannel();
 
@@ -110,7 +110,7 @@ namespace mage::engine {
      */
     class ClusterNetwork {
     public:
-        ClusterNetwork(WorkerID self);
+        ClusterNetwork(WorkerID self, std::size_t buffer_size);
 
         WorkerID get_self() const;
         WorkerID get_num_workers() const;
@@ -129,6 +129,7 @@ namespace mage::engine {
 
     private:
         std::vector<std::unique_ptr<MessageChannel>> channels;
+        std::size_t channel_buffer_size;
         WorkerID self_id;
     };
 }
