@@ -33,6 +33,13 @@ function invoke {
 	then
 		diff ${5}_${WORKER_ID}.output ${5}_${WORKER_ID}.expected > ~/work/logs/${5}_${6}_${7}.result
 	fi
+	if [ $8 = false ]
+	then
+		./ckks_utils decrypt_file 1 ${5}_${WORKER_ID}.output
+		./ckks_utils float_file_decode ${5}_${WORKER_ID}.output > decoded.output
+		./ckks_utils float_file_decode ${5}_${WORKER_ID}.expected > expected.output
+		diff decoded.output expected.output > ~/work/logs/${5}_${6}_${7}.result
+	fi
 }
 
 function run_benchmark {
