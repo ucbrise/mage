@@ -372,6 +372,60 @@ int main(int argc, char** argv) {
             float value = reader.BinaryReader::read<float>();
             std::cout << value << std::endl;
         }
+    } else if (std::strcmp(argv[1], "real_statistics") == 0) {
+        check_num_args(argc, 5);
+
+        seal::EncryptionParameters parms = parms_from_file("parms.ckks");
+        seal::SEALContext context(parms);
+        seal::Evaluator evaluator(context);
+
+        seal::RelinKeys relin_keys = from_file<seal::RelinKeys>(context, "relinkeys.ckks");
+
+        int problem_size = std::stoi(argv[2]);
+        std::ifstream input_file(argv[3], std::ios::binary);
+        std::ofstream output_file(argv[4], std::ios::binary);
+
+        std::vector<seal::Ciphertext> input_points(problem_size);
+        for (int i = 0; i != problem_size; i++) {
+            input_points[i].load(context, input_file);
+        }
+
+        seal::Ciphertext sum_squares;
+        evaluator.square(input_points[0], sum_squares);
+        seal::Ciphertext& sum = input_points[0];
+        for (int i = 1; i != problem_size; i++) {
+            evaluator.add_inplace(sum, input_points[i]);
+            evaluator.square_inplace(input_points[i]);
+            evaluator.add_inplace(sum_squares, input_points[i]);
+        }
+        evaluator.relinearize_inplace(sum_squares, relin_keys);
+        evaluator.rescale_to_next_inplace(sum_squares);
+        sum_squares.scale() = ckks_scale;
+
+        seal::CKKSEncoder encoder(context);
+        {
+            auto context_data = context.first_context_data()->next_context_data();
+            if (context_data->chain_index() != 1) {
+                std::abort();
+            }
+            seal::Plaintext reciprocal_size;
+            encoder.encode(1 / static_cast<double>(problem_size), context_data->parms_id(), ckks_scale, reciprocal_size);
+            evaluator.multiply_plain_inplace(sum_squares, reciprocal_size);
+            evaluator.relinearize_inplace(sum_squares, relin_keys);
+            evaluator.rescale_to_next_inplace(sum_squares);
+            sum_squares.scale() = ckks_scale;
+        }
+        {
+            seal::Plaintext reciprocal_size;
+            encoder.encode(1 / static_cast<double>(problem_size), ckks_scale, reciprocal_size);
+            evaluator.multiply_plain_inplace(sum, reciprocal_size);
+            evaluator.relinearize_inplace(sum, relin_keys);
+            evaluator.rescale_to_next_inplace(sum);
+            sum.scale() = ckks_scale;
+        }
+
+        sum.save(output_file);
+        sum_squares.save(output_file);
     } else {
         std::cerr << "Unknown command " << argv[1] << std::endl;
         std::abort();
