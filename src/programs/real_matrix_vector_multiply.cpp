@@ -45,9 +45,6 @@ namespace mage::programs::real_matrix_vector_multiply {
         std::uint64_t matrix_dimension = vector_size;
         std::uint64_t matrix_size = matrix_dimension * matrix_dimension;
 
-        program_ptr->print_stats();
-        program_ptr->start_timer();
-
         /* Blocked vector provided by the evaluator. */
         ShardedArray<LeveledBatch<level + 1, true>> vector_x(vector_size, args.worker_index, args.num_workers, Layout::Blocked);
         vector_x.for_each([=](std::size_t i, auto& elem) {
@@ -59,6 +56,9 @@ namespace mage::programs::real_matrix_vector_multiply {
         for (auto& elem : my_matrix_a) {
             elem.mark_input();
         }
+
+        program_ptr->print_stats();
+        program_ptr->start_timer();
 
         /* Reconstruct the entire vector x for each worker. */
         std::vector<LeveledBatch<level + 1, true>> my_vector_x = vector_x.materialize_global_array(true);
