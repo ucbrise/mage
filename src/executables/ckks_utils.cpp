@@ -385,6 +385,8 @@ int main(int argc, char** argv) {
         std::ifstream input_file(argv[3], std::ios::binary);
         std::ofstream output_file(argv[4], std::ios::binary);
 
+        auto start = std::chrono::steady_clock::now();
+
         std::vector<seal::Ciphertext> input_points(problem_size);
         for (int i = 0; i != problem_size; i++) {
             input_points[i].load(context, input_file);
@@ -426,6 +428,11 @@ int main(int argc, char** argv) {
 
         sum.save(output_file);
         sum_squares.save(output_file);
+
+        auto end = std::chrono::steady_clock::now();
+        std::chrono::milliseconds latency_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+        std::cout << latency_ms.count() << " ms" << std::endl;
     } else {
         std::cerr << "Unknown command " << argv[1] << std::endl;
         std::abort();
