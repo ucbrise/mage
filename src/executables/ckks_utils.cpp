@@ -426,8 +426,17 @@ int main(int argc, char** argv) {
             sum.scale() = ckks_scale;
         }
 
-        sum.save(output_file);
-        sum_squares.save(output_file);
+        seal::Ciphertext& mean = sum;
+        seal::Ciphertext mean_squared;
+        evaluator.square(mean, mean_squared);
+        evaluator.relinearize_inplace(mean_squared, relin_keys);
+        evaluator.rescale_to_next_inplace(mean_squared);
+        mean_squared.scale() = ckks_scale;
+        evaluator.sub_inplace(sum_squares, mean_squared);
+        seal::Ciphertext& variance = sum_squares;
+
+        mean.save(output_file);
+        variance.save(output_file);
 
         auto end = std::chrono::steady_clock::now();
         std::chrono::milliseconds latency_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
