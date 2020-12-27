@@ -22,7 +22,10 @@
 #ifndef MAGE_PROTOCOLS_REGISTRY_HPP_
 #define MAGE_PROTOCOLS_REGISTRY_HPP_
 
+#include <cstdlib>
+#include <iostream>
 #include <memory>
+#include <string>
 #include "engine/cluster.hpp"
 #include "memprog/placement.hpp"
 #include "util/config.hpp"
@@ -37,20 +40,48 @@ namespace mage::protocols {
         std::string problem_name;
     };
 
-    class RegisteredProtocol : public util::CallableRegistryEntry<EngineOptions> {
-        friend class util::Register<RegisteredProtocol>;
+    class RegisteredPlacementPlugin : public util::BaseRegistryEntry {
+        friend class util::Register<RegisteredPlacementPlugin>;
 
     public:
-        memprog::ProtocolPlacementPlugin get_protocol_placement_plugin() const {
+        memprog::PlacementPlugin get_placement_plugin() const {
             return this->p;
         }
 
     private:
-        RegisteredProtocol(std::string name, std::string desc, std::function<void(const EngineOptions&)> driver, memprog::ProtocolPlacementPlugin plugin)
-            : util::CallableRegistryEntry<EngineOptions>(name, desc, driver), p(plugin) {
+        RegisteredPlacementPlugin(std::string name, std::string desc, memprog::PlacementPlugin plugin)
+            : util::BaseRegistryEntry(name, desc), p(plugin) {
         }
 
-        memprog::ProtocolPlacementPlugin p;
+        memprog::PlacementPlugin p;
+    };
+
+    using RegisterPlacementPlugin = util::Register<RegisteredPlacementPlugin>;
+
+    class RegisteredProtocol : public util::CallableRegistryEntry<EngineOptions> {
+        friend class util::Register<RegisteredProtocol>;
+
+    public:
+        const std::string& get_placement_plugin_name() const {
+            return this->plugin_name;
+        }
+
+        memprog::PlacementPlugin get_placement_plugin() const {
+            const std::string& name = this->get_placement_plugin_name();
+            const RegisteredPlacementPlugin* plugin_ptr = util::Registry<RegisteredPlacementPlugin>::look_up_by_name(name);
+            if (plugin_ptr == nullptr) {
+                std::cerr << "Misconfigured build: protocol \"" << this->get_label() << "\" requires placement plugin \"" << name << "\"" << std::endl;
+                std::abort();
+            }
+            return plugin_ptr->get_placement_plugin();
+        }
+
+    private:
+        RegisteredProtocol(std::string name, std::string desc, std::function<void(const EngineOptions&)> driver, const std::string& plugin)
+            : util::CallableRegistryEntry<EngineOptions>(name, desc, driver), plugin_name(plugin) {
+        }
+
+        std::string plugin_name;
     };
 
     using RegisterProtocol = util::Register<RegisteredProtocol>;

@@ -50,6 +50,8 @@ namespace mage::protocols::ckks {
         std::cout << ms.count() << " ms" << std::endl;
     }
 
+    RegisterProtocol ckks("ckks", "Homomorphic Encryption for Arithmetic of Approximate Numbers", run_ckks, "ckks_plugin");
+
     memprog::AllocationSize ckks_physical_size(std::uint64_t logical_width, memprog::PlaceableType type) {
         std:uint64_t result = UINT64_MAX;
         switch (type) {
@@ -69,5 +71,5 @@ namespace mage::protocols::ckks {
         return result;
     }
 
-    RegisterProtocol ckks("ckks", "Homomorphic Encryption for Arithmetic of Approximate Numbers", run_ckks, ckks_physical_size);
+    RegisterPlacementPlugin ckks_plugin("ckks_plugin", "Object's MAGE-virtual size is the size of a CKKS ciphertext/plaintext in bytes", ckks_physical_size);
 }

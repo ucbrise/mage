@@ -269,9 +269,5 @@ namespace mage::protocols::halfgates {
         std::cout << ms.count() << " ms" << std::endl;
     }
 
-    memprog::AllocationSize halfgates_physical_size(std::uint64_t logical_width, memprog::PlaceableType type) {
-        return logical_width;
-    }
-
-    RegisterProtocol halfgates("halfgates", "Garbled Circuits with HalfGates optimizations", run_halfgates, halfgates_physical_size);
+    RegisterProtocol halfgates("halfgates", "Garbled Circuits with HalfGates optimizations", run_halfgates, "identity_plugin");
 }

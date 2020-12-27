@@ -48,7 +48,7 @@ namespace mage::memprog {
 
         virtual void set_verbose(bool be_verbose) = 0;
         virtual void read_config(const util::ConfigValue& worker) = 0;
-        virtual void plan(Program<Placer>** p, ProtocolPlacementPlugin plugin, std::function<void()> program) = 0;
+        virtual void plan(Program<Placer>** p, PlacementPlugin plugin, std::function<void()> program) = 0;
 
     protected:
         std::string program_name;
@@ -76,11 +76,11 @@ namespace mage::memprog {
 
         void read_config(const util::ConfigValue& worker) override;
 
-        virtual void program(Program<BinnedPlacer>** p, ProtocolPlacementPlugin plugin, std::function<void()> dsl_program, const std::string& prog_file);
+        virtual void program(Program<BinnedPlacer>** p, PlacementPlugin plugin, std::function<void()> dsl_program, const std::string& prog_file);
         virtual void allocate(const std::string& prog_file, const std::string& repprog_file);
         virtual void schedule(const std::string& repprog_file, const std::string& memprog_file);
 
-        void plan(Program<BinnedPlacer>** p, ProtocolPlacementPlugin plugin, std::function<void()> program) override;
+        void plan(Program<BinnedPlacer>** p, PlacementPlugin plugin, std::function<void()> program) override;
 
         const DefaultPipelineStats& get_stats() const;
 

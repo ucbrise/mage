@@ -49,5 +49,5 @@ namespace mage::protocols::tfhe {
         return logical_width;
     }
 
-    RegisterProtocol tfhe("tfhe", "Fast Fully Homomorphic Encryption over the Torus", run_tfhe, tfhe_physical_size);
+    RegisterProtocol tfhe("tfhe", "Fast Fully Homomorphic Encryption over the Torus", run_tfhe, "identity_plugin");
 }

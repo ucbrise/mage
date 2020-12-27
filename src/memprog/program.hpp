@@ -37,7 +37,7 @@ namespace mage::memprog {
     template <typename Placer>
     class Program : public VirtProgramFileWriter {
     public:
-        Program(std::string filename, PageShift shift, ProtocolPlacementPlugin prot) : VirtProgramFileWriter(filename, shift), placer(shift), protocol(prot) {
+        Program(std::string filename, PageShift shift, PlacementPlugin prot) : VirtProgramFileWriter(filename, shift), placer(shift), protocol(prot) {
         }
 
         ~Program() {
@@ -125,7 +125,7 @@ namespace mage::memprog {
     private:
         Instruction current;
         Placer placer;
-        ProtocolPlacementPlugin protocol;
+        PlacementPlugin protocol;
         static Program<Placer>* current_working_program;
     };
 

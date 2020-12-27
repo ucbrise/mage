@@ -47,7 +47,6 @@ static void print_valid_protocol_names() {
 int main(int argc, char** argv) {
     if (argc != 6) {
         std::cerr << "Usage: " << argv[0] << " protocol config.yaml party_id worker_id program_name" << std::endl;
-        print_valid_protocol_names();
         return EXIT_FAILURE;
     }
 
@@ -57,7 +56,7 @@ int main(int argc, char** argv) {
     const RegisteredProtocol* prot_ptr = Registry<RegisteredProtocol>::look_up_by_name(protocol_name);
     if (prot_ptr == nullptr) {
         std::cerr << protocol_name << " is not a valid protocol name. "; // lack of std::endl is intentional
-        print_valid_protocol_names();
+        Registry<RegisteredProtocol>::print_all("programs", std::cerr);
         return EXIT_FAILURE;
     }
 

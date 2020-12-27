@@ -35,7 +35,7 @@ namespace mage::util {
 
     class BaseRegistryEntry {
     public:
-        const std::string& get_label() {
+        const std::string& get_label() const {
             return this->label;
         }
 
@@ -69,29 +69,6 @@ namespace mage::util {
         std::function<void(const T&)> func;
     };
 
-    // template <typename T>
-    // class RegistryEntry {
-    //     friend class Register<T>;
-    //
-    // public:
-    //     void operator ()(const T& args) const {
-    //         this->func(args);
-    //     }
-    //
-    //     const std::string& get_description() const {
-    //         return this->description;
-    //     }
-    //
-    // private:
-    //     RegistryEntry<T>(const std::string& name, const std::string& desc, std::function<void(const T&)> f)
-    //         : label(name), description(desc), func(f) {
-    //     }
-    //
-    //     std::string label;
-    //     std::string description;
-    //     std::function<void(const T&)> func;
-    // };
-
     template <typename Entry>
     class Registry {
         friend class Register<Entry>;
@@ -109,6 +86,17 @@ namespace mage::util {
                 return nullptr;
             }
             return &iter->second;
+        }
+
+        static void print_all(const std::string& plural_item, std::ostream& out) {
+            if (Registry<Entry>::get_registry().size() == 0) {
+                out << "There are no available " << plural_item << " in this build." << std::endl;
+            } else {
+                out << "Available " << plural_item << ":" << std::endl;
+                for (const auto& [name, prot] : Registry<Entry>::get_registry()) {
+                    out << name << " - " << prot.get_description() << std::endl;
+                }
+            }
         }
 
     private:

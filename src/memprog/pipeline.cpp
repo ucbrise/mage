@@ -51,7 +51,7 @@ namespace mage::memprog {
         this->prefetch_lookahead = worker["prefetch_lookahead"].as_int();
     }
 
-    void DefaultPipeline::program(Program<BinnedPlacer>** p, ProtocolPlacementPlugin plugin, std::function<void()> dsl_program, const std::string& prog_file) {
+    void DefaultPipeline::program(Program<BinnedPlacer>** p, PlacementPlugin plugin, std::function<void()> dsl_program, const std::string& prog_file) {
         Program<BinnedPlacer> program(prog_file, this->page_shift, plugin);
         *p = &program;
         dsl_program();
@@ -89,7 +89,7 @@ namespace mage::memprog {
         }
     }
 
-    void DefaultPipeline::plan(Program<BinnedPlacer>** p, ProtocolPlacementPlugin plugin, std::function<void()> program) {
+    void DefaultPipeline::plan(Program<BinnedPlacer>** p, PlacementPlugin plugin, std::function<void()> program) {
         auto program_start = std::chrono::steady_clock::now();
         this->program(p, plugin, program, this->program_name + ".prog");
         auto program_end = std::chrono::steady_clock::now();

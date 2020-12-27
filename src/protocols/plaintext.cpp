@@ -45,9 +45,5 @@ namespace mage::protocols::plaintext {
         std::cerr << ms.count() << " ms" << std::endl;
     }
 
-    memprog::AllocationSize plaintext_physical_size(std::uint64_t logical_width, memprog::PlaceableType type) {
-        return logical_width;
-    }
-
-    RegisterProtocol plaintext("plaintext", "Plaintext simulation of halfgates (for testing)", run_plaintext, plaintext_physical_size);
+    RegisterProtocol plaintext("plaintext", "Plaintext simulation of halfgates (for testing)", run_plaintext, "identity_plugin");
 }

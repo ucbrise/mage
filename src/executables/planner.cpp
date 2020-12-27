@@ -32,34 +32,13 @@
 using mage::programs::ProgramOptions;
 using mage::programs::RegisteredProgram;
 using mage::protocols::RegisteredProtocol;
+using mage::protocols::RegisteredPlacementPlugin;
 using mage::util::Registry;
-
-static void print_valid_program_names() {
-    if (Registry<RegisteredProgram>::get_registry().size() == 0) {
-        std::cerr << "There are no valid program names in this build." << std::endl;
-    } else {
-        std::cerr << "Valid program names:" << std::endl;
-        for (const auto& [name, prog] : Registry<RegisteredProgram>::get_registry()) {
-            std::cerr << name << " - " << prog.get_description() << std::endl;
-        }
-    }
-}
-
-static void print_valid_protocol_names() {
-    if (Registry<RegisteredProtocol>::get_registry().size() == 0) {
-        std::cerr << "There are no available protocols in this build." << std::endl;
-    } else {
-        std::cerr << "Available protocols:" << std::endl;
-        for (const auto& [name, prot] : Registry<RegisteredProtocol>::get_registry()) {
-            std::cerr << name << " - " << prot.get_description() << std::endl;
-        }
-    }
-}
 
 int main(int argc, char** argv) {
     if (argc != 7) {
-        std::cerr << "Usage: " << argv[0] << " program_name protocol config.yaml garbler/evaluator index input_size" << std::endl;
-        print_valid_program_names();
+        std::cerr << "Usage: " << argv[0] << " program_name protocol/plugin config.yaml garbler/evaluator index input_size" << std::endl;
+        Registry<RegisteredProgram>::print_all("programs", std::cerr);
         return EXIT_FAILURE;
     }
 
@@ -67,16 +46,25 @@ int main(int argc, char** argv) {
     const RegisteredProgram* prog = Registry<RegisteredProgram>::look_up_by_name(program_name);
     if (prog == nullptr) {
         std::cerr << program_name << " is not a valid program name. "; // lack of std::endl is intentional
-        print_valid_program_names();
+        Registry<RegisteredProgram>::print_all("programs", std::cerr);
         return EXIT_FAILURE;
     }
 
     std::string protocol(argv[2]);
+    std::string plugin_name;
+    mage::memprog::PlacementPlugin plugin;
     const RegisteredProtocol* prot = Registry<RegisteredProtocol>::look_up_by_name(protocol);
     if (prot == nullptr) {
-        std::cerr << protocol << " is not a valid protocol name. "; // lack of std::endl is intentional
-        print_valid_protocol_names();
-        return EXIT_FAILURE;
+        const RegisteredPlacementPlugin* plug = Registry<RegisteredPlacementPlugin>::look_up_by_name(protocol);
+        if (plug == nullptr) {
+            std::cerr << protocol << " is not a valid protocol name or plugin name. "; // lack of std::endl is intentional
+            Registry<RegisteredProtocol>::print_all("protocols", std::cerr);
+            Registry<RegisteredPlacementPlugin>::print_all("plugins", std::cerr);
+            return EXIT_FAILURE;
+        }
+        plugin = plug->get_placement_plugin();
+    } else {
+        plugin = prot->get_placement_plugin();
     }
 
     mage::util::Configuration c(argv[3]);
@@ -117,7 +105,7 @@ int main(int argc, char** argv) {
 
     mage::memprog::DefaultPipeline planner(problem_name, w);
     planner.set_verbose(true);
-    planner.plan(&mage::programs::program_ptr, prot->get_protocol_placement_plugin(), [prog, &args]() {
+    planner.plan(&mage::programs::program_ptr, prot->get_placement_plugin(), [prog, &args]() {
         (*prog)(args);
     });
 

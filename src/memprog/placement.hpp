@@ -55,7 +55,7 @@ namespace mage::memprog {
         }
     }
 
-    using ProtocolPlacementPlugin = std::function<AllocationSize(std::uint64_t, PlaceableType)>;
+    using PlacementPlugin = std::function<AllocationSize(std::uint64_t, PlaceableType)>;
 
     class InvalidPlacementException : public std::runtime_error {
     public:
