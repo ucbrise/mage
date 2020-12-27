@@ -37,8 +37,8 @@ namespace mage::programs {
         std::uint64_t problem_size;
     };
 
-    using RegisterProgram = util::Register<ProgramOptions>;
-    using RegisteredProgram = util::RegistryEntry<ProgramOptions>;
+    using RegisteredProgram = util::CallableRegistryEntry<ProgramOptions>;
+    using RegisterProgram = util::Register<RegisteredProgram>;
 
     extern memprog::DefaultProgram* program_ptr;
 }

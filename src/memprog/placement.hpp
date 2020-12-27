@@ -25,6 +25,7 @@
 #include <cassert>
 #include <cstdint>
 #include <iostream>
+#include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -34,6 +35,34 @@
 
 namespace mage::memprog {
     using AllocationSize = std::uint64_t;
+
+    enum class PlaceableType : std::uint64_t {
+        Ciphertext = 0,
+        Plaintext = 1,
+        DenormalizedCiphertext = 2,
+    };
+
+    constexpr const char* placeable_type_name(PlaceableType p) {
+        switch (p) {
+        case PlaceableType::Ciphertext:
+            return "Ciphertext";
+        case PlaceableType::Plaintext:
+            return "Plaintext";
+        case PlaceableType::DenormalizedCiphertext:
+            return "DenormalizedCiphertext";
+        default:
+            return "INVALID";
+        }
+    }
+
+    using ProtocolPlacementPlugin = std::function<AllocationSize(std::uint64_t, PlaceableType)>;
+
+    class InvalidPlacementException : public std::runtime_error {
+    public:
+        InvalidPlacementException(const std::string& protocol, std::uint64_t logical_width, PlaceableType type)
+            : std::runtime_error("Invalid placement for protocol \"" + protocol + "\": logical width = " + std::to_string(logical_width) + ", type = " + placeable_type_name(type)) {
+        }
+    };
 
     class Placer {
     public:

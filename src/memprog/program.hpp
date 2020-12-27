@@ -37,7 +37,7 @@ namespace mage::memprog {
     template <typename Placer>
     class Program : public VirtProgramFileWriter {
     public:
-        Program(std::string filename, PageShift shift = 16) : VirtProgramFileWriter(filename, shift), placer(shift) {
+        Program(std::string filename, PageShift shift, ProtocolPlacementPlugin prot) : VirtProgramFileWriter(filename, shift), placer(shift), protocol(prot) {
         }
 
         ~Program() {
@@ -108,6 +108,10 @@ namespace mage::memprog {
             this->append_instruction(instr);
         }
 
+        memprog::AllocationSize get_physical_width(std::uint64_t logical_width, memprog::PlaceableType type) const {
+            return this->protocol(logical_width, type);
+        }
+
         static Program<Placer>* set_current_working_program(Program<Placer>* cwp) {
             Program<Placer>* old_cwp = Program<Placer>::current_working_program;
             Program<Placer>::current_working_program = cwp;
@@ -121,6 +125,7 @@ namespace mage::memprog {
     private:
         Instruction current;
         Placer placer;
+        ProtocolPlacementPlugin protocol;
         static Program<Placer>* current_working_program;
     };
 

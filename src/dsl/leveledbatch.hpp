@@ -84,7 +84,7 @@ namespace mage::dsl {
         }
 
         static constexpr std::size_t get_size() {
-            return protocols::ckks::ckks_plaintext_size(level);
+            return (*p)->get_physical_width(level, memprog::PlaceableType::Plaintext);
         }
 
         VirtAddr v;
@@ -249,8 +249,10 @@ namespace mage::dsl {
             }
         }
 
-        static constexpr std::size_t get_size() {
-            return protocols::ckks::ckks_ciphertext_size(level, normalized);
+        static std::size_t get_size() {
+            // return protocols::ckks::ckks_ciphertext_size(level, normalized);
+            constexpr memprog::PlaceableType t = normalized ? memprog::PlaceableType::Ciphertext : memprog::PlaceableType::DenormalizedCiphertext;
+            return (*p)->get_physical_width(level, t);
         }
 
     private:

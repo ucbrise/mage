@@ -31,6 +31,7 @@
 #include "crypto/block.hpp"
 #include "crypto/ot/correlated.hpp"
 #include "engine/andxor.hpp"
+#include "memprog/program.hpp"
 #include "protocols/registry.hpp"
 #include "util/filebuffer.hpp"
 #include "util/misc.hpp"
@@ -268,5 +269,9 @@ namespace mage::protocols::halfgates {
         std::cout << ms.count() << " ms" << std::endl;
     }
 
-    RegisterProtocol halfgates("halfgates", "Garbled Circuits with HalfGates optimizations", run_halfgates);
+    memprog::AllocationSize halfgates_physical_size(std::uint64_t logical_width, memprog::PlaceableType type) {
+        return logical_width;
+    }
+
+    RegisterProtocol halfgates("halfgates", "Garbled Circuits with HalfGates optimizations", run_halfgates, halfgates_physical_size);
 }

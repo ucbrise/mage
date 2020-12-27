@@ -51,8 +51,8 @@ namespace mage::memprog {
         this->prefetch_lookahead = worker["prefetch_lookahead"].as_int();
     }
 
-    void DefaultPipeline::program(Program<BinnedPlacer>** p, std::function<void()> dsl_program, const std::string& prog_file) {
-        Program<BinnedPlacer> program(prog_file, this->page_shift);
+    void DefaultPipeline::program(Program<BinnedPlacer>** p, ProtocolPlacementPlugin plugin, std::function<void()> dsl_program, const std::string& prog_file) {
+        Program<BinnedPlacer> program(prog_file, this->page_shift, plugin);
         *p = &program;
         dsl_program();
         *p = nullptr;
@@ -89,9 +89,9 @@ namespace mage::memprog {
         }
     }
 
-    void DefaultPipeline::plan(Program<BinnedPlacer>** p, std::function<void()> program) {
+    void DefaultPipeline::plan(Program<BinnedPlacer>** p, ProtocolPlacementPlugin plugin, std::function<void()> program) {
         auto program_start = std::chrono::steady_clock::now();
-        this->program(p, program, this->program_name + ".prog");
+        this->program(p, plugin, program, this->program_name + ".prog");
         auto program_end = std::chrono::steady_clock::now();
         this->stats.placement_duration = std::chrono::duration_cast<std::chrono::milliseconds>(program_end - program_start);
 

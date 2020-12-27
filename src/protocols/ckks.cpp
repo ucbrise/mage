@@ -20,9 +20,11 @@
  */
 
 #include <chrono>
+#include <cstdint>
 #include "engine/addmultiply.hpp"
 #include "protocols/registry.hpp"
 #include "protocols/ckks.hpp"
+#include "protocols/ckks_constants.hpp"
 
 namespace mage::protocols::ckks {
     void run_ckks(const EngineOptions& args) {
@@ -48,5 +50,24 @@ namespace mage::protocols::ckks {
         std::cout << ms.count() << " ms" << std::endl;
     }
 
-    RegisterProtocol ckks("ckks", "Homomorphic Encryption for Arithmetic of Approximate Numbers", run_ckks);
+    memprog::AllocationSize ckks_physical_size(std::uint64_t logical_width, memprog::PlaceableType type) {
+        std:uint64_t result = UINT64_MAX;
+        switch (type) {
+        case memprog::PlaceableType::Ciphertext:
+            result = ckks_ciphertext_size(logical_width, true);
+            break;
+        case memprog::PlaceableType::Plaintext:
+            result = ckks_plaintext_size(logical_width);
+            break;
+        case memprog::PlaceableType::DenormalizedCiphertext:
+            result = ckks_ciphertext_size(logical_width, false);
+            break;
+        }
+        if (result == UINT64_MAX) {
+            throw memprog::InvalidPlacementException("ckks", logical_width, type);
+        }
+        return result;
+    }
+
+    RegisterProtocol ckks("ckks", "Homomorphic Encryption for Arithmetic of Approximate Numbers", run_ckks, ckks_physical_size);
 }

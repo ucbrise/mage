@@ -45,5 +45,9 @@ namespace mage::protocols::tfhe {
         std::cerr << ms.count() << " ms" << std::endl;
     }
 
-    RegisterProtocol tfhe("tfhe", "Fast Fully Homomorphic Encryption over the Torus", run_tfhe);
+    memprog::AllocationSize tfhe_physical_size(std::uint64_t logical_width, memprog::PlaceableType type) {
+        return logical_width;
+    }
+
+    RegisterProtocol tfhe("tfhe", "Fast Fully Homomorphic Encryption over the Torus", run_tfhe, tfhe_physical_size);
 }

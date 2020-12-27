@@ -31,13 +31,14 @@
 using namespace mage;
 using mage::protocols::RegisteredProtocol;
 using mage::protocols::EngineOptions;
+using mage::util::Registry;
 
 static void print_valid_protocol_names() {
-    if (RegisteredProtocol::get_registry().size() == 0) {
+    if (Registry<RegisteredProtocol>::get_registry().size() == 0) {
         std::cerr << "There are no available protocols in this build." << std::endl;
     } else {
         std::cerr << "Available protocols:" << std::endl;
-        for (const auto& [name, prot] : RegisteredProtocol::get_registry()) {
+        for (const auto& [name, prot] : Registry<RegisteredProtocol>::get_registry()) {
             std::cerr << name << " - " << prot.get_description() << std::endl;
         }
     }
@@ -53,7 +54,7 @@ int main(int argc, char** argv) {
     /* Parse the protocol name. */
 
     std::string protocol_name(argv[1]);
-    const RegisteredProtocol* prot_ptr = RegisteredProtocol::look_up_by_name(protocol_name);
+    const RegisteredProtocol* prot_ptr = Registry<RegisteredProtocol>::look_up_by_name(protocol_name);
     if (prot_ptr == nullptr) {
         std::cerr << protocol_name << " is not a valid protocol name. "; // lack of std::endl is intentional
         print_valid_protocol_names();

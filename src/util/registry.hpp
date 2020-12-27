@@ -33,26 +33,77 @@ namespace mage::util {
     template <typename T>
     class Register;
 
-    template <typename T>
-    class RegistryEntry {
-        friend class Register<T>;
-
+    class BaseRegistryEntry {
     public:
-        void operator ()(const T& args) const {
-            this->func(args);
+        const std::string& get_label() {
+            return this->label;
         }
 
         const std::string& get_description() const {
             return this->description;
         }
 
-        static const std::map<std::string, RegistryEntry<T>>& get_registry() {
-            auto& registry = RegistryEntry<T>::get_registry_mutable();
+    protected:
+        BaseRegistryEntry(std::string name, std::string desc) : label(name), description(desc) {
+        }
+
+    private:
+        std::string label;
+        std::string description;
+    };
+
+    template <typename T>
+    class CallableRegistryEntry : public BaseRegistryEntry {
+        friend class Register<CallableRegistryEntry>;
+
+    public:
+        void operator ()(const T& args) const {
+            this->func(args);
+        }
+
+    protected:
+        CallableRegistryEntry(const std::string& name, const std::string& desc, std::function<void(const T&)> f) : BaseRegistryEntry(name, desc), func(f) {
+        }
+
+    private:
+        std::function<void(const T&)> func;
+    };
+
+    // template <typename T>
+    // class RegistryEntry {
+    //     friend class Register<T>;
+    //
+    // public:
+    //     void operator ()(const T& args) const {
+    //         this->func(args);
+    //     }
+    //
+    //     const std::string& get_description() const {
+    //         return this->description;
+    //     }
+    //
+    // private:
+    //     RegistryEntry<T>(const std::string& name, const std::string& desc, std::function<void(const T&)> f)
+    //         : label(name), description(desc), func(f) {
+    //     }
+    //
+    //     std::string label;
+    //     std::string description;
+    //     std::function<void(const T&)> func;
+    // };
+
+    template <typename Entry>
+    class Registry {
+        friend class Register<Entry>;
+
+    public:
+        static const std::map<std::string, Entry>& get_registry() {
+            auto& registry = Registry<Entry>::get_registry_mutable();
             return registry;
         }
 
-        static const RegistryEntry<T>* look_up_by_name(const std::string& name) {
-            auto& registry = RegistryEntry<T>::get_registry();
+        static const Entry* look_up_by_name(const std::string& name) {
+            auto& registry = Registry<Entry>::get_registry();
             auto iter = registry.find(name);
             if (iter == registry.end()) {
                 return nullptr;
@@ -61,26 +112,19 @@ namespace mage::util {
         }
 
     private:
-        RegistryEntry<T>(const std::string& name, const std::string& desc, std::function<void(const T&)> f)
-            : label(name), description(desc), func(f) {
-        }
-
-        static std::map<std::string, RegistryEntry<T>>& get_registry_mutable() {
-            static std::map<std::string, RegistryEntry<T>> registry;
+        static std::map<std::string, Entry>& get_registry_mutable() {
+            static std::map<std::string, Entry> registry;
             return registry;
         }
-
-        std::string label;
-        std::string description;
-        std::function<void(const T&)> func;
     };
 
-    template <typename T>
+    template <typename Entry>
     class Register {
     public:
-        Register(const std::string& name, const std::string& desc, std::function<void(const T&)> f) {
-            std::map<std::string, RegistryEntry<T>>& registry = RegistryEntry<T>::get_registry_mutable();
-            auto [iter, success] = registry.emplace(name, RegistryEntry<T>(name, desc, f));
+        template <typename... Args>
+        Register(const std::string& name, const std::string& desc, Args... args) {
+            std::map<std::string, Entry>& registry = Registry<Entry>::get_registry_mutable();
+            auto [iter, success] = registry.emplace(name, Entry(name, desc, args...));
             if (!success) {
                 std::cerr << "Trying to register \"" << name << "\" but an entry with that name already exists" << std::endl;
                 std::abort();

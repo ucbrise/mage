@@ -19,11 +19,12 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef MAGE_PROGRAMS_REGISTRY_HPP_
-#define MAGE_PROGRAMS_REGISTRY_HPP_
+#ifndef MAGE_PROTOCOLS_REGISTRY_HPP_
+#define MAGE_PROTOCOLS_REGISTRY_HPP_
 
 #include <memory>
 #include "engine/cluster.hpp"
+#include "memprog/placement.hpp"
 #include "util/config.hpp"
 #include "util/registry.hpp"
 
@@ -36,8 +37,23 @@ namespace mage::protocols {
         std::string problem_name;
     };
 
-    using RegisterProtocol = util::Register<EngineOptions>;
-    using RegisteredProtocol = util::RegistryEntry<EngineOptions>;
+    class RegisteredProtocol : public util::CallableRegistryEntry<EngineOptions> {
+        friend class util::Register<RegisteredProtocol>;
+
+    public:
+        memprog::ProtocolPlacementPlugin get_protocol_placement_plugin() const {
+            return this->p;
+        }
+
+    private:
+        RegisteredProtocol(std::string name, std::string desc, std::function<void(const EngineOptions&)> driver, memprog::ProtocolPlacementPlugin plugin)
+            : util::CallableRegistryEntry<EngineOptions>(name, desc, driver), p(plugin) {
+        }
+
+        memprog::ProtocolPlacementPlugin p;
+    };
+
+    using RegisterProtocol = util::Register<RegisteredProtocol>;
 }
 
 #endif
