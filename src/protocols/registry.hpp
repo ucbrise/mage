@@ -22,10 +22,12 @@
 #ifndef MAGE_PROTOCOLS_REGISTRY_HPP_
 #define MAGE_PROTOCOLS_REGISTRY_HPP_
 
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <memory>
 #include <string>
+#include "addr.hpp"
 #include "engine/cluster.hpp"
 #include "memprog/placement.hpp"
 #include "util/config.hpp"
@@ -34,11 +36,16 @@
 namespace mage::protocols {
     struct EngineOptions {
         util::Configuration* config;
-        std::uint32_t party_id;
+        PartyID party_id;
         WorkerID self_id;
         std::shared_ptr<engine::ClusterNetwork> cluster;
         std::string problem_name;
     };
+
+    extern std::vector<std::string> evaluator_synonyms;
+    extern std::vector<std::string> garbler_synonyms;
+
+    std::optional<PartyID> parse_party_id(const std::string& party);
 
     class RegisteredPlacementPlugin : public util::BaseRegistryEntry {
         friend class util::Register<RegisteredPlacementPlugin>;

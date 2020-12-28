@@ -27,6 +27,7 @@
 #include <string>
 #include <unordered_map>
 #include <variant>
+#include <vector>
 #include <yaml-cpp/yaml.h>
 
 namespace mage::util {
@@ -48,6 +49,18 @@ namespace mage::util {
         }
     };
 
+    class ConfigIncompatibleKeysException : public ConfigException {
+    public:
+        ConfigIncompatibleKeysException(const std::string& what) : ConfigException(what) {
+        }
+    };
+
+    class ConfigInvalidAccessException : public ConfigException {
+    public:
+        ConfigInvalidAccessException(const std::string& what) : ConfigException(what) {
+        }
+    };
+
     class ConfigNode;
     class ConfigMapNode;
     class ConfigListNode;
@@ -65,8 +78,10 @@ namespace mage::util {
         const std::vector<std::unique_ptr<ConfigValue>>& as_list() const;
 
         const ConfigValue* get(const std::string& key) const;
+        const ConfigValue* get(const std::vector<std::string>& key_set) const;
         const ConfigValue* get(std::size_t index) const;
         const ConfigValue& operator [](const std::string& key) const;
+        const ConfigValue& operator [](const std::vector<std::string>& key_set) const;
         const ConfigValue& operator [](std::size_t index) const;
         std::size_t get_size() const;
 

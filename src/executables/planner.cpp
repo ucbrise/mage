@@ -37,7 +37,7 @@ using mage::util::Registry;
 
 int main(int argc, char** argv) {
     if (argc != 7) {
-        std::cerr << "Usage: " << argv[0] << " program_name protocol/plugin config.yaml garbler/evaluator index input_size" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " program_name protocol/plugin config.yaml party_id worker_index input_size" << std::endl;
         Registry<RegisteredProgram>::print_all("programs", std::cerr);
         return EXIT_FAILURE;
     }
@@ -69,11 +69,13 @@ int main(int argc, char** argv) {
 
     mage::util::Configuration c(argv[3]);
 
-    if (std::strcmp(argv[4], "garbler") != 0 && std::strcmp(argv[4], "evaluator") != 0) {
-        std::cerr << "Third argument (" << argv[4] << ") is neither garbler not evaluator" << std::endl;
+    std::optional<std::uint32_t> party_id = mage::protocols::parse_party_id(argv[4]);
+    if (!party_id.has_value()) {
+        std::cerr << "Invalid party_id (try \"garbler\", \"evaluator\", or an integer)" << std::endl;
         return EXIT_FAILURE;
     }
-    mage::WorkerID num_workers = c[argv[4]]["workers"].get_size();
+
+    mage::WorkerID num_workers = c["parties"][*party_id]["workers"].get_size();
 
     errno = 0;
     mage::WorkerID index = std::strtoull(argv[5], nullptr, 10);
@@ -93,7 +95,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    const mage::util::ConfigValue& w = c[argv[4]]["workers"][index];
+    const mage::util::ConfigValue& w = c["parties"][*party_id]["workers"][index];
 
     ProgramOptions args = {};
     args.worker_config = &w;

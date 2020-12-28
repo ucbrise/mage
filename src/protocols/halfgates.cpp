@@ -28,6 +28,7 @@
 #include <mutex>
 #include <thread>
 #include <utility>
+#include "addr.hpp"
 #include "crypto/block.hpp"
 #include "crypto/ot/correlated.hpp"
 #include "engine/andxor.hpp"
@@ -218,25 +219,25 @@ namespace mage::protocols::halfgates {
         /* Validate the config.yaml file for running the computation. */
 
         util::Configuration& c = *args.config;
-        if (c.get("garbler") == nullptr) {
+        if (c["parties"].get(garbler_party_id) == nullptr) {
             std::cerr << "Garbler not present in configuration file" << std::endl;
             std::abort();
         }
-        if (c.get("evaluator") == nullptr) {
+        if (c["parties"].get(evaluator_party_id) == nullptr) {
             std::cerr << "Evaluator not present in configuration file" << std::endl;
             std::abort();
         }
-        if (c["garbler"]["workers"].get_size() != c["evaluator"]["workers"].get_size()) {
-            std::cerr << "Garbler has " << c["garbler"]["workers"].get_size() << " workers but evaluator has " << c["evaluator"]["workers"].get_size() << " workers --- must be equal" << std::endl;
+        if (c["parties"][garbler_party_id]["workers"].get_size() != c["parties"][evaluator_party_id]["workers"].get_size()) {
+            std::cerr << "Garbler has " << c["parties"][garbler_party_id]["workers"].get_size() << " workers but evaluator has " << c["parties"][evaluator_party_id]["workers"].get_size() << " workers --- must be equal" << std::endl;
             std::abort();
         }
-        if (args.self_id >= c["garbler"]["workers"].get_size()) {
-            std::cerr << "Worker index is " << args.self_id << " but only " << c["garbler"]["workers"].get_size() << " workers are specified" << std::endl;
+        if (args.self_id >= c["parties"][garbler_party_id]["workers"].get_size()) {
+            std::cerr << "Worker index is " << args.self_id << " but only " << c["parties"][garbler_party_id]["workers"].get_size() << " workers are specified" << std::endl;
             std::abort();
         }
 
-        if (args.party_id == 0) {
-            const util::ConfigValue& worker = c["evaluator"]["workers"][args.self_id];
+        if (args.party_id == evaluator_party_id) {
+            const util::ConfigValue& worker = c["parties"][evaluator_party_id]["workers"][args.self_id];
             if (worker.get("external_host") == nullptr || worker.get("external_port") == nullptr) {
                 std::cerr << "This party's external network information is not specified" << std::endl;
                 std::abort();
@@ -244,11 +245,11 @@ namespace mage::protocols::halfgates {
 
             std::string evaluator_input_file = file_base + "_evaluator.input";
             HalfGatesEvaluationEngine p(evaluator_input_file.c_str(), worker["external_port"].as_string().c_str());
-            engine::ANDXOREngine executor(args.cluster, c["evaluator"]["workers"][args.self_id], p, prog_file.c_str());
+            engine::ANDXOREngine executor(args.cluster, c["parties"][evaluator_party_id]["workers"][args.self_id], p, prog_file.c_str());
             start = std::chrono::steady_clock::now();
             executor.execute_program();
-        } else if (args.party_id == 1) {
-            const util::ConfigValue& opposite_worker = c["evaluator"]["workers"][args.self_id];
+        } else if (args.party_id == garbler_party_id) {
+            const util::ConfigValue& opposite_worker = c["parties"][evaluator_party_id]["workers"][args.self_id];
             if (opposite_worker.get("external_host") == nullptr || opposite_worker.get("external_port") == nullptr) {
                 std::cerr << "Opposite party's external network information is not specified" << std::endl;
                 std::abort();
@@ -256,7 +257,7 @@ namespace mage::protocols::halfgates {
 
             std::string garbler_input_file = file_base + "_garbler.input";
             HalfGatesGarblingEngine p(args.cluster, garbler_input_file.c_str(), output_file.c_str(), opposite_worker["external_host"].as_string().c_str(), opposite_worker["external_port"].as_string().c_str());
-            engine::ANDXOREngine executor(args.cluster, c["garbler"]["workers"][args.self_id], p, prog_file.c_str());
+            engine::ANDXOREngine executor(args.cluster, c["parties"][garbler_party_id]["workers"][args.self_id], p, prog_file.c_str());
             start = std::chrono::steady_clock::now();
             executor.execute_program();
         } else {

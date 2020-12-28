@@ -38,7 +38,7 @@ namespace mage::protocols::tfhe {
         util::Configuration& c = *args.config;
         TFHEEngine p(garbler_input_file.c_str(), evaluator_input_file.c_str(), output_file.c_str());
         start = std::chrono::steady_clock::now();
-        engine::ANDXOREngine executor(args.cluster, c["garbler"]["workers"][args.self_id], p, prog_file.c_str());
+        engine::ANDXOREngine executor(args.cluster, c["parties"][args.party_id]["workers"][args.self_id], p, prog_file.c_str());
         executor.execute_program();
         end = std::chrono::steady_clock::now();
         std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);

@@ -22,6 +22,7 @@
 #include "util/config.hpp"
 #include <cstdlib>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <tuple>
@@ -108,6 +109,23 @@ namespace mage::util {
         return node->get(key);
     }
 
+    const ConfigValue* ConfigValue::get(const std::vector<std::string>& key_set) const {
+        const ConfigNode* node = this->as_node();
+        const ConfigValue* result = nullptr;
+        const std::string* result_key = nullptr;
+        for (const std::string& key : key_set) {
+            const ConfigValue* key_result = node->get(key);
+            if (key_result != nullptr) {
+                if (result != nullptr) {
+                    throw ConfigIncompatibleKeysException("In " + this->get_field_path() + ": keys \"" + *result_key + "\" and \"" + key + "\" are both present");
+                }
+                result = key_result;
+                result_key = &key;
+            }
+        }
+        return result;
+    }
+
     const ConfigValue* ConfigValue::get(const std::size_t index) const {
         const ConfigListNode& node = this->as_list_node();
         return node.get(index);
@@ -117,6 +135,34 @@ namespace mage::util {
         const ConfigValue* result = this->get(key);
         if (result == nullptr) {
             throw ConfigDoesNotExistException("In " + this->get_field_path() + ": key \"" + key + "\" expected but does not exist");
+        }
+        return *result;
+    }
+
+    const ConfigValue& ConfigValue::operator [](const std::vector<std::string>& key_set) const {
+        const ConfigValue* result = this->get(key_set);
+        if (result == nullptr) {
+            if (key_set.size() == 0) {
+                throw ConfigInvalidAccessException("At " + this->get_field_path() + ": attempted to access with empty key set");
+            }
+            if (key_set.size() == 1) {
+                throw ConfigDoesNotExistException("In " + this->get_field_path() + ": key \"" + key_set[0] + "\" expected but does not exist");
+            }
+            std::ostringstream message;
+            message << "In " << this->get_field_path() << ": expected one of the keys ";
+            for (std::size_t i = 0; i != key_set.size(); i++) {
+                if (i + 1 != key_set.size()) {
+                    message << "\"" << key_set[i] << "\"";
+                    if (key_set.size() == 2) {
+                        message << " ";
+                    } else {
+                        message << ", ";
+                    }
+                } else {
+                    message << "or \"" << key_set[i] << "\" but none exist";
+                }
+            }
+            throw ConfigDoesNotExistException(message.str());
         }
         return *result;
     }

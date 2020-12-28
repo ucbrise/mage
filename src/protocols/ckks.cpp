@@ -36,13 +36,11 @@ namespace mage::protocols::ckks {
         std::chrono::time_point<std::chrono::steady_clock> start;
         std::chrono::time_point<std::chrono::steady_clock> end;
 
-        const char* party = (args.party_id == 0) ? "evaluator" : "garbler";
-
         util::Configuration& c = *args.config;
         {
             CKKSEngine p(input_file.c_str(), output_file.c_str());
             start = std::chrono::steady_clock::now();
-            engine::AddMultiplyEngine executor(args.cluster, c[party]["workers"][args.self_id], p, prog_file.c_str());
+            engine::AddMultiplyEngine executor(args.cluster, c["parties"][args.party_id]["workers"][args.self_id], p, prog_file.c_str());
             executor.execute_program();
             end = std::chrono::steady_clock::now();
         }

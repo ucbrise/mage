@@ -24,6 +24,7 @@
 #include <chrono>
 #include <iostream>
 #include <string>
+#include "addr.hpp"
 #include "protocols/registry.hpp"
 #include "platform/network.hpp"
 #include "util/config.hpp"
@@ -32,17 +33,6 @@ using namespace mage;
 using mage::protocols::RegisteredProtocol;
 using mage::protocols::EngineOptions;
 using mage::util::Registry;
-
-static void print_valid_protocol_names() {
-    if (Registry<RegisteredProtocol>::get_registry().size() == 0) {
-        std::cerr << "There are no available protocols in this build." << std::endl;
-    } else {
-        std::cerr << "Available protocols:" << std::endl;
-        for (const auto& [name, prot] : Registry<RegisteredProtocol>::get_registry()) {
-            std::cerr << name << " - " << prot.get_description() << std::endl;
-        }
-    }
-}
 
 int main(int argc, char** argv) {
     if (argc != 6) {
@@ -56,7 +46,7 @@ int main(int argc, char** argv) {
     const RegisteredProtocol* prot_ptr = Registry<RegisteredProtocol>::look_up_by_name(protocol_name);
     if (prot_ptr == nullptr) {
         std::cerr << protocol_name << " is not a valid protocol name. "; // lack of std::endl is intentional
-        Registry<RegisteredProtocol>::print_all("programs", std::cerr);
+        Registry<RegisteredProtocol>::print_all("protocols", std::cerr);
         return EXIT_FAILURE;
     }
 
@@ -66,13 +56,9 @@ int main(int argc, char** argv) {
 
     /* Parse the party ID. */
 
-    std::uint32_t party_id;
-    if (std::strcmp(argv[3], "garbler") == 0) {
-        party_id = 1;
-    } else if (std::strcmp(argv[3], "evaluator") == 0) {
-        party_id = 0;
-    } else {
-        std::cerr << "The party_id must be either \"garbler\" or \"evaluator\"." << std::endl;
+    std::optional<PartyID> party_id = mage::protocols::parse_party_id(argv[3]);
+    if (!party_id.has_value()) {
+        std::cerr << "Invalid party_id (try \"garbler\", \"evaluator\", or an integer)" << std::endl;
         return EXIT_FAILURE;
     }
 
@@ -92,7 +78,7 @@ int main(int argc, char** argv) {
     }
 
     auto cluster = std::make_shared<mage::engine::ClusterNetwork>(self_id, buffer_size);
-    std::string err = cluster->establish(c[argv[3]]);
+    std::string err = cluster->establish(c["parties"][*party_id]);
     if (!err.empty()) {
         std::cerr << err << std::endl;
         return EXIT_FAILURE;
@@ -102,7 +88,7 @@ int main(int argc, char** argv) {
 
     EngineOptions args = {};
     args.config = &c;
-    args.party_id = party_id;
+    args.party_id = *party_id;
     args.self_id = self_id;
     args.cluster = cluster;
     args.problem_name = argv[5];
