@@ -40,9 +40,7 @@
 
 namespace mage::protocols::halfgates {
     const constexpr std::uint64_t halfgates_max_batch_size = 4 * crypto::block_num_bits;
-    constexpr const std::size_t halfgates_num_input_daemons = 3;
-    constexpr const std::size_t halfgates_num_connections = 1 + halfgates_num_input_daemons;
-    constexpr const std::size_t halfgates_output_batch_size = 1 << 21; // number of bits to buffer before completing a round and writing it to a file
+    constexpr const std::size_t halfgates_output_batch_size = 1 << 21; // number of output bits to buffer before completing a round and writing it to a file
 
     template <typename T, std::size_t batch_size>
     class InputBatchPipe : public util::UserPipe<std::array<T, batch_size>> {
@@ -91,12 +89,15 @@ namespace mage::protocols::halfgates {
     public:
         using Wire = HalfGatesGarbler::Wire;
 
-        HalfGatesGarblingEngine(const std::shared_ptr<engine::ClusterNetwork>& network, const char* input_file, const char* output_file, const char* evaluator_host, const char* evaluator_port)
-            : input_reader(input_file), output_writer(output_file), conn_output_reader(this->conn_reader), input_daemon_threads(halfgates_num_input_daemons), evaluator_input_index(0) {
-            platform::network_connect(evaluator_host, evaluator_port, this->sockets.data(), nullptr, halfgates_num_connections);
+        HalfGatesGarblingEngine(const std::shared_ptr<engine::ClusterNetwork>& network,
+            const char* input_file, const char* output_file, const char* evaluator_host,
+            const char* evaluator_port, std::size_t num_input_daemons = 3)
+            : input_reader(input_file), output_writer(output_file), sockets(num_input_daemons + 1),
+            conn_output_reader(this->conn_reader), input_daemon_threads(num_input_daemons), evaluator_input_index(0) {
+            platform::network_connect(evaluator_host, evaluator_port, this->sockets.data(), nullptr, this->sockets.size());
             this->conn_reader.set_file_descriptor(this->sockets[0], false);
             this->conn_writer.set_file_descriptor(this->sockets[0], false);
-            for (int i = 0; i != halfgates_num_input_daemons; i++) {
+            for (int i = 0; i != this->input_daemon_threads.size(); i++) {
                 this->input_daemon_threads[i].ot_conn_reader.set_file_descriptor(this->sockets[1 + i], false);
                 this->input_daemon_threads[i].ot_conn_writer.set_file_descriptor(this->sockets[1 + i], false);
             }
@@ -129,12 +130,12 @@ namespace mage::protocols::halfgates {
             this->write_pending_output_data();
             this->conn_reader.relinquish_file_descriptor();
             this->conn_writer.relinquish_file_descriptor();
-            for (int i = 0; i != halfgates_num_input_daemons; i++) {
+            for (int i = 0; i != this->input_daemon_threads.size(); i++) {
                 this->input_daemon_threads[i].thread.join();
                 this->input_daemon_threads[i].ot_conn_reader.relinquish_file_descriptor();
                 this->input_daemon_threads[i].ot_conn_writer.relinquish_file_descriptor();
             }
-            for (std::size_t i = 0; i != halfgates_num_connections; i++) {
+            for (std::size_t i = 0; i != this->sockets.size(); i++) {
                 platform::network_close(this->sockets[i]);
             }
         }
@@ -159,7 +160,7 @@ namespace mage::protocols::halfgates {
                     read_so_far += bytes_read;
                     if (end_of_batch) {
                         this->evaluator_input_index++;
-                        if (this->evaluator_input_index == halfgates_num_input_daemons) {
+                        if (this->evaluator_input_index == this->input_daemon_threads.size()) {
                             this->evaluator_input_index = 0;
                         }
                     }
@@ -226,7 +227,7 @@ namespace mage::protocols::halfgates {
 
         util::BinaryFileReader input_reader;
         util::BinaryFileWriter output_writer;
-        std::array<int, halfgates_num_connections> sockets;
+        std::vector<int> sockets;
         util::BufferedFileReader<false> conn_reader;
         util::BufferedFileWriter<false> conn_writer;
         util::BinaryReader conn_output_reader;
@@ -240,13 +241,13 @@ namespace mage::protocols::halfgates {
     public:
         using Wire = HalfGatesEvaluator::Wire;
 
-        HalfGatesEvaluationEngine(const char* input_file, const char* evaluator_port)
-            : input_reader(input_file), conn_output_writer(this->conn_writer), input_daemon_threads(halfgates_num_input_daemons), evaluator_input_index(0),
+        HalfGatesEvaluationEngine(const char* input_file, const char* evaluator_port, std::size_t num_input_daemons = 3)
+            : input_reader(input_file), sockets(num_input_daemons + 1), conn_output_writer(this->conn_writer), input_daemon_threads(num_input_daemons), evaluator_input_index(0),
             bits_left_in_output_batch(halfgates_output_batch_size) {
-            platform::network_accept(evaluator_port, this->sockets.data(), halfgates_num_connections);
+            platform::network_accept(evaluator_port, this->sockets.data(), this->sockets.size());
             this->conn_reader.set_file_descriptor(this->sockets[0], false);
             this->conn_writer.set_file_descriptor(this->sockets[0], false);
-            for (int i = 0; i != halfgates_num_input_daemons; i++) {
+            for (int i = 0; i != this->input_daemon_threads.size(); i++) {
                 this->input_daemon_threads[i].ot_conn_reader.set_file_descriptor(this->sockets[1 + i], false);
                 this->input_daemon_threads[i].ot_conn_writer.set_file_descriptor(this->sockets[1 + i], false);
             }
@@ -262,12 +263,12 @@ namespace mage::protocols::halfgates {
         ~HalfGatesEvaluationEngine() {
             this->conn_reader.relinquish_file_descriptor();
             this->conn_writer.relinquish_file_descriptor();
-            for (int i = 0; i != halfgates_num_input_daemons; i++) {
+            for (int i = 0; i != this->input_daemon_threads.size(); i++) {
                 this->input_daemon_threads[i].thread.join();
                 this->input_daemon_threads[i].ot_conn_reader.relinquish_file_descriptor();
                 this->input_daemon_threads[i].ot_conn_writer.relinquish_file_descriptor();
             }
-            for (std::size_t i = 0; i != halfgates_num_connections; i++) {
+            for (std::size_t i = 0; i != this->sockets.size(); i++) {
                 platform::network_close(this->sockets[i]);
             }
         }
@@ -287,7 +288,7 @@ namespace mage::protocols::halfgates {
                     read_so_far += bytes_read;
                     if (end_of_batch) {
                         this->evaluator_input_index++;
-                        if (this->evaluator_input_index == halfgates_num_input_daemons) {
+                        if (this->evaluator_input_index == this->input_daemon_threads.size()) {
                             this->evaluator_input_index = 0;
                         }
                     }
@@ -344,7 +345,7 @@ namespace mage::protocols::halfgates {
 
         HalfGatesEvaluator evaluator;
         util::BinaryFileReader input_reader;
-        std::array<int, halfgates_num_connections> sockets;
+        std::vector<int> sockets;
         util::BufferedFileReader<false> conn_reader;
         util::BufferedFileWriter<false> conn_writer;
         util::BinaryWriter conn_output_writer;

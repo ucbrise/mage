@@ -21,6 +21,7 @@
 
 #include "protocols/halfgates.hpp"
 #include <cstdint>
+#include <cstdlib>
 #include <algorithm>
 #include <chrono>
 #include <iostream>
@@ -54,7 +55,7 @@ namespace mage::protocols::halfgates {
         for (int i = 0; i != this->input_daemon_threads.size(); i++) {
             InputDaemonThread* daemon = &this->input_daemon_threads[i];
             daemon->thread = std::thread([=]() {
-                auto [ num_batches, num_extra_batches ] = util::floor_div(total_batches, halfgates_num_input_daemons);
+                auto [ num_batches, num_extra_batches ] = util::floor_div(total_batches, this->input_daemon_threads.size());
                 if (i < num_extra_batches) {
                     num_batches++;
                 }
@@ -118,9 +119,12 @@ namespace mage::protocols::halfgates {
     }
 
     struct InputTurn {
+        InputTurn(std::size_t num_input_daemons) : thread_turn_active(num_input_daemons) {
+        }
+
         int turn;
         std::mutex turn_mutex;
-        std::condition_variable thread_turn_active[halfgates_num_input_daemons];
+        std::vector<std::condition_variable> thread_turn_active;
     };
 
     void HalfGatesEvaluationEngine::start_input_daemon() {
@@ -133,14 +137,14 @@ namespace mage::protocols::halfgates {
         static_assert((halfgates_max_batch_size & 0x7) == 0);
         assert((num_bits & 0x7) == 0);
 
-        std::shared_ptr<InputTurn> turn_info = std::make_shared<InputTurn>();
+        std::shared_ptr<InputTurn> turn_info = std::make_shared<InputTurn>(this->input_daemon_threads.size());
         turn_info->turn = 0;
 
         for (int i = 0; i != this->input_daemon_threads.size(); i++) {
             InputDaemonThread* daemon = &this->input_daemon_threads[i];
             daemon->thread = std::thread([=]() {
                 int next_thread_i = (i + 1) % this->input_daemon_threads.size();
-                auto [ num_batches, num_extra_batches ] = util::floor_div(total_batches, halfgates_num_input_daemons);
+                auto [ num_batches, num_extra_batches ] = util::floor_div(total_batches, this->input_daemon_threads.size());
                 if (i < num_extra_batches) {
                     num_batches++;
                 }
@@ -236,15 +240,26 @@ namespace mage::protocols::halfgates {
             std::abort();
         }
 
+        const util::ConfigValue& worker = c["parties"][evaluator_party_id]["workers"][args.self_id];
+
+        std::size_t num_input_daemons = 3;
+        if (worker.get("num_input_daemons") != nullptr) {
+            std::int64_t temp = worker["num_input_daemons"].as_int();
+            if (temp <= 0 || temp > SIZE_MAX) {
+                std::cerr << "Specified \"num_input_daemons\" is " << temp << ", which is invalid" << std::endl;
+                std::abort();
+            }
+            num_input_daemons = static_cast<std::size_t>(temp);
+        }
+
         if (args.party_id == evaluator_party_id) {
-            const util::ConfigValue& worker = c["parties"][evaluator_party_id]["workers"][args.self_id];
             if (worker.get("external_host") == nullptr || worker.get("external_port") == nullptr) {
                 std::cerr << "This party's external network information is not specified" << std::endl;
                 std::abort();
             }
 
             std::string evaluator_input_file = file_base + "_evaluator.input";
-            HalfGatesEvaluationEngine p(evaluator_input_file.c_str(), worker["external_port"].as_string().c_str());
+            HalfGatesEvaluationEngine p(evaluator_input_file.c_str(), worker["external_port"].as_string().c_str(), num_input_daemons);
             engine::ANDXOREngine executor(args.cluster, c["parties"][evaluator_party_id]["workers"][args.self_id], p, prog_file.c_str());
             start = std::chrono::steady_clock::now();
             executor.execute_program();
@@ -256,7 +271,7 @@ namespace mage::protocols::halfgates {
             }
 
             std::string garbler_input_file = file_base + "_garbler.input";
-            HalfGatesGarblingEngine p(args.cluster, garbler_input_file.c_str(), output_file.c_str(), opposite_worker["external_host"].as_string().c_str(), opposite_worker["external_port"].as_string().c_str());
+            HalfGatesGarblingEngine p(args.cluster, garbler_input_file.c_str(), output_file.c_str(), opposite_worker["external_host"].as_string().c_str(), opposite_worker["external_port"].as_string().c_str(), num_input_daemons);
             engine::ANDXOREngine executor(args.cluster, c["parties"][garbler_party_id]["workers"][args.self_id], p, prog_file.c_str());
             start = std::chrono::steady_clock::now();
             executor.execute_program();
