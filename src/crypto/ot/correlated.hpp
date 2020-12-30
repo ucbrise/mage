@@ -23,9 +23,12 @@
 #define MAGE_CRYPTO_OT_CORRELATED_HPP_
 
 #include <cstddef>
+#include <memory>
+#include <thread>
 #include "crypto/block.hpp"
 #include "crypto/ot/extension.hpp"
 #include "util/filebuffer.hpp"
+#include "util/userpipe.hpp"
 
 namespace mage::crypto::ot {
     class CorrelatedExtensionSender : public ExtensionSender {
@@ -42,6 +45,56 @@ namespace mage::crypto::ot {
 
     protected:
         void finish_choose(const block* choices, block* results, std::size_t num_choices, const block* y, const block* tT);
+    };
+
+    class PipelinedCorrelatedExtSender : private CorrelatedExtensionSender {
+    public:
+        PipelinedCorrelatedExtSender(util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out, block choice_delta, util::UserPipe<block>& results, std::size_t batch_size, std::size_t max_depth);
+        ~PipelinedCorrelatedExtSender();
+
+        /* WARNING: Do not call this concurrently from multiple threads. */
+        void submit_send();
+
+    private:
+        void start_daemon();
+        
+        util::BufferedFileReader<false>& net_in;
+        util::BufferedFileWriter<false>& net_out;
+        std::size_t num_choices;
+        std::size_t depth;
+
+        std::size_t num_row_blocks;
+        std::size_t num_blocks;
+        std::unique_ptr<util::UserPipe<crypto::block>> pipeline;
+
+        block delta;
+
+        util::UserPipe<block>& output;
+        std::thread daemon;
+    };
+
+    class PipelinedCorrelatedExtChooser : private CorrelatedExtensionChooser {
+    public:
+        PipelinedCorrelatedExtChooser(util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out, util::UserPipe<block>& results, std::size_t batch_size, std::size_t max_depth);
+        ~PipelinedCorrelatedExtChooser();
+
+        void start_daemon();
+
+        /* WARNING: Do not call this concurrently from multiple threads. */
+        void submit_choose(const block* choices);
+
+    private:
+        util::BufferedFileReader<false>& net_in;
+        util::BufferedFileWriter<false>& net_out;
+        std::size_t num_choices;
+        std::size_t depth;
+
+        std::size_t num_row_blocks;
+        std::size_t num_blocks;
+        std::unique_ptr<util::UserPipe<crypto::block>> pipeline;
+
+        util::UserPipe<block>& output;
+        std::thread daemon;
     };
 }
 

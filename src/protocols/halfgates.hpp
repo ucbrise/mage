@@ -25,7 +25,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <algorithm>
-#include <array>
 #include <chrono>
 #include <iostream>
 #include <memory>
@@ -42,22 +41,21 @@ namespace mage::protocols::halfgates {
     const constexpr std::uint64_t halfgates_max_batch_size = 4 * crypto::block_num_bits;
     constexpr const std::size_t halfgates_output_batch_size = 1 << 21; // number of output bits to buffer before completing a round and writing it to a file
 
-    template <typename T, std::size_t batch_size>
-    class InputBatchPipe : public util::UserPipe<std::array<T, batch_size>> {
+    template <typename T>
+    class InputBatchPipe : public util::UserPipe<T> {
     public:
-        InputBatchPipe(std::size_t capacity_shift)
-            : util::UserPipe<std::array<T, batch_size>>(capacity_shift), index_into_batch(0) {
+        InputBatchPipe(std::size_t num_batches, std::size_t batch_length)
+            : util::UserPipe<T>(num_batches * batch_length), batch_size(batch_length), index_into_batch(0) {
         }
 
         std::pair<std::size_t, bool> read_elements_until_end_of_batch(T* into, std::size_t count) {
-            std::array<T, batch_size>& latest = *(this->start_read_single_in_place());
-            T* batch_data = latest.data();
-            std::size_t to_read = std::min(batch_size - this->index_into_batch, count);
+            T* batch_data = this->start_read_in_place(this->batch_size);
+            std::size_t to_read = std::min(this->batch_size - this->index_into_batch, count);
             std::copy(&batch_data[this->index_into_batch], &batch_data[this->index_into_batch + to_read], into);
             this->index_into_batch += to_read;
-            if (this->index_into_batch == batch_size) {
+            if (this->index_into_batch == this->batch_size) {
                 this->index_into_batch = 0;
-                this->finish_read_single_in_place();
+                this->finish_read_in_place(this->batch_size);
                 return std::make_pair(to_read, true);
             }
             return std::make_pair(to_read, false);
@@ -72,17 +70,27 @@ namespace mage::protocols::halfgates {
         }
 
     private:
+        std::size_t batch_size;
         std::size_t index_into_batch;
     };
 
     struct InputDaemonThread {
-        InputDaemonThread() : evaluator_input_labels(2) {
+        InputDaemonThread(std::size_t max_batch_size) : evaluator_input_labels((1 << 2), max_batch_size) {
         }
 
         std::thread thread;
         util::BufferedFileReader<false> ot_conn_reader;
         util::BufferedFileWriter<false> ot_conn_writer;
-        InputBatchPipe<crypto::block, halfgates_max_batch_size> evaluator_input_labels;
+        InputBatchPipe<crypto::block> evaluator_input_labels;
+    };
+
+    struct OTInfo {
+        OTInfo() : max_batch_size(4 * crypto::block_num_bits), pipeline_depth(1), num_daemons(3) {
+        }
+
+        std::size_t max_batch_size;
+        std::size_t pipeline_depth;
+        std::size_t num_daemons;
     };
 
     class HalfGatesGarblingEngine {
@@ -91,15 +99,16 @@ namespace mage::protocols::halfgates {
 
         HalfGatesGarblingEngine(const std::shared_ptr<engine::ClusterNetwork>& network,
             const char* input_file, const char* output_file, const char* evaluator_host,
-            const char* evaluator_port, std::size_t num_input_daemons = 3)
-            : input_reader(input_file), output_writer(output_file), sockets(num_input_daemons + 1),
-            conn_output_reader(this->conn_reader), input_daemon_threads(num_input_daemons), evaluator_input_index(0) {
+            const char* evaluator_port, const OTInfo& oti)
+            : input_reader(input_file), output_writer(output_file), sockets(oti.num_daemons + 1),
+            conn_output_reader(this->conn_reader), input_daemon_threads(oti.num_daemons), evaluator_input_index(0) {
             platform::network_connect(evaluator_host, evaluator_port, this->sockets.data(), nullptr, this->sockets.size());
             this->conn_reader.set_file_descriptor(this->sockets[0], false);
             this->conn_writer.set_file_descriptor(this->sockets[0], false);
             for (int i = 0; i != this->input_daemon_threads.size(); i++) {
-                this->input_daemon_threads[i].ot_conn_reader.set_file_descriptor(this->sockets[1 + i], false);
-                this->input_daemon_threads[i].ot_conn_writer.set_file_descriptor(this->sockets[1 + i], false);
+                this->input_daemon_threads[i] = std::make_unique<InputDaemonThread>(oti.max_batch_size);
+                this->input_daemon_threads[i]->ot_conn_reader.set_file_descriptor(this->sockets[1 + i], false);
+                this->input_daemon_threads[i]->ot_conn_writer.set_file_descriptor(this->sockets[1 + i], false);
             }
 
             this->conn_writer.enable_stats("GATE-SEND (ns)");
@@ -123,7 +132,7 @@ namespace mage::protocols::halfgates {
             this->conn_writer.flush();
 
             /* Once this->garbler is initialized, start the OT daemon. */
-            this->start_input_daemon();
+            this->start_input_daemon(oti.max_batch_size, oti.pipeline_depth);
         }
 
         ~HalfGatesGarblingEngine() {
@@ -131,9 +140,9 @@ namespace mage::protocols::halfgates {
             this->conn_reader.relinquish_file_descriptor();
             this->conn_writer.relinquish_file_descriptor();
             for (int i = 0; i != this->input_daemon_threads.size(); i++) {
-                this->input_daemon_threads[i].thread.join();
-                this->input_daemon_threads[i].ot_conn_reader.relinquish_file_descriptor();
-                this->input_daemon_threads[i].ot_conn_writer.relinquish_file_descriptor();
+                this->input_daemon_threads[i]->thread.join();
+                this->input_daemon_threads[i]->ot_conn_reader.relinquish_file_descriptor();
+                this->input_daemon_threads[i]->ot_conn_writer.relinquish_file_descriptor();
             }
             for (std::size_t i = 0; i != this->sockets.size(); i++) {
                 platform::network_close(this->sockets[i]);
@@ -155,7 +164,7 @@ namespace mage::protocols::halfgates {
             } else {
                 std::size_t read_so_far = 0;
                 while (read_so_far != length) {
-                    auto& label_pipe = this->input_daemon_threads[this->evaluator_input_index].evaluator_input_labels;
+                    auto& label_pipe = this->input_daemon_threads[this->evaluator_input_index]->evaluator_input_labels;
                     auto [ bytes_read, end_of_batch ] = label_pipe.read_elements_until_end_of_batch(&data[read_so_far], length - read_so_far);
                     read_so_far += bytes_read;
                     if (end_of_batch) {
@@ -221,7 +230,7 @@ namespace mage::protocols::halfgates {
         }
 
     private:
-        void start_input_daemon();
+        void start_input_daemon(std::size_t batch_size, std::size_t pipeline_depth);
 
         HalfGatesGarbler garbler;
 
@@ -233,7 +242,7 @@ namespace mage::protocols::halfgates {
         util::BinaryReader conn_output_reader;
         std::vector<bool> output_label_lsbs;
 
-        std::vector<InputDaemonThread> input_daemon_threads;
+        std::vector<std::unique_ptr<InputDaemonThread>> input_daemon_threads;
         std::size_t evaluator_input_index;
     };
 
@@ -241,15 +250,16 @@ namespace mage::protocols::halfgates {
     public:
         using Wire = HalfGatesEvaluator::Wire;
 
-        HalfGatesEvaluationEngine(const char* input_file, const char* evaluator_port, std::size_t num_input_daemons = 3)
-            : input_reader(input_file), sockets(num_input_daemons + 1), conn_output_writer(this->conn_writer), input_daemon_threads(num_input_daemons), evaluator_input_index(0),
+        HalfGatesEvaluationEngine(const char* input_file, const char* evaluator_port, const OTInfo& oti)
+            : input_reader(input_file), sockets(oti.num_daemons + 1), conn_output_writer(this->conn_writer), input_daemon_threads(oti.num_daemons), evaluator_input_index(0),
             bits_left_in_output_batch(halfgates_output_batch_size) {
             platform::network_accept(evaluator_port, this->sockets.data(), this->sockets.size());
             this->conn_reader.set_file_descriptor(this->sockets[0], false);
             this->conn_writer.set_file_descriptor(this->sockets[0], false);
             for (int i = 0; i != this->input_daemon_threads.size(); i++) {
-                this->input_daemon_threads[i].ot_conn_reader.set_file_descriptor(this->sockets[1 + i], false);
-                this->input_daemon_threads[i].ot_conn_writer.set_file_descriptor(this->sockets[1 + i], false);
+                this->input_daemon_threads[i] = std::make_unique<InputDaemonThread>(oti.max_batch_size);
+                this->input_daemon_threads[i]->ot_conn_reader.set_file_descriptor(this->sockets[1 + i], false);
+                this->input_daemon_threads[i]->ot_conn_writer.set_file_descriptor(this->sockets[1 + i], false);
             }
 
             this->conn_reader.enable_stats("GATE-RECV (ns)");
@@ -257,16 +267,16 @@ namespace mage::protocols::halfgates {
             this->evaluator.initialize(input_seed);
 
             /* Once this->evaluator is initialized, start the OT daemon. */
-            this->start_input_daemon();
+            this->start_input_daemon(oti.max_batch_size, oti.pipeline_depth);
         }
 
         ~HalfGatesEvaluationEngine() {
             this->conn_reader.relinquish_file_descriptor();
             this->conn_writer.relinquish_file_descriptor();
             for (int i = 0; i != this->input_daemon_threads.size(); i++) {
-                this->input_daemon_threads[i].thread.join();
-                this->input_daemon_threads[i].ot_conn_reader.relinquish_file_descriptor();
-                this->input_daemon_threads[i].ot_conn_writer.relinquish_file_descriptor();
+                this->input_daemon_threads[i]->thread.join();
+                this->input_daemon_threads[i]->ot_conn_reader.relinquish_file_descriptor();
+                this->input_daemon_threads[i]->ot_conn_writer.relinquish_file_descriptor();
             }
             for (std::size_t i = 0; i != this->sockets.size(); i++) {
                 platform::network_close(this->sockets[i]);
@@ -283,7 +293,7 @@ namespace mage::protocols::halfgates {
             } else {
                 std::size_t read_so_far = 0;
                 while (read_so_far != length) {
-                    auto& label_pipe = this->input_daemon_threads[this->evaluator_input_index].evaluator_input_labels;
+                    auto& label_pipe = this->input_daemon_threads[this->evaluator_input_index]->evaluator_input_labels;
                     auto [ bytes_read, end_of_batch ] = label_pipe.read_elements_until_end_of_batch(&data[read_so_far], length - read_so_far);
                     read_so_far += bytes_read;
                     if (end_of_batch) {
@@ -341,7 +351,7 @@ namespace mage::protocols::halfgates {
         }
 
     private:
-        void start_input_daemon();
+        void start_input_daemon(std::size_t max_batch_size, std::size_t pipeline_depth);
 
         HalfGatesEvaluator evaluator;
         util::BinaryFileReader input_reader;
@@ -351,7 +361,7 @@ namespace mage::protocols::halfgates {
         util::BinaryWriter conn_output_writer;
 
         /* For the input daemon. */
-        std::vector<InputDaemonThread> input_daemon_threads;
+        std::vector<std::unique_ptr<InputDaemonThread>> input_daemon_threads;
         std::size_t evaluator_input_index;
         std::size_t bits_left_in_output_batch;
     };

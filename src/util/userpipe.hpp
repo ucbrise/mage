@@ -31,7 +31,7 @@ namespace mage::util {
     template <typename T>
     class UserPipe : private CircularBuffer<T> {
     public:
-        UserPipe(std::size_t capacity_shift) : CircularBuffer<T>(capacity_shift), closed(false) {
+        UserPipe(std::size_t capacity) : CircularBuffer<T>(capacity), closed(false) {
         }
 
         /*
@@ -79,39 +79,39 @@ namespace mage::util {
          * should not be too difficult to use.
          */
 
-        T* start_read_single_in_place() {
+        T* start_read_in_place(std::size_t amount) {
             std::unique_lock<std::mutex> lock(this->mutex);
-            while (this->get_space_occupied() == 0 && !this->closed) {
+            while (this->get_space_occupied() < amount && !this->closed) {
                 this->added.wait(lock);
             }
-            if (this->get_space_occupied() == 0) {
+            if (this->get_space_occupied() < amount) {
                 return nullptr;
             }
-            return &(this->start_read_single_unchecked());
+            return &(this->start_read_unchecked());
         }
 
-        void finish_read_single_in_place() {
+        void finish_read_in_place(std::size_t amount) {
             std::lock_guard<std::mutex> lock(this->mutex);
             assert(this->get_space_occupied() != 0);
-            this->finish_read_single();
+            this->finish_read(amount);
             this->removed.notify_all();
         }
 
-        T* start_write_single_in_place() {
+        T* start_write_in_place(std::size_t amount) {
             std::unique_lock<std::mutex> lock(this->mutex);
-            while (this->get_space_unoccupied() == 0 && !this->closed) {
+            while (this->get_space_unoccupied() < amount && !this->closed) {
                 this->removed.wait(lock);
             }
             if (this->closed) {
                 return nullptr;
             }
-            return &(this->start_write_single_unchecked());
+            return &(this->start_write_unchecked());
         }
 
-        void finish_write_single_in_place() {
+        void finish_write_in_place(std::size_t amount = 1) {
             std::lock_guard<std::mutex> lock(this->mutex);
             assert(this->get_space_unoccupied() != 0);
-            this->finish_write_single();
+            this->finish_write(amount);
             this->added.notify_all();
         }
 

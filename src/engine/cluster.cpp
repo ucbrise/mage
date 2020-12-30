@@ -41,7 +41,7 @@
 
 namespace mage::engine {
     MessageChannel::MessageChannel(int fd, std::size_t buffer_size) : reader(fd, buffer_size), writer(fd, buffer_size), socket_fd(fd),
-        posted_reads(14), num_posted_reads(0) {
+        posted_reads(1 << 14), num_posted_reads(0) {
         if (fd != -1) {
             this->start_reading_daemon();
         }
@@ -65,11 +65,11 @@ namespace mage::engine {
         assert(!this->reading_daemon.joinable());
         this->reading_daemon = std::thread([this]() {
             AsyncRead* read_op;
-            while ((read_op = this->posted_reads.start_read_single_in_place()) != nullptr) {
+            while ((read_op = this->posted_reads.start_read_in_place(1)) != nullptr) {
                 std::uint8_t* buffer = &(this->reader.start_read<std::uint8_t>(read_op->length));
                 std::copy(buffer, buffer + read_op->length, static_cast<std::uint8_t*>(read_op->into));
                 this->reader.finish_read(read_op->length);
-                this->posted_reads.finish_read_single_in_place();
+                this->posted_reads.finish_read_in_place(1);
 
                 {
                     std::lock_guard<std::mutex> lock(this->num_posted_reads_mutex);

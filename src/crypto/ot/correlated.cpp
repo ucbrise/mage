@@ -22,9 +22,12 @@
 #include "crypto/ot/correlated.hpp"
 #include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <thread>
 #include "crypto/block.hpp"
 #include "crypto/ot/extension.hpp"
 #include "util/filebuffer.hpp"
+#include "util/userpipe.hpp"
 
 namespace mage::crypto::ot {
     void CorrelatedExtensionSender::finish_send(block delta, block* first_choices, std::size_t num_choices, block* y, const block* qT) {
@@ -104,5 +107,113 @@ namespace mage::crypto::ot {
         block* y = static_cast<block*>(from);
         this->finish_choose(choices, results, num_choices, y, tT);
         network_in.finish_read(sizeof(block) * num_choices);
+    }
+
+    PipelinedCorrelatedExtSender::PipelinedCorrelatedExtSender(util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out, block choice_delta, util::UserPipe<block>& results, std::size_t batch_size, std::size_t max_depth)
+        : net_in(network_in), net_out(network_out), delta(choice_delta), output(results), num_choices(batch_size), depth(max_depth) {
+        assert(this->num_choices != 0); // sse_trans does not work for zero-size matrices
+
+        this->initialize(this->net_in, this->net_out);
+
+        this->num_row_blocks = (this->num_choices + block_num_bits - 1) / block_num_bits;
+        this->num_blocks = this->num_row_blocks * extension_kappa;
+        this->pipeline = std::make_unique<util::UserPipe<crypto::block>>(this->num_blocks * this->depth);
+
+        this->start_daemon();
+    }
+
+    PipelinedCorrelatedExtSender::~PipelinedCorrelatedExtSender() {
+        this->pipeline->close();
+        this->daemon.join();
+    }
+
+    void PipelinedCorrelatedExtSender::start_daemon() {
+        this->daemon = std::thread([this]() {
+            block* request;
+            while ((request = this->pipeline->start_read_in_place(this->num_blocks)) != nullptr) {
+                block* qT = request;
+                this->net_out.flush();
+                void* into = this->net_out.start_write(sizeof(block) * this->num_choices);
+                block* y = static_cast<block*>(into);
+                block* results = this->output.start_write_in_place(this->num_choices);
+                this->finish_send(this->delta, results, this->num_choices, y, qT);
+                this->output.finish_write_in_place(this->num_choices);
+                this->pipeline->finish_read_in_place(this->num_blocks);
+                this->net_out.finish_write(sizeof(block) * this->num_choices);
+                this->net_out.flush();
+            }
+        });
+    }
+
+    /* WARNING: Do not call this concurrently from multiple threads. */
+    void PipelinedCorrelatedExtSender::submit_send() {
+        block q[this->num_blocks];
+        block* request = this->pipeline->start_write_in_place(this->num_blocks);
+        assert(request != nullptr);
+        block* qT = request;
+
+        void* from = this->net_in.start_read(sizeof(block) * this->num_blocks);
+        block* u = reinterpret_cast<block*>(from);
+        this->prepare_send(this->num_choices, u, q);
+        this->net_in.finish_read(sizeof(block) * this->num_blocks);
+
+        sse_trans(reinterpret_cast<std::uint8_t*>(qT), reinterpret_cast<std::uint8_t*>(q), extension_kappa, this->num_row_blocks * block_num_bits);
+
+        this->pipeline->finish_write_in_place(this->num_blocks);
+    }
+
+    PipelinedCorrelatedExtChooser::PipelinedCorrelatedExtChooser(util::BufferedFileReader<false>& network_in, util::BufferedFileWriter<false>& network_out, util::UserPipe<block>& results, std::size_t batch_size, std::size_t max_depth)
+        : net_in(network_in), net_out(network_out), output(results), num_choices(batch_size), depth(max_depth) {
+        assert(this->num_choices != 0); // sse_trans does not work for zero-size matrices
+
+        this->initialize(this->net_in, this->net_out);
+
+        this->num_row_blocks = (this->num_choices + block_num_bits - 1) / block_num_bits;
+        this->num_blocks = this->num_row_blocks * extension_kappa;
+        this->pipeline = std::make_unique<util::UserPipe<crypto::block>>((this->num_row_blocks + this->num_blocks) * this->depth);
+
+        this->start_daemon();
+    }
+
+    PipelinedCorrelatedExtChooser::~PipelinedCorrelatedExtChooser() {
+        this->pipeline->close();
+        this->daemon.join();
+    }
+
+    void PipelinedCorrelatedExtChooser::start_daemon() {
+        this->daemon = std::thread([this]() {
+            block* request;
+            while ((request = this->pipeline->start_read_in_place(this->num_row_blocks + this->num_blocks)) != nullptr) {
+                block* choices = request;
+                block* tT = request + this->num_row_blocks;
+                void* from = this->net_in.start_read(sizeof(block) * this->num_choices);
+                block* y = static_cast<block*>(from);
+                block* results = this->output.start_write_in_place(this->num_blocks);
+                this->finish_choose(choices, results, this->num_choices, y, tT);
+                this->output.finish_write_in_place(this->num_blocks);
+                this->pipeline->finish_read_in_place(this->num_row_blocks + this->num_blocks);
+                this->net_in.finish_read(sizeof(block) * this->num_choices);
+            }
+        });
+    }
+
+    /* WARNING: Do not call this concurrently from multiple threads. */
+    void PipelinedCorrelatedExtChooser::submit_choose(const block* choices) {
+        block t[this->num_blocks];
+        block* request = this->pipeline->start_write_in_place(this->num_row_blocks + this->num_blocks);
+        assert(request != nullptr);
+        std::copy(choices, choices + this->num_row_blocks, request);
+        block* tT = request + this->num_row_blocks;
+
+        this->net_out.flush(); // This guarantees that u will be aligned
+        void* into = this->net_out.start_write(sizeof(block) * this->num_blocks);
+        block* u = static_cast<block*>(into);
+        this->prepare_choose(choices, this->num_choices, u, t);
+        this->net_out.finish_write(sizeof(block) * this->num_blocks);
+        this->net_out.flush();
+
+        sse_trans(reinterpret_cast<std::uint8_t*>(tT), reinterpret_cast<std::uint8_t*>(t), extension_kappa, this->num_row_blocks * block_num_bits);
+
+        this->pipeline->finish_write_in_place(this->num_row_blocks + this->num_blocks);
     }
 }

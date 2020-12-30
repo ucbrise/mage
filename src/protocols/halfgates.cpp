@@ -44,16 +44,19 @@ namespace mage::protocols::halfgates {
         std::mutex mutex;
     };
 
-    void HalfGatesGarblingEngine::start_input_daemon() {
-        std::uint64_t num_bytes = this->input_daemon_threads[0].ot_conn_reader.read<std::uint64_t>();
+    void HalfGatesGarblingEngine::start_input_daemon(std::size_t max_batch_size, std::size_t pipeline_depth) {
+        std::uint64_t num_bytes = this->input_daemon_threads[0]->ot_conn_reader.read<std::uint64_t>();
         std::uint64_t num_bits = num_bytes << 3;
         std::int64_t total_batches, extra_bits;
-        std::tie(total_batches, extra_bits) = util::floor_div(num_bits, halfgates_max_batch_size);
-        static_assert((halfgates_max_batch_size & 0x7) == 0);
+        std::tie(total_batches, extra_bits) = util::floor_div(num_bits, max_batch_size);
+        if ((max_batch_size & 0x7) != 0) {
+            std::cerr << "Invalid batch size" << std::endl;
+            std::abort();
+        }
         assert((num_bits & 0x7) == 0);
 
         for (int i = 0; i != this->input_daemon_threads.size(); i++) {
-            InputDaemonThread* daemon = &this->input_daemon_threads[i];
+            InputDaemonThread* daemon = this->input_daemon_threads[i].get();
             daemon->thread = std::thread([=]() {
                 auto [ num_batches, num_extra_batches ] = util::floor_div(total_batches, this->input_daemon_threads.size());
                 if (i < num_extra_batches) {
@@ -64,11 +67,12 @@ namespace mage::protocols::halfgates {
                     // This thread will handle the smaller extra batch
                 }
 
-                crypto::ot::CorrelatedExtensionSender ot_sender;
-                ot_sender.initialize(daemon->ot_conn_reader, daemon->ot_conn_writer);
+                // crypto::ot::CorrelatedExtensionSender ot_sender;
+                // ot_sender.initialize(daemon->ot_conn_reader, daemon->ot_conn_writer);
+                crypto::ot::PipelinedCorrelatedExtSender ot_sender(daemon->ot_conn_reader, daemon->ot_conn_writer, this->garbler.get_delta(), daemon->evaluator_input_labels, max_batch_size, pipeline_depth);
 
                 for (std::int64_t c = 0; c != num_batches; c++) {
-                    std::uint64_t batch_size = halfgates_max_batch_size;
+                    std::uint64_t batch_size = max_batch_size;
                     if (c == num_batches - 1 && i == num_extra_batches && extra_bits != 0) {
                         batch_size = extra_bits;
                     }
@@ -84,9 +88,11 @@ namespace mage::protocols::halfgates {
                     // ot_sender.send(this->ot_conn_reader, this->ot_conn_writer, ot_pairs, batch_size);
                     // delete[] ot_pairs;
 
-                    std::array<crypto::block, halfgates_max_batch_size>* batch = daemon->evaluator_input_labels.start_write_single_in_place();
-                    ot_sender.send(daemon->ot_conn_reader, daemon->ot_conn_writer, this->garbler.get_delta(), batch->data(), batch_size);
-                    daemon->evaluator_input_labels.finish_write_single_in_place();
+                    // crypto::block* batch = daemon->evaluator_input_labels.start_write_in_place(halfgates_max_batch_size);
+                    // ot_sender.send(daemon->ot_conn_reader, daemon->ot_conn_writer, this->garbler.get_delta(), batch, batch_size);
+                    // daemon->evaluator_input_labels.finish_write_in_place(halfgates_max_batch_size);
+
+                    ot_sender.submit_send();
                 }
             });
         }
@@ -127,21 +133,24 @@ namespace mage::protocols::halfgates {
         std::vector<std::condition_variable> thread_turn_active;
     };
 
-    void HalfGatesEvaluationEngine::start_input_daemon() {
+    void HalfGatesEvaluationEngine::start_input_daemon(std::size_t max_batch_size, std::size_t pipeline_depth) {
         std::uint64_t num_bytes = this->input_reader.get_file_length();
-        this->input_daemon_threads[0].ot_conn_writer.write<std::uint64_t>() = num_bytes;
-        this->input_daemon_threads[0].ot_conn_writer.flush();
+        this->input_daemon_threads[0]->ot_conn_writer.write<std::uint64_t>() = num_bytes;
+        this->input_daemon_threads[0]->ot_conn_writer.flush();
         std::uint64_t num_bits = num_bytes << 3;
         std::int64_t total_batches, extra_bits;
-        std::tie(total_batches, extra_bits) = util::floor_div(num_bits, halfgates_max_batch_size);
-        static_assert((halfgates_max_batch_size & 0x7) == 0);
+        std::tie(total_batches, extra_bits) = util::floor_div(num_bits, max_batch_size);
+        if ((max_batch_size & 0x7) != 0) {
+            std::cerr << "Invalid batch size" << std::endl;
+            std::abort();
+        }
         assert((num_bits & 0x7) == 0);
 
         std::shared_ptr<InputTurn> turn_info = std::make_shared<InputTurn>(this->input_daemon_threads.size());
         turn_info->turn = 0;
 
         for (int i = 0; i != this->input_daemon_threads.size(); i++) {
-            InputDaemonThread* daemon = &this->input_daemon_threads[i];
+            InputDaemonThread* daemon = this->input_daemon_threads[i].get();
             daemon->thread = std::thread([=]() {
                 int next_thread_i = (i + 1) % this->input_daemon_threads.size();
                 auto [ num_batches, num_extra_batches ] = util::floor_div(total_batches, this->input_daemon_threads.size());
@@ -153,11 +162,12 @@ namespace mage::protocols::halfgates {
                     // This thread will handle the smaller extra batch
                 }
 
-                crypto::ot::CorrelatedExtensionChooser ot_chooser;
-                ot_chooser.initialize(daemon->ot_conn_reader, daemon->ot_conn_writer);
+                // crypto::ot::CorrelatedExtensionChooser ot_chooser;
+                // ot_chooser.initialize(daemon->ot_conn_reader, daemon->ot_conn_writer);
+                crypto::ot::PipelinedCorrelatedExtChooser ot_chooser(daemon->ot_conn_reader, daemon->ot_conn_writer, daemon->evaluator_input_labels, max_batch_size, pipeline_depth);
 
                 for (std::int64_t c = 0; c != num_batches; c++) {
-                    std::uint64_t batch_size = halfgates_max_batch_size;
+                    std::uint64_t batch_size = max_batch_size;
                     if (c == num_batches - 1 && i == num_extra_batches && extra_bits != 0) {
                         batch_size = extra_bits;
                     }
@@ -179,9 +189,12 @@ namespace mage::protocols::halfgates {
                     // std::array<crypto::block, halfgates_max_batch_size> batch;
                     // ot_chooser.choose(daemon->ot_conn_reader, daemon->ot_conn_writer, choices, batch.data(), batch_size);
                     // this->evaluator_input_labels.write_contiguous(&batch, 1);
-                    std::array<crypto::block, halfgates_max_batch_size>* batch = daemon->evaluator_input_labels.start_write_single_in_place();
-                    ot_chooser.choose(daemon->ot_conn_reader, daemon->ot_conn_writer, choices, batch->data(), batch_size);
-                    daemon->evaluator_input_labels.finish_write_single_in_place();
+
+                    // crypto::block* batch = daemon->evaluator_input_labels.start_write_in_place(halfgates_max_batch_size);
+                    // ot_chooser.choose(daemon->ot_conn_reader, daemon->ot_conn_writer, choices, batch, batch_size);
+                    // daemon->evaluator_input_labels.finish_write_in_place(halfgates_max_batch_size);
+
+                    ot_chooser.submit_choose(choices);
                 }
             });
         // this->input_daemon = std::thread([=]() {
@@ -242,14 +255,32 @@ namespace mage::protocols::halfgates {
 
         const util::ConfigValue& worker = c["parties"][evaluator_party_id]["workers"][args.self_id];
 
-        std::size_t num_input_daemons = 3;
-        if (worker.get("num_input_daemons") != nullptr) {
-            std::int64_t temp = worker["num_input_daemons"].as_int();
-            if (temp <= 0 || temp > SIZE_MAX) {
-                std::cerr << "Specified \"num_input_daemons\" is " << temp << ", which is invalid" << std::endl;
-                std::abort();
+        OTInfo oti;
+        if (worker.get("oblivious_transfer") != nullptr) {
+            if (worker["oblivious_transfer"].get("max_batch_size") != nullptr) {
+                std::int64_t temp = worker["oblivious_transfer"]["max_batch_size"].as_int();
+                if (temp <= 0 || temp > SIZE_MAX || (temp & 7) != 0) {
+                    std::cerr << "Specified \"oblivious_transfer/max_batch_size\" is " << temp << ", which is invalid" << std::endl;
+                    std::abort();
+                }
+                oti.max_batch_size = static_cast<std::size_t>(temp);
             }
-            num_input_daemons = static_cast<std::size_t>(temp);
+            if (worker["oblivious_transfer"].get("pipeline_depth") != nullptr) {
+                std::int64_t temp = worker["oblivious_transfer"]["pipeline_depth"].as_int();
+                if (temp <= 0 || temp > SIZE_MAX) {
+                    std::cerr << "Specified \"oblivious_transfer/pipeline_depth\" is " << temp << ", which is invalid" << std::endl;
+                    std::abort();
+                }
+                oti.pipeline_depth = static_cast<std::size_t>(temp);
+            }
+            if (worker["oblivious_transfer"].get("num_daemons") != nullptr) {
+                std::int64_t temp = worker["oblivious_transfer"]["num_daemons"].as_int();
+                if (temp <= 0 || temp > SIZE_MAX) {
+                    std::cerr << "Specified \"oblivious_transfer/num_daemons\" is " << temp << ", which is invalid" << std::endl;
+                    std::abort();
+                }
+                oti.num_daemons = static_cast<std::size_t>(temp);
+            }
         }
 
         if (args.party_id == evaluator_party_id) {
@@ -259,7 +290,7 @@ namespace mage::protocols::halfgates {
             }
 
             std::string evaluator_input_file = file_base + "_evaluator.input";
-            HalfGatesEvaluationEngine p(evaluator_input_file.c_str(), worker["external_port"].as_string().c_str(), num_input_daemons);
+            HalfGatesEvaluationEngine p(evaluator_input_file.c_str(), worker["external_port"].as_string().c_str(), oti);
             engine::ANDXOREngine executor(args.cluster, c["parties"][evaluator_party_id]["workers"][args.self_id], p, prog_file.c_str());
             start = std::chrono::steady_clock::now();
             executor.execute_program();
@@ -271,7 +302,7 @@ namespace mage::protocols::halfgates {
             }
 
             std::string garbler_input_file = file_base + "_garbler.input";
-            HalfGatesGarblingEngine p(args.cluster, garbler_input_file.c_str(), output_file.c_str(), opposite_worker["external_host"].as_string().c_str(), opposite_worker["external_port"].as_string().c_str(), num_input_daemons);
+            HalfGatesGarblingEngine p(args.cluster, garbler_input_file.c_str(), output_file.c_str(), opposite_worker["external_host"].as_string().c_str(), opposite_worker["external_port"].as_string().c_str(), oti);
             engine::ANDXOREngine executor(args.cluster, c["parties"][garbler_party_id]["workers"][args.self_id], p, prog_file.c_str());
             start = std::chrono::steady_clock::now();
             executor.execute_program();

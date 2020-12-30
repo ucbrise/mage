@@ -61,7 +61,7 @@ namespace mage::engine {
         }
 
         AsyncRead& start_post_read() {
-            AsyncRead* ar = this->posted_reads.start_write_single_in_place();
+            AsyncRead* ar = this->posted_reads.start_write_in_place(1);
             return *ar;
         }
 
@@ -70,7 +70,7 @@ namespace mage::engine {
                 std::lock_guard<std::mutex> lock(this->num_posted_reads_mutex);
                 this->num_posted_reads++;
             }
-            this->posted_reads.finish_write_single_in_place();
+            this->posted_reads.finish_write_in_place(1);
         }
 
         void wait_until_reads_finished() {

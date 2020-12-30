@@ -30,8 +30,7 @@ namespace mage::util {
     template <typename T>
     class CircularBuffer {
     public:
-        CircularBuffer(std::size_t capacity_shift) : data(sizeof(T) << capacity_shift, false), read_index(0), write_index(0), length(0) {
-            this->capacity = (1 << capacity_shift);
+        CircularBuffer(std::size_t buffer_capacity) : data(sizeof(T) * buffer_capacity, false), read_index(0), write_index(0), capacity(buffer_capacity), length(0) {
         }
 
         std::size_t get_space_occupied() const {
@@ -98,12 +97,12 @@ namespace mage::util {
             return count;
         }
 
-        T& start_write_single_unchecked() {
+        T& start_write_unchecked() {
             T* buffer = this->data.mapping();
             return buffer[this->write_index];
         }
 
-        bool start_write_single_checked(T** target) {
+        bool start_write_checked(T** target) {
             if (this->get_space_unoccupied() == 0) {
                 return false;
             }
@@ -111,17 +110,20 @@ namespace mage::util {
             return true;
         }
 
-        void finish_write_single() {
-            this->write_index = (this->write_index + 1) & (this->capacity - 1);
-            this->length++;
+        void finish_write(std::size_t amount = 1) {
+            this->write_index += amount;
+            if (this->capacity <= this->write_index) {
+                this->write_index -= this->capacity;
+            }
+            this->length += amount;
         }
 
-        T& start_read_single_unchecked() {
+        T& start_read_unchecked() {
             T* buffer = this->data.mapping();
             return buffer[this->read_index];
         }
 
-        bool start_read_single_checked(T** target) {
+        bool start_read_checked(T** target) {
             if (this->get_space_occupied() == 0) {
                 return false;
             }
@@ -129,9 +131,12 @@ namespace mage::util {
             return true;
         }
 
-        void finish_read_single() {
-            this->read_index = (this->read_index + 1) & (this->capacity - 1);
-            this->length--;
+        void finish_read(std::size_t amount = 1) {
+            this->read_index += amount;
+            if (this->capacity <= this->read_index) {
+                this->read_index -= this->capacity;
+            }
+            this->length -= amount;
         }
 
     private:
