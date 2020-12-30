@@ -38,6 +38,9 @@ namespace mage::crypto {
         assert(this->ec_group != nullptr);
         EC_GROUP_free(this->ec_group);
 
+        assert(this->order != nullptr);
+        BN_free(this->order);
+
         assert(this->bn_ctx != nullptr);
         BN_CTX_free(this->bn_ctx);
     }
