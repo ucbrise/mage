@@ -49,7 +49,7 @@ namespace mage::protocols::halfgates {
         }
 
         std::pair<std::size_t, bool> read_elements_until_end_of_batch(T* into, std::size_t count) {
-            T* batch_data = this->start_read_in_place(this->batch_size);
+            const T* batch_data = this->start_read_in_place(this->batch_size);
             std::size_t to_read = std::min(this->batch_size - this->index_into_batch, count);
             std::copy(&batch_data[this->index_into_batch], &batch_data[this->index_into_batch + to_read], into);
             this->index_into_batch += to_read;

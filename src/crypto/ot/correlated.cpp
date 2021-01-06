@@ -129,9 +129,9 @@ namespace mage::crypto::ot {
 
     void PipelinedCorrelatedExtSender::start_daemon() {
         this->daemon = std::thread([this]() {
-            block* request;
+            const block* request;
             while ((request = this->pipeline->start_read_in_place(this->num_blocks)) != nullptr) {
-                block* qT = request;
+                const block* qT = request;
                 this->net_out.flush();
                 void* into = this->net_out.start_write(sizeof(block) * this->num_choices);
                 block* y = static_cast<block*>(into);
@@ -182,10 +182,10 @@ namespace mage::crypto::ot {
 
     void PipelinedCorrelatedExtChooser::start_daemon() {
         this->daemon = std::thread([this]() {
-            block* request;
+            const block* request;
             while ((request = this->pipeline->start_read_in_place(this->num_row_blocks + this->num_blocks)) != nullptr) {
-                block* choices = request;
-                block* tT = request + this->num_row_blocks;
+                const block* choices = request;
+                const block* tT = request + this->num_row_blocks;
                 void* from = this->net_in.start_read(sizeof(block) * this->num_choices);
                 block* y = static_cast<block*>(from);
                 block* results = this->output.start_write_in_place(this->num_blocks);

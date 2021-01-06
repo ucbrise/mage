@@ -40,7 +40,7 @@
 #include "util/userpipe.hpp"
 
 namespace mage::engine {
-    MessageChannel::MessageChannel(int fd, std::size_t buffer_size) : reader(fd, buffer_size), writer(fd, buffer_size), socket_fd(fd),
+    MessageChannel::MessageChannel(int fd, std::size_t buffer_size) : reader(fd, false,buffer_size), writer(fd, false, buffer_size), socket_fd(fd),
         posted_reads(1 << 14), num_posted_reads(0) {
         if (fd != -1) {
             this->start_reading_daemon();
@@ -64,7 +64,7 @@ namespace mage::engine {
     void MessageChannel::start_reading_daemon() {
         assert(!this->reading_daemon.joinable());
         this->reading_daemon = std::thread([this]() {
-            AsyncRead* read_op;
+            const AsyncRead* read_op;
             while ((read_op = this->posted_reads.start_read_in_place(1)) != nullptr) {
                 std::uint8_t* buffer = &(this->reader.start_read<std::uint8_t>(read_op->length));
                 std::copy(buffer, buffer + read_op->length, static_cast<std::uint8_t*>(read_op->into));
