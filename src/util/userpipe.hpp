@@ -19,6 +19,11 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+/**
+ * @file util/userpipe.hpp
+ * @brief Bounded buffer data structure and synchronization primitive.
+ */
+
 #ifndef MAGE_UTIL_USERPIPE_HPP_
 #define MAGE_UTIL_USERPIPE_HPP_
 

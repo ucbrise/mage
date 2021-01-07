@@ -19,6 +19,11 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+/**
+ * @file util/circbuffer.hpp
+ * @brief Circular buffer data structure.
+ */
+
 #ifndef MAGE_UTIL_CIRCBUFFER_HPP_
 #define MAGE_UTIL_CIRCBUFFER_HPP_
 

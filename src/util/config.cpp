@@ -126,7 +126,7 @@ namespace mage::util {
         return result;
     }
 
-    const ConfigValue* ConfigValue::get(const std::size_t index) const {
+    const ConfigValue* ConfigValue::get(std::size_t index) const {
         const ConfigListNode& node = this->as_list_node();
         return node.get(index);
     }

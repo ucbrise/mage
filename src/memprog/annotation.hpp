@@ -26,7 +26,6 @@
 #include <string>
 #include "memprog/program.hpp"
 #include "util/filebuffer.hpp"
-#include "util/mapping.hpp"
 
 namespace mage::memprog {
     struct Annotation {

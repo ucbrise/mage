@@ -19,6 +19,11 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+/**
+ * @file util/filebuffer.hpp
+ * @brief Efficient in-memory buffering for file descriptors.
+ */
+
 #ifndef MAGE_UTIL_FILEBUFFER_HPP_
 #define MAGE_UTIL_FILEBUFFER_HPP_
 
