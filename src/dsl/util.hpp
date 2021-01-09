@@ -19,6 +19,11 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+/**
+ * @file dsl/util.hpp
+ * @brief Utility functions to use with MAGE's DSLs.
+ */
+
 #ifndef MAGE_DSL_UTIL_HPP_
 #define MAGE_DSL_UTIL_HPP_
 
@@ -28,6 +33,19 @@
 #include "util/misc.hpp"
 
 namespace mage::dsl {
+    /**
+     * @brief Computes the sum of a set of Integers, increasing the width as
+     * needed to prevent overflow.
+     *
+     * @tparam output_bits The width of the sum, in bits.
+     * @tparam bits The width of the Integers to add, in bits.
+     * @tparam sliced True if the Integers to add are sliced, otherwise false.
+     * @tparam Placer Type of placement module used by the Integers.
+     * @tparam p Double pointer to the program object used by the Integers.
+     * @param elements Pointer to the array of Integers whose sum to compute.
+     * @param num_elements Length of the array whose sum to compute.
+     * @return The sum, at the specified width.
+     */
     template <BitWidth output_bits, BitWidth bits, bool sliced, typename Placer, Program<Placer>** p>
     Integer<output_bits, false, Placer, p> reduce(Integer<bits, sliced, Placer, p>* elements, std::size_t num_elements) {
         if constexpr (bits == output_bits) { // we need this to end the template recursion
@@ -58,6 +76,16 @@ namespace mage::dsl {
         }
     }
 
+    /**
+     * @brief Sends any buffered data to the destination workers, and blocks
+     * until any outstanding receive operations complete.
+     *
+     * It is expected that all workers call this function concurrently.
+     *
+     * @param self_id The ID of the worker in whose program this is being
+     * called.
+     * @param num_proc The total number of workers.
+     */
     template <typename T>
     void communication_barrier(WorkerID self_id, WorkerID num_proc) {
         for (WorkerID w = 0; w != num_proc; w++) {

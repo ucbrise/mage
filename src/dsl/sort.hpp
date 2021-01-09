@@ -19,6 +19,11 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+/**
+ * @file dsl/sort.hpp
+ * @brief Utilities for sorting using MAGE's DSLs.
+ */
+
 #ifndef MAGE_DSL_SORT_HPP_
 #define MAGE_DSL_SORT_HPP_
 
@@ -28,9 +33,24 @@
 #include "util/misc.hpp"
 
 namespace mage::dsl {
-    /*
-     * BITONIC-SORTER[length] network (see Algorithms by CLR, Section 28.3).
-     * Sorts a bitonic sequence.
+    /**
+    * @brief Sorts an array stored locally by the calling worker containing a
+    * bitonic sequence of elements.
+     *
+     * This function is based on the BITONIC-SORTER[length] network from
+     * Algorithms by CLR, Section 28.3).
+     *
+     * @pre The array stores a bitonic sequence.
+     * @post The array is sorted.
+     *
+     * @tparam T The type of elements in the array. It must support a static
+     * comparator function similar to the one in the Integer<...> class.
+     * @param array A pointer to the array of elements to sort.
+     * @param length The length of the array to sort.
+     * @param increasing If true, the array is sorted in order from lowest to
+     * highest. If false, the array is sorted in order from highest to lowest.
+     * @param max_depth The maximum recursion depth of the BITONIC-SORTER
+     * network, which can be restricted if only a partial sort is needed.
      */
     template <typename T>
     void bitonic_sorter(T* array, std::uint64_t length, bool increasing = true, std::uint64_t max_depth = UINT64_MAX) {
@@ -56,18 +76,31 @@ namespace mage::dsl {
         bitonic_sorter<T>(array + half_length, half_length, increasing, max_depth - 1);
     }
 
-    /*
-     * Modified version of SORTER[length] network (see Algorithms by CLR,
-     * Section 28.5). Unlike the MERGER circuit, which modifies the first
-     * half-cleaner to effectively reverse the second half of the input, we
-     * "flip" the recursive SORTER[length/2] circuit that produces the second
-     * half of the MERGER's input to sort in the opposite direction. This
-     * allows us to just use the BITONIC-SORTER circuit to merge the two sorted
-     * arrays. This creates a more regular structure for the circuit. The "Fast
-     * Parallel Sorting under LogP" paper uses this same trick, allowing for a
-     * simpler communication schedule. That isn't important for this function,
-     * but it is important for parallel_sorter, because we use the
-     * communication schedule suggested in that paper.
+    /**
+    * @brief Sorts an array stored locally the calling worker.
+     *
+     * The implementation is based on a modified version of the SORTER[length]
+     * network from Algorithms by CLR, Section 28.5). Unlike the MERGER
+     * circuit, which modifies the first half-cleaner to effectively reverse
+     * the second half of the input, we "flip" the recursive SORTER[length/2]
+     * circuit that produces the second half of the MERGER's input to sort in
+     * the opposite direction. This allows us to just use the BITONIC-SORTER
+     * circuit to merge the two sorted arrays. This creates a more regular
+     * structure for the circuit. The "Fast Parallel Sorting under LogP" paper
+     * uses this same trick, allowing for a simpler communication schedule.
+     * That isn't important for this function, but it is important for
+     * parallel_sorter(), because we use the communication schedule suggested
+     * in that paper.
+     *
+     * @pre The array stores any sequence.
+     * @post The array is sorted.
+     *
+     * @tparam T The type of elements in the array. It must support a static
+     * comparator function similar to the one in the Integer<...> class.
+     * @param array A pointer to the array of elements to sort.
+     * @param length The length of the array to sort.
+     * @param increasing If true, the array is sorted in order from lowest to
+     * highest. If false, the array is sorted in order from highest to lowest.
      */
     template <typename T>
     void sorter(T* array, std::uint64_t length, bool increasing = true) {
@@ -83,6 +116,24 @@ namespace mage::dsl {
         bitonic_sorter(array, length, increasing);
     }
 
+    /**
+     * @brief Sorts a ShardedArray containing a bitonic sequence.
+     *
+     * To support the necessary communication phase, all workers must call this
+     * function concurrently on their share of the partitioned logical array.
+     *
+     * This function is based on the BITONIC-SORTER[length] network from
+     * Algorithms by CLR, Section 28.3).
+     *
+     * @pre The array stores a bitonic sequence.
+     * @post The array is sorted.
+     *
+     * @tparam T The type of elements in the array. It must support a static
+     * comparator function similar to the one in the Integer<...> class.
+     * @param array The ShardedArray to sort.
+     * @param increasing If true, the array is sorted in order from lowest to
+     * highest. If false, the array is sorted in order from highest to lowest.
+     */
     template <typename T>
     void parallel_bitonic_sorter(ShardedArray<T>& array, bool increasing = true) {
         std::vector<T>& locals = array.get_locals();
@@ -99,13 +150,26 @@ namespace mage::dsl {
         bitonic_sorter<T>(locals.data(), length, increasing);
     }
 
-    /*
-     * Unlike the sorter() function, we can't implement this recursively
+    /**
+     * @brief Sorts a ShardedArray.
+     *
+     * To support the necessary communication phase, all workers must call this
+     * function concurrently on their share of the partitioned logical array.
+     *
+     * Unlike the sorter() function, this cannot be implemented recursively
      * because the all-to-all communication phase to be shared by both of the
      * recursive parallel_sorter circuits; simply making a recursive call would
      * result in each recursive call having its own all-to-all phase.
+     *
+     * @pre The array stores any sequence.
+     * @post The array is sorted.
+     *
+     * @tparam T The type of elements in the array. It must support a static
+     * comparator function similar to the one in the Integer<...> class.
+     * @param array The ShardedArray to sort.
+     * @param increasing If true, the array is sorted in order from lowest to
+     * highest. If false, the array is sorted in order from highest to lowest.
      */
-
     template <typename T>
     void parallel_sorter(ShardedArray<T>& array, bool increasing = true) {
         std::vector<T>& locals = array.get_locals();

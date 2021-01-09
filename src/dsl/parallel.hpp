@@ -19,6 +19,12 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+ /**
+  * @file dsl/parallel.hpp
+  * @brief Utility functions to simplify programming with MAGE's DSLs in a
+  * distributed memory model.
+  */
+
 #ifndef MAGE_DSL_PARALLEL_HPP_
 #define MAGE_DSL_PARALLEL_HPP_
 
@@ -31,10 +37,35 @@
 #include <vector>
 
 namespace mage::dsl {
+    /**
+     * @brief Information of the program's distribution and worker layout,
+     * with some utility functions that use that information.
+     */
     struct ClusterUtils {
+        /**
+         * @brief The ID of the worker whose program this is.
+         */
         WorkerID self_id;
+
+        /**
+         * @brief The total number of workers.
+         */
         WorkerID num_proc;
 
+        /**
+         * @brief Helps reduce a dataset partitioned over multiple workers to a
+         * single value, assuming each worker has performed local reduction.
+         *
+         * It is expected that all workers will call this function
+         * concurrently.
+         *
+         * @tparam T The type of the items to reduce.
+         * @param gets_result The ID of the worker who obtains the result.
+         * @param local_aggregate The local aggregate of this worker.
+         * @param f The functon used to reduce the values.
+         * @return Returns the result of the reduction for the worker whose ID
+         * is @p gets_result, and an empty optional for all other workers.
+         */
         template <typename T>
         std::optional<T> reduce_aggregates(WorkerID gets_result, T& local_aggregate, std::function<T(T&, T&)> f) const {
             T current = std::move(local_aggregate);
@@ -60,9 +91,22 @@ namespace mage::dsl {
         }
 
         /*
-         * Reorganizes elements of A and B, assigning each element of each list
-         * to multiple workers, so that, for each (a, b) in A x B, exactly one
-         * has both a and b.
+         * @brief Reorganizes elements of the two argument arrays A and B,
+         * assigning each element of each list to multiple workers, so that,
+         * for each (a, b) in A x B, exactly one has both a and b.
+         *
+         * This can be understood as decomposing a single cross products of
+         * arrays that are each partitioned over multiple workers into a union
+         * of local cross products, one at each worker.
+         *
+         * It is expected that all workers will call this function
+         * concurrently.
+         *
+         * @param a The first array of the cross product.
+         * @param b The second array ofthe cross product.
+         * @return A pair where the first element is a subset of @p a and the
+         * second element is a subset of @p b, consisting of the elements from
+         * each array assigned to this worker.
          */
         template <typename T>
         std::pair<std::vector<T>, std::vector<T>> cross_product(ShardedArray<T>& a, ShardedArray<T>& b) const {

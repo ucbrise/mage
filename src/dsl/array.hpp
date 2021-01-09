@@ -19,6 +19,12 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+/**
+ * @file dsl/array.hpp
+ * @brief Utility for partitioning arrays over multiple workers when using
+ * MAGE's DSLs.
+ */
+
 #ifndef MAGE_DSL_ARRAY_HPP_
 #define MAGE_DSL_ARRAY_HPP_
 
@@ -35,17 +41,53 @@
 #include "util/misc.hpp"
 
 namespace mage::dsl {
+    /**
+     * @brief Describes the layout of a ShardedArray, which can be either be
+     * a Cyclic layout or a Blocked layout.
+     *
+     * @sa ShardedArray
+     */
     enum class Layout : std::uint8_t {
         Cyclic,
         Blocked
     };
 
+    /**
+     * @brief An abstraction for an ordered container partitioned across
+     * the workers in a distributed-memory computation.
+     *
+     * Logically, the data form a single logical array. This array may be
+     * partitioned among the workers in two layouts. In the Cyclic layout,
+     * elements are strided across the workers. If there are W workers, worker
+     * i has elements at indices i, i + W, i + 2W, ... . In the Blocked layout,
+     * each worker stores a contiguous section of the logical array. The array
+     * is divided into W consecutive sections of equal length (the remainder
+     * distributed among the first sections if the division is uneven), and
+     * worker i has the elemenths of the ith section.
+     *
+     * The Sharded Array allows one to switch between the two reprsentations
+     * via a communication phase, which is useful for implementing certain
+     * algorithms (e.g., bitonic sort, fast Fourier transform) in a distributed
+     * memory model.
+     *
+     * @tparam T The type of elements in the ShardedArray.
+     */
     template <typename T>
     class ShardedArray {
         template <typename U>
         friend class ShardedArray;
 
     public:
+        /**
+         * @brief Creates a ShardedArray.
+         *
+         * @param length The total number of elements in the ShardedArray,
+         * across all workers.
+         * @param self The ID of the worker in whose program this is being
+         * called.
+         * @param num_processors The total number of workers.
+         * @param The initial layout strategy of this ShardedArray.
+         */
         ShardedArray(std::size_t length, WorkerID self, WorkerID num_processors, Layout strategy)
             : total_length(length), self_id(self), num_proc(num_processors), layout(strategy) {
             this->num_local_base = this->total_length / this->num_proc;
@@ -57,26 +99,73 @@ namespace mage::dsl {
             }
         }
 
+        /**
+         * @brief Returns a reference to the underlying data stored locally
+         * for this worker.
+         *
+         * @return A reference to a vector storing the partition of the
+         * logical array stored at this worker.
+         */
         std::vector<T>& get_locals() {
             return this->local_array;
         }
 
+        /**
+         * @brief Returns a const reference to the underlying data stored
+         * locally for this worker.
+         *
+         * @return A const reference to a vector storing the partition of the
+         * logical array stored at this worker.
+         */
         const std::vector<T>& get_locals() const {
             return this->local_array;
         }
 
+        /**
+         * @brief Obtain the layout (partitioning) strategy of this
+         * ShardedArray.
+         *
+         * @return The layout/partitioning strategy of this ShardedArray.
+         */
         Layout get_layout() const {
             return this->layout;
         }
 
+        /**
+         * @brief Returns the ID of the worker using this ShardedArray
+         * instance, provided at the time of construction.
+         *
+         * @return The ID of the worker whose partition is held by this
+         * ShardedArray instance.
+         */
         WorkerID get_self_id() const {
             return this->self_id;
         }
 
+        /**
+         * @brief Returns the number of workers over which the logical array is
+         * distributed, provided at the time of construction.
+         *
+         * @return The number of workers over which the contents of the Logical
+         * array are distributed.
+         */
         WorkerID get_num_proc() const {
             return this->num_proc;
         }
 
+        /**
+         * @brief Calls the provided function @p f on each element of the array
+         * held by this ShardedArray instance.
+         *
+         * To perform a "for each" operation on the overall array, all workers
+         * should call this function. For each element, the provided function
+         * will be called on exactly one worker.
+         *
+         * The element's index in the logical array as the first argument and
+         * a reference to the element itself as the second argument.
+         *
+         * @param f The function to call.
+         */
         void for_each(std::function<void(std::size_t, T&)> f) {
             auto [index, stride] = this->get_global_base_and_stride(this->self_id, this->layout);
             for (T& elem : this->local_array) {
@@ -85,6 +174,25 @@ namespace mage::dsl {
             }
         }
 
+        /**
+         * @brief When called concurrently by all workers, calls the provided
+         * function @p f on each pair of consecutive elements of the logical
+         * array.
+         *
+         * It is expected that all workers will call this function
+         * concurrently, to allow elements to be transferred in cases where
+         * consecutive elements of the logical array reside at different
+         * workers.
+         *
+         * The provided function is invoked with three arguments: the index of
+         * the first element in the pair in the logical array, a reference to
+         * the first element in the pair, and a reference to the second element
+         * in the pair. When called concurrently by all workers, the provided
+         * function is called exactly once for each pair of consecutive
+         * elements in the array, on one of the workers.
+         *
+         * @param f The function to call.
+         */
         void for_each_pair(std::function<void(std::size_t, T&, T&)> f) {
             if (this->layout == Layout::Cyclic) {
                 if (this->num_proc == 1) {
@@ -149,6 +257,19 @@ namespace mage::dsl {
             }
         }
 
+        /**
+         * @brief When called concurrently by all workers, the contents of the
+         * logical array are materialized at each worker.
+         *
+         * It is expected that all workers will call this function
+         * concurrently, so that the partition of the logical array stored at
+         * each worker can be sent to and received by all other workers.
+         *
+         * @param destructive If true, some data may be move-assigned out of
+         * the ShardedArray to save memory, in effect making the ShardedArray
+         * unusable thereafter. If false, the ShardedArray's contents are
+         * preserved.
+         */
         std::vector<T> materialize_global_array(bool destructive) {
             if (this->layout != Layout::Blocked) {
                 this->layout_panic();
@@ -188,6 +309,15 @@ namespace mage::dsl {
             return globals;
         }
 
+        /**
+         * @brief Initiates a communication phase to change the layout strategy
+         * of this ShardedArray.
+         *
+         * It is expected that all workers call this function concurrently,
+         * as all workers need to participate in the communication phase.
+         *
+         * @param to The layout strategy to use for this ShardedArray.
+         */
         void switch_layout(Layout to) {
             if ((this->layout == Layout::Cyclic && to == Layout::Blocked) || (this->layout == Layout::Blocked && to == Layout::Cyclic)) {
                 auto [my_current_base, my_current_stride] = this->get_global_base_and_stride(this->self_id, this->layout);
@@ -279,6 +409,22 @@ namespace mage::dsl {
             }
         }
 
+        /**
+         * @brief For a given worker and layout strategy, obtains the global
+         * index of the first element in that worker's local array and the
+         * difference in global index between consecutive elements of that
+         * worker's local array.
+         *
+         * Here, "global index" refers to the index of the element in the
+         * logical array partitioned over the workers.
+         *
+         * @param id The ID of the worker in question.
+         * @param layout The layout strategy to consider.
+         * @return A pair where the first element is the global index of the
+         * first element in that worker's local array and the second element
+         * is the difference in global index between consecutive elements of
+         * that worker's local array.
+         */
         std::pair<std::int64_t, std::int64_t> get_global_base_and_stride(WorkerID id, Layout layout) const {
             std::int64_t base;
             std::int64_t stride;
@@ -299,10 +445,31 @@ namespace mage::dsl {
             return std::make_pair(base, stride);
         }
 
+        /**
+         * @brief Obtains the global index of the first element in this
+         * ShardedArray instance's local data and the difference in global
+         * index between consecutive elements of this ShardedArray instance's
+         * local data.
+         *
+         * Here, "global index" refers to the index of the element in the
+         * logical array partitioned over the workers.
+         *
+         * @return A pair where the first element is the global index of the
+         * first element in this ShardedArray instance's local data and the
+         * second element is the difference in global index between consecutive
+         * elements of this ShardedArray instance's local data.
+         */
         std::pair<std::int64_t, std::int64_t> get_global_base_and_stride() const {
             return this->get_global_base_and_stride(this->self_id, this->layout);
         }
 
+        /**
+         * @brief Obtains the number of elements of the logical array stored by
+         * the specified worker, with the current layout strategy.
+         *
+         * @param who The ID of the worker in question.
+         * @return The number of elements stored at the specfied worker.
+         */
         std::size_t get_local_size(WorkerID who) const {
             if (who < num_extras) {
                 return this->num_local_base + 1;
@@ -311,10 +478,25 @@ namespace mage::dsl {
             }
         }
 
+        /**
+         * @brief Obtains the total number of elements in the logical array.
+         *
+         * @return The total number of elements in the logical array.
+         */
         std::size_t get_total_size() const {
             return this->total_length;
         }
 
+        /**
+         * @brief Obtains the worker who should store the element at the
+         * provided index in the logical array, with the current layout
+         * strategy.
+         *
+         * @param global_index The index of the element in question in the
+         * logical array.
+         * @return The ID of the worker that should store the specified element
+         * under the current layout strategy.
+         */
         WorkerID who(std::size_t global_index) const {
             assert(global_index < this->total_length);
             if (this->layout == Layout::Cyclic) {
