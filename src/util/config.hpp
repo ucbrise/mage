@@ -288,7 +288,7 @@ namespace mage::util {
      * configuration file that may contain other items.
      *
      * Users of the configuration file tools will normally not have to use this
-     * deal with this class directly.
+     * class directly.
      */
     class ConfigNode {
         friend class ConfigValue;
@@ -310,7 +310,7 @@ namespace mage::util {
      * items.
      *
      * Users of the configuration file tools will normally not have to use this
-     * deal with this class directly.
+     * class directly.
      */
     class ConfigMapNode : public ConfigNode {
         friend class ConfigValue;
@@ -331,7 +331,7 @@ namespace mage::util {
      * items.
      *
      * Users of the configuration file tools will normally not have to use this
-     * deal with this class directly.
+     * class directly.
      */
     class ConfigListNode : public ConfigNode {
         friend class ConfigValue;
