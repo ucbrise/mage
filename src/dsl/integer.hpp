@@ -60,8 +60,15 @@ namespace mage::dsl {
     /* TODO: reduce placement allocations by overloading on ref-qualifiers? */
 
     /**
-     * @brief An Integer is a fixed-width sequence of bits in a bit-addressed
-     * MAGE-virtual address space representing an integer.
+     * @brief A fixed-width sequence of bits, interpreted as an integer by the
+     * operations supported by this class.
+     *
+     * The Integer DSL allows programs to be written in terms of Integer
+     * operations. It is suitable for cryptographic protocols that can execute
+     * boolean circuits, like the AND-XOR circuits used in garbled-circuit-
+     * style protocols and the general boolean circuits used in TFHE-style
+     * protocols. The engine is responsible for executing a subcircuit to
+     * implement each instruction in terms of the protocol's binary gates.
      *
      * An Integer can be understood as storing a pointer to memory in a
      * MAGE-virtual address space. If the Integer has ownership of that memory,
@@ -117,7 +124,7 @@ namespace mage::dsl {
         /**
          * @brief Creates an invalid Integer, with no underlying memory. Before
          * using this Integer, one should call mark_input() or another
-         * operation that allocates memory for this Integer before using it.
+         * operation that allocates memory for this Integer.
          */
         Integer() : v(invalid_vaddr) {
         }
@@ -173,8 +180,7 @@ namespace mage::dsl {
         }
 
         /**
-         * @brief Deallocates the underlying memory for this Integer, unless
-         * this Integer is sliced.
+         * @brief Returns this Integer to the invalid state, if it is valid.
          */
         ~Integer() {
             this->recycle();
@@ -791,9 +797,9 @@ namespace mage::dsl {
         }
 
         /**
-         * @brief Returns this Integer to the invalid state. If it is not a
-         * slice (i.e., it owns its underlying memory), its memory is first
-         * deallocated.
+         * @brief Returns this Integer to the invalid state. If it is valid and
+         * is not a slice (i.e., it owns its underlying memory), its memory is
+         * first deallocated.
          */
         void recycle() {
             if constexpr (sliced) {
@@ -847,7 +853,8 @@ namespace mage::dsl {
         }
 
         /**
-         * @brief Address of the underlying data.
+         * @brief Pointer to the underlying data in the MAGE-virtual address
+         * space.
          */
         VirtAddr v;
     };
