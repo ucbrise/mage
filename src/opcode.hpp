@@ -19,6 +19,11 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+/**
+ * @file opcode.hpp
+ * @brief Describes the different types of instructions in MAGE's bytecodes.
+ */
+
 #ifndef MAGE_OPCODE_HPP_
 #define MAGE_OPCODE_HPP_
 
@@ -28,6 +33,11 @@
 #include "addr.hpp"
 
 namespace mage {
+    /**
+     * @brief An Opcode describes the operation performed by an instruction.
+     *
+     * This type is used in the instruction encoding.
+     */
     enum class OpCode : std::uint8_t {
         Undefined = 0,
         PrintStats,
@@ -69,6 +79,12 @@ namespace mage {
         Encode, // 1 argument
     };
 
+    /**
+     * @brief Provides a human-readable string naming the specified operation.
+     *
+     * @param op The specified operation.
+     * @return A human-readable string naming the specified operation.
+     */
     constexpr const char* opcode_to_string(OpCode op) {
         switch (op) {
         case OpCode::Undefined:
@@ -152,6 +168,15 @@ namespace mage {
         }
     }
 
+    /**
+     * @brief Describes the different formats by which encoded bits can be
+     * interpreted as an instruction (and, conversely, an instruction can be
+     * encoded into bits).
+     *
+     * Depending on the operation being described by the instruction, only
+     * certain instruction formats may be able to describe the arguments to
+     * the instruction.
+     */
     enum class InstructionFormat : std::uint8_t {
         NoArgs = 0,
         OneArg = 1,
@@ -163,6 +188,16 @@ namespace mage {
         Control = 7
     };
 
+    /**
+     * @brief For a given instruction format, provides the number of input
+     * arguments to the instruction that require address translation.
+     *
+     * The instruction's output is ont considered.
+     *
+     * @param format The specified instruction format.
+     * @return The number of arguments to the instruction, excluding the
+     * instruction's output, that require address translation.
+     */
     constexpr int instruction_format_num_args(InstructionFormat format) {
         switch (format) {
         case InstructionFormat::NoArgs:
@@ -183,6 +218,14 @@ namespace mage {
         }
     }
 
+    /**
+     * @brief For a given instruction format, determines if the value of a
+     * constant is encoded directly in the instruction.
+     *
+     * @param format The specified instruction format.
+     * @return True if the value of a constant is included in the instruction
+     * encoding, otherwise false.
+     */
     constexpr bool instruction_format_uses_constant(InstructionFormat format) {
         switch (format) {
         case InstructionFormat::NoArgs:
@@ -201,17 +244,40 @@ namespace mage {
         }
     }
 
+    /**
+     * @brief For a given operation, obtains relevant information regarding
+     * its instruction encoding and behavior.
+     */
     class OpInfo {
     public:
+        /**
+         * @brief Creates an OpInfo instance and initializes it according to
+         * the specified operation.
+         *
+         * @param op The specified operation.
+         */
         constexpr OpInfo(OpCode op) : layout(InstructionFormat::NoArgs), single_bit(false), has_output(true) {
             this->set(op);
         }
 
+        /**
+         * @brief Initializes this OpInfo instance according to the specified
+         * operation.
+         *
+         * @param op The specified operation.
+         * @return A reference to this OpInfo reference.
+         */
         constexpr OpInfo& operator=(OpCode op) {
             this->set(op);
             return *this;
         }
 
+        /**
+         * @brief Initializes this OpInfo instance according to the specified
+         * operation.
+         *
+         * @param op The specified operation.
+         */
         constexpr void set(OpCode op)  {
             switch (op) {
             case OpCode::PrintStats:
@@ -324,22 +390,59 @@ namespace mage {
             }
         }
 
+        /**
+         * @brief Obtains the number of input arguments (excluding the output)
+         * that require address translation for the operation represented by
+         * this OpInfo instance.
+         *
+         * @return The number of input arguments (excluding the output) that
+         * require address translation.
+         */
         constexpr int num_args() const {
             return instruction_format_num_args(this->layout);
         }
 
+        /**
+         * @brief Obtains a boolean value indicating whether the operation
+         * represented by this OpInfo instance uses an instruction format
+         * that encodes a constant directly.
+         *
+         * @return True if this operation uses an instruction format that
+         * direclty encodes a constant, otherwise false.
+         */
         constexpr bool uses_constant() const {
             return instruction_format_uses_constant(this->layout);
         }
 
+        /**
+         * @brief Returns whether the operation represented by this OpInfo
+         * instance writes a single logical bit of output, independent of the
+         * width specified in the instruction.
+         *
+         * @return True if this operation writes data in the MAGE address space
+         * and the amount of data is a single logical bit, otherwise false.
+         */
         constexpr bool single_bit_output() const {
             return this->single_bit;
         }
 
+        /**
+         * @brief Returns whether the operation represented by this OpInfo
+         * instance writes to memory in the MAGE address space.
+         *
+         * @return True if this operation writes data in the MAGE address
+         * space, otherwise false.
+         */
         constexpr bool has_variable_output() const {
             return this->has_output;
         }
 
+        /**
+         * @brief Returns the instruction format for the operation represented
+         * by this OpInfo instance.
+         *
+         * @return The instruction format for this operation.
+         */
         constexpr InstructionFormat format() const {
             return this->layout;
         }

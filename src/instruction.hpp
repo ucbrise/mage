@@ -19,6 +19,11 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+/**
+ * @file instruction.hpp
+ * @brief Describes instruction encodings for MAGE's bytecodes.
+ */
+
 #ifndef MAGE_INSTRUCTION_HPP_
 #define MAGE_INSTRUCTION_HPP_
 
@@ -30,8 +35,17 @@
 #include "opcode.hpp"
 
 namespace mage {
+    /**
+     * @brief Integer type large enough to describe the logical width/size of
+     * an operation.
+     */
     using BitWidth = std::uint16_t;
 
+    /**
+     * @brief Flags stored in the instruction encoding. The lower nybble is
+     * reserved for use by MAGE's planner, and the upper nybble is preserved
+     * planning and can be used to modify the instruction's behavior.
+     */
     enum InstructionFlags : std::uint8_t {
         FlagInput1Constant = 0x1,
         FlagInput2Constant = 0x2,
@@ -41,20 +55,53 @@ namespace mage {
         FlagNotNormalized = 0x20,
     };
 
+    /**
+     * @brief Provides a constexpr (compile-time) assembly of instruction flags
+     * into a bitmask.
+     *
+     * @tparam flags The specified instruction flags to combine.
+     * @return A constexpr bitmask of the specified instruction flags.
+     */
     template <InstructionFlags... flags>
     constexpr std::uint8_t instr_flags() {
         return (... | static_cast<std::uint8_t>(flags));
     }
 
+    /**
+     * @brief Structure describing the instruction encoding used in MAGE's
+     * bytecodes.
+     *
+     * @tparam addr_bits Number of bits used to describe a MAGE address. Chosen
+     * depending on the size of the memory address space on which the
+     * instruction operates.
+     * @tparam storage_bits Number of bits used to describe a storage (swap)
+     * address. Chosen depending on the size of the storage address space.
+     */
     template <std::uint8_t addr_bits, std::uint8_t storage_bits>
     struct PackedInstruction {
         static const constexpr std::uint8_t addr_bytes = addr_bits >> 3;
         static_assert((addr_bits & 0x7) == 0, "Address width not a whole number of bytes");
 
+        /**
+         * @brief All instructions have the same header, described by this
+         * structure.
+         *
+         * This allows any instruction to be parsed by reading its header,
+         * and determining the structure of the rest of the instruction based
+         * on the opcode. The size of the instruction isn't known until the
+         * opcode (part of the header) is read.
+         */
         struct {
             OpCode operation;
             std::uint8_t flags;
         } __attribute__((packed)) header;
+
+        /**
+         * @brief Remainder of the instruction encoding. Each alternative of
+         * the union corresponds to an InstructionFormat value.
+         *
+         * @sa mage::InstructionFormat
+         */
         union {
             struct {
                 BitWidth width;
@@ -95,6 +142,13 @@ namespace mage {
             } __attribute__((packed)) control;
         };
 
+        /**
+         * @brief For a specified instruction format, determines the size of
+         * the instruction encoding, in bytes.
+         *
+         * @param format The specified instruction format.
+         * @return The size of the encoded instruction, in bytes.
+         */
         static constexpr std::size_t size(InstructionFormat format) {
             switch (format) {
             case InstructionFormat::NoArgs:
@@ -117,38 +171,67 @@ namespace mage {
                 std::abort();
             }
         }
+
+        /**
+         * @brief Obtains the size of the instruction, in bytes, encoding for
+         * the specified operation.
+         *
+         * @param operation The specified operation.
+         * @return The size of the encoded instruction, in bytes.
+         */
         static constexpr std::size_t size(OpCode operation) {
             OpInfo info(operation);
             return PackedInstruction<addr_bits, storage_bits>::size(info.format());
         }
+
+        /**
+         * @brief The size of this instruction's encoding.
+         *
+         * The size is computed by reading the operation from the encoded
+         * header.
+         *
+         * @return The size of the encoded instruction, in bytes.
+         */
         constexpr std::size_t size() const {
             return PackedInstruction<addr_bits, storage_bits>::size(this->header.operation);
         }
 
         /* Useful if we memory-map a program. */
-        constexpr PackedInstruction<addr_bits, storage_bits>* next(std::size_t size) {
-            std::uint8_t* self = reinterpret_cast<std::uint8_t*>(this);
-            return reinterpret_cast<PackedInstruction<addr_bits, storage_bits>*>(self + size);
-        }
-        constexpr PackedInstruction<addr_bits, storage_bits>* next(InstructionFormat format) {
-            return this->next(PackedInstruction<addr_bits, storage_bits>::size(format));
-        }
-        constexpr PackedInstruction<addr_bits, storage_bits>* next() {
-            OpInfo info(this->header.operation);
-            return this->next(info.format());
-        }
-        constexpr const PackedInstruction<addr_bits, storage_bits>* next(std::size_t size) const {
-            const std::uint8_t* self = reinterpret_cast<const std::uint8_t*>(this);
-            return reinterpret_cast<const PackedInstruction<addr_bits, storage_bits>*>(self + size);
-        }
-        constexpr const PackedInstruction<addr_bits, storage_bits>* next(InstructionFormat format) const {
-            return this->next(PackedInstruction<addr_bits, storage_bits>::size(format));
-        }
-        constexpr const PackedInstruction<addr_bits, storage_bits>* next() const {
-            OpInfo info(this->header.operation);
-            return this->next(info.format());
-        }
+        // constexpr PackedInstruction<addr_bits, storage_bits>* next(std::size_t size) {
+        //     std::uint8_t* self = reinterpret_cast<std::uint8_t*>(this);
+        //     return reinterpret_cast<PackedInstruction<addr_bits, storage_bits>*>(self + size);
+        // }
+        // constexpr PackedInstruction<addr_bits, storage_bits>* next(InstructionFormat format) {
+        //     return this->next(PackedInstruction<addr_bits, storage_bits>::size(format));
+        // }
+        // constexpr PackedInstruction<addr_bits, storage_bits>* next() {
+        //     OpInfo info(this->header.operation);
+        //     return this->next(info.format());
+        // }
+        // constexpr const PackedInstruction<addr_bits, storage_bits>* next(std::size_t size) const {
+        //     const std::uint8_t* self = reinterpret_cast<const std::uint8_t*>(this);
+        //     return reinterpret_cast<const PackedInstruction<addr_bits, storage_bits>*>(self + size);
+        // }
+        // constexpr const PackedInstruction<addr_bits, storage_bits>* next(InstructionFormat format) const {
+        //     return this->next(PackedInstruction<addr_bits, storage_bits>::size(format));
+        // }
+        // constexpr const PackedInstruction<addr_bits, storage_bits>* next() const {
+        //     OpInfo info(this->header.operation);
+        //     return this->next(info.format());
+        // }
 
+        /**
+         * @brief Stores the page numbers of this instruction's arguments'
+         * addresses requiring address translation into the specified array,
+         * starting with this instruction's output.
+         *
+         * @sa restore_page_numbers()
+         *
+         * @param into A pointer to the array into which to store the page
+         * numbers.
+         * @param page_shift Describes the size of pages used.
+         * @return The number of pages stored in the array.
+         */
         std::uint8_t store_page_numbers(std::uint64_t* into, PageShift page_shift) {
             OpInfo info(this->header.operation);
 
@@ -194,6 +277,24 @@ namespace mage {
             }
         }
 
+        /**
+         * @brief Sets this instruction's arguments' addresses by reading the
+         * page numbers from the specified array and reading the page offsets
+         * from the specified instruction encoding.
+         *
+         * An intended use case is to read the page numbers in an instruction
+         * usin store_page_numbers(), translate the address space using those
+         * page numbers to obtain new page numbers, and then use this function
+         * to encode an instruction that uses translated addresses.
+         *
+         * @sa store_page_numbers()
+         *
+         * @param original The instruction encoding from which to read page
+         * offsets.
+         * @param from A pointer to the array from which to read page numbers.
+         * @param page_shift Describes the size of pages used.
+         * @return The number of pages read from the array.
+         */
         template <std::uint8_t other_addr_bits, std::uint8_t other_storage_bits>
         std::uint8_t restore_page_numbers(const PackedInstruction<other_addr_bits, other_storage_bits>& original, const std::uint64_t* from, PageShift page_shift) {
             OpInfo info(this->header.operation);
@@ -247,6 +348,10 @@ namespace mage {
         }
     } __attribute__((packed));
 
+    /**
+     * @brief Logical instruction format that is easier to use than
+     * PackedInstruction, but does not reflect the actual instruction encoding.
+     */
     struct Instruction {
         struct {
             OpCode operation;
@@ -283,6 +388,17 @@ namespace mage {
             } control;
         };
 
+        /**
+         * @brief Writes the data in this Instruction structure into a
+         * PackedInstruction, following the provided instruction format.
+         *
+         * @tparam addr_bits,storage_bits Template arguments of the specified
+         * PackedInstruction.
+         * @param packed The PackedInstruction into which to write the data in
+         * this Instruction structure.
+         * @param format The instruction format to follow when writing data
+         * into the PackedInstruction structure.
+         */
         template <std::uint8_t addr_bits, std::uint8_t storage_bits>
         std::size_t pack(PackedInstruction<addr_bits, storage_bits>& packed, InstructionFormat format) const {
             packed.header.operation = this->header.operation;
@@ -331,6 +447,16 @@ namespace mage {
             }
         }
 
+        /**
+         * @brief Writes the data in this Instruction structure into a
+         * PackedInstruction, following the instruction format implied by this
+         * Instruction structure's operation.
+         *
+         * @tparam addr_bits,storage_bits Template arguments of the specified
+         * PackedInstruction.
+         * @param packed The PackedInstruction into which to write the data in
+         * this Instruction structure.
+         */
         template <std::uint8_t addr_bits, std::uint8_t storage_bits>
         std::size_t pack(PackedInstruction<addr_bits, storage_bits>& packed) const {
             OpInfo info(this->header.operation);
@@ -425,6 +551,15 @@ namespace mage {
         // }
     };
 
+    /**
+     * @brief Writes the specified instruction to the specified output stream
+     * in human-readable form.
+     *
+     * @param out The output stream to which to write a human-readable
+     * representation of the specified instruction instruction.
+     * @param p The specified instruction.
+     * @return A reference to the specified output stream.
+     */
     template<std::uint8_t addr_bits, std::uint8_t storage_bits>
     std::ostream& operator <<(std::ostream& out, const PackedInstruction<addr_bits, storage_bits>& p) {
         const char* name = opcode_to_string(p.header.operation);
@@ -463,7 +598,16 @@ namespace mage {
         return out;
     }
 
+    /**
+     * @brief Instantiation of the PackedInstruction template with address
+     * widths suitable for use with the MAGE-virtual address space.
+     */
     using PackedVirtInstruction = PackedInstruction<virtual_address_bits, virtual_address_bits>;
+
+    /**
+     * @brief Instantiation of the PackedInstruction template with address
+     * widths suitable for use with the MAGE-physical address space.
+     */
     using PackedPhysInstruction = PackedInstruction<physical_address_bits, storage_address_bits>;
 }
 

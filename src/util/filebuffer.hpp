@@ -179,7 +179,8 @@ namespace mage::util {
         }
 
         /**
-         * @brief Returns statistics collector for this BufferedFileWriter.
+         * @brief Returns a reference to the statistics collector for thisBufferedFileWriter
+         * BufferedFileWriter instance.
          */
         util::StreamStats& get_stats() {
             return this->stats;
@@ -445,7 +446,8 @@ namespace mage::util {
         }
 
         /**
-         * @brief Returns the statistics collector for this BufferedFileReader.
+         * @brief Returns a reference to the statistics collector for this
+         * BufferedFileReader instance.
          */
         util::StreamStats& get_stats() {
             return this->stats;
