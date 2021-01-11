@@ -19,6 +19,13 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+/**
+ * @file engine/andxor.hpp
+ * @brief AND-XOR Engine, for protocols that support binary AND and XOR
+ * operations on encrypted bits, with XOR operations at nearly zero performance
+ * cost.
+ */
+
 #ifndef MAGE_ENGINE_ANDXOR_HPP_
 #define MAGE_ENGINE_ANDXOR_HPP_
 
@@ -34,9 +41,28 @@
 #include "util/stats.hpp"
 
 namespace mage::engine {
+    /**
+     * @brief ANDXOREngine is an engine for protocols that support binary AND
+     * and XOR operations on encrypted bits. Its implementation is optimized
+     * assuming that XOR operations have nearly zero performance cost. An
+     * example of such a protocol is Garbled Circuits, with the HalfGates and
+     * Free XOR optimizations.
+     *
+     * @tparam ProtEngine The type of the underlying protocol driver.
+     */
     template <typename ProtEngine>
     class ANDXOREngine : private Engine {
     public:
+        /**
+         * @brief Creates an Add-Multiply Engine.
+         *
+         * @param network This worker's network endpoint for intra-party
+         * communication.
+         * @param worker Value in the configuration file holding the storage
+         * file/device path for this worker.
+         * @param prot The protocol driver to use.
+         * @param program The file path of the memory program to execute.
+         */
         ANDXOREngine(const std::shared_ptr<ClusterNetwork>& network, const util::ConfigValue& worker, ProtEngine& prot, std::string program)
             : Engine(network), protocol(prot), input(program.c_str()) {
             const ProgramFileHeader& header = this->input.get_header();
@@ -52,6 +78,9 @@ namespace mage::engine {
             this->wires = reinterpret_cast<typename ProtEngine::Wire*>(this->get_memory());
         }
 
+        /**
+         * @brief Execute the memory program.
+         */
         void execute_program() {
             InstructionNumber num_instructions = this->input.get_header().num_instructions;
             for (InstructionNumber i = 0; i != num_instructions; i++) {
@@ -61,6 +90,7 @@ namespace mage::engine {
             }
         }
 
+    private:
         void execute_public_constant(const PackedPhysInstruction& phys) {
             typename ProtEngine::Wire* output = &this->wires[phys.constant.output];
             BitWidth width = phys.constant.width;
@@ -358,6 +388,12 @@ namespace mage::engine {
             }
         }
 
+        /**
+         * @brief Execute the provided instruction of the memory program.
+         *
+         * @param phys The instruction to execute.
+         * @return The size of the instruction's encoding, in bytes.
+         */
         std::size_t execute_instruction(const PackedPhysInstruction& phys) {
             switch (phys.header.operation) {
             case OpCode::PrintStats:
@@ -461,7 +497,6 @@ namespace mage::engine {
             }
         }
 
-    private:
         ProtEngine& protocol;
         typename ProtEngine::Wire* wires;
         PhysProgramFileReader input;

@@ -19,6 +19,12 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+ /**
+  * @file engine/addmultiply.hpp
+  * @brief Add-Multiply Engine, for protocols that support element-wise Add
+  * and Multiply operations on encrypted batches of numbers.
+  */
+
 #ifndef MAGE_ENGINE_ADDMULTIPLY_HPP_
 #define MAGE_ENGINE_ADDMULTIPLY_HPP_
 
@@ -34,13 +40,37 @@
 #include "util/stats.hpp"
 
 namespace mage::engine {
+    /**
+     * @brief Checks if an instruction operates on normalized ciphertexts.
+     *
+     * @param phys The specified instruction.
+     * @return True if the instruction operates on normalized ciphertexts,
+     * otherwise false.
+     */
     static inline bool normalized(const PackedPhysInstruction& phys) {
         return (phys.header.flags & FlagNotNormalized) == 0;
     }
 
+    /**
+     * @brief AddMultiplyEngine is an engine for protocols that support
+     * addition and multiplications on batches of values in a SIMD fashion.
+     * An example of such a protocol is Leveled Homomorphic Encryption.
+     *
+     * @tparam ProtEngine The type of the underlying protocol driver.
+     */
     template <typename ProtEngine>
     class AddMultiplyEngine : private Engine {
     public:
+        /**
+         * @brief Creates an Add-Multiply Engine.
+         *
+         * @param network This worker's network endpoint for intra-party
+         * communication.
+         * @param worker Value in the configuration file holding the storage
+         * file/device path for this worker.
+         * @param prot The protocol driver to use.
+         * @param program The file path of the memory program to execute.
+         */
         AddMultiplyEngine(const std::shared_ptr<ClusterNetwork>& network, const util::ConfigValue& worker, ProtEngine& prot, std::string program)
             : Engine(network), protocol(prot), input(program.c_str()) {
             const ProgramFileHeader& header = this->input.get_header();
@@ -56,6 +86,9 @@ namespace mage::engine {
             this->memory = this->get_memory();
         }
 
+        /**
+         * @brief Execute the memory program.
+         */
         void execute_program() {
             InstructionNumber num_instructions = this->input.get_header().num_instructions;
             for (InstructionNumber i = 0; i != num_instructions; i++) {
@@ -65,6 +98,13 @@ namespace mage::engine {
             }
         }
 
+    private:
+        /**
+         * @brief Execute the provided instruction of the memory program.
+         *
+         * @param phys The instruction to execute.
+         * @return The size of the instruction's encoding, in bytes.
+         */
         std::size_t execute_instruction(const PackedPhysInstruction& phys) {
             switch (phys.header.operation) {
             case OpCode::PrintStats:
@@ -141,7 +181,6 @@ namespace mage::engine {
             }
         }
 
-    private:
         ProtEngine& protocol;
         std::uint8_t* memory;
         PhysProgramFileReader input;

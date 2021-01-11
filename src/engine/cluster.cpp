@@ -40,7 +40,7 @@
 #include "util/userpipe.hpp"
 
 namespace mage::engine {
-    MessageChannel::MessageChannel(int fd, std::size_t buffer_size) : reader(fd, false,buffer_size), writer(fd, false, buffer_size), socket_fd(fd),
+    MessageChannel::MessageChannel(int fd, std::size_t buffer_size) : reader(fd, false, buffer_size), writer(fd, false, buffer_size), socket_fd(fd),
         posted_reads(1 << 14), num_posted_reads(0) {
         if (fd != -1) {
             this->start_reading_daemon();
