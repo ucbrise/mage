@@ -53,6 +53,7 @@ namespace mage::platform {
             std::abort();
         }
 
+
         if (bind(server_socket, info->ai_addr, info->ai_addrlen) == -1) {
             std::perror("network_accept -> bind");
             std::abort();
@@ -69,6 +70,13 @@ namespace mage::platform {
             into[i] = accept(server_socket, NULL, NULL);
             if (into[i] == -1) {
                 std::perror("network_accept -> accept");
+                std::abort();
+            }
+
+            /* Maintain firewall state through idle periods. */
+            int keepalive = 1;
+            if (setsockopt(into[i], SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive)) == -1) {
+                std::perror("network_connect -> setsockopt");
                 std::abort();
             }
         }
@@ -95,6 +103,13 @@ namespace mage::platform {
             into[i] = socket(info->ai_family, info->ai_socktype, info->ai_protocol);
             if (into[i] == -1) {
                 std::perror("network_connect -> socket");
+                std::abort();
+            }
+
+            /* Maintain firewall state through idle periods. */
+            int keepalive = 1;
+            if (setsockopt(into[i], SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive)) == -1) {
+                std::perror("network_connect -> setsockopt");
                 std::abort();
             }
 
