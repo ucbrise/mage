@@ -95,7 +95,7 @@ namespace mage::dsl {
          * assigning each element of each list to multiple workers, so that,
          * for each (a, b) in A x B, exactly one has both a and b.
          *
-         * This can be understood as decomposing a single cross products of
+         * This can be understood as decomposing a single cross product of
          * arrays that are each partitioned over multiple workers into a union
          * of local cross products, one at each worker.
          *
@@ -103,7 +103,7 @@ namespace mage::dsl {
          * concurrently.
          *
          * @param a The first array of the cross product.
-         * @param b The second array ofthe cross product.
+         * @param b The second array of the cross product.
          * @return A pair where the first element is a subset of @p a and the
          * second element is a subset of @p b, consisting of the elements from
          * each array assigned to this worker.
