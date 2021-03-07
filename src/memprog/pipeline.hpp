@@ -32,9 +32,18 @@
 #include "util/config.hpp"
 
 namespace mage::memprog {
+    /**
+     * @brief An abstract class for a pipeline for generating a memory program.
+     */
     template <typename Placer>
     class Pipeline {
     public:
+        /**
+         * @brief Creates a pipeline to create a memory program with the given
+         * name
+         *
+         * @param name The name of the memory program to create.
+         */
         Pipeline(const std::string& name) : program_name(name) {
         }
 

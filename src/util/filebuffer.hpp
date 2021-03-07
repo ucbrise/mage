@@ -559,7 +559,7 @@ namespace mage::util {
                 auto start = std::chrono::steady_clock::now();
 
                 bool rv = this->_rebuffer();
-//
+
                 auto end = std::chrono::steady_clock::now();
                 this->stats.event(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count());
 
