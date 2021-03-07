@@ -74,10 +74,6 @@ namespace mage::programs::binary_fc_layer {
             elem.mark_input(Party::Evaluator);
         });
 
-        program_ptr->print_stats();
-        program_ptr->start_timer();
-
-
         /* Blocked row-major matrix provided by the garbler. */
         std::uint64_t num_columns = matrix_dimension / batch_size;
         std::uint64_t num_rows = matrix_dimension / args.num_workers;
@@ -88,6 +84,9 @@ namespace mage::programs::binary_fc_layer {
         for (auto& elem : my_matrix_a) {
             elem.mark_input(Party::Garbler);
         }
+
+        program_ptr->print_stats();
+        program_ptr->start_timer();
 
         /* Reconstruct the entire vector x for each worker. */
         std::vector<Integer<batch_size>> my_vector_x = vector_x.materialize_global_array(true);
