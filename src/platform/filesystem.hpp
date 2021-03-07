@@ -35,6 +35,7 @@ namespace mage::platform {
     std::size_t read_from_file(int fd, void* buffer, std::size_t length);
     std::size_t read_from_file_at(int fd, void* buffer, std::size_t length, std::uint64_t offset);
     std::size_t read_available_from_file(int fd, void* buffer, std::size_t length);
+    void prefetch_from_file_at(int fd, std::uint64_t start, std::size_t length);
     void seek_file(int fd, std::int64_t amount, bool relative = false);
     std::uint64_t tell_file(int fd);
     void close_file(int fd);

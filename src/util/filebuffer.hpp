@@ -350,7 +350,7 @@ namespace mage::util {
          * @param buffer_size Size of the in-memory buffer.
          */
         BufferedFileReader(std::size_t buffer_size = 1 << 18)
-            : fd(-1), owns_fd(false), use_stats(false), position(0), buffer(buffer_size, true), active_size(0) {
+            : fd(-1), owns_fd(false), use_stats(false), position(0), buffer(buffer_size, true), active_size(0), readahead_pos(-1) {
         }
 
         /**
@@ -364,7 +364,8 @@ namespace mage::util {
          * @param buffer_size Size of the in-memory buffer.
          */
         BufferedFileReader(const char* filename, std::size_t buffer_size = 1 << 18)
-            : owns_fd(true), use_stats(false), position(0), buffer(buffer_size, true), active_size(0) {
+            : owns_fd(true), use_stats(false), position(0), buffer(buffer_size, true), active_size(0),
+            readahead_pos(0) {
             this->fd = platform::open_file(filename, nullptr);
         }
 
@@ -390,7 +391,7 @@ namespace mage::util {
          */
         BufferedFileReader(BufferedFileReader<backwards_readable>&& other)
             : fd(other.fd), owns_fd(other.owns_fd), use_stats(other.use_stats), position(other.position),
-            buffer(std::move(other.buffer)), active_size(other.active_size) {
+            buffer(std::move(other.buffer)), active_size(other.active_size), readahead_pos(other.readahead) {
             other.fd = -1;
             other.owns_fd = false;
             other.use_stats = false;
@@ -408,6 +409,7 @@ namespace mage::util {
         void set_file_descriptor(int file_descriptor, bool owns_fd) {
             this->fd = file_descriptor;
             this->owns_fd = owns_fd;
+            this->readahead_pos = -1;
         }
 
         /**
@@ -423,6 +425,24 @@ namespace mage::util {
             this->fd = -1;
             this->owns_fd = false;
             return old_fd;
+        }
+
+        /*
+         * @brief Enables or disables readahead on this BufferedFileReader.
+         *
+         * This function should only be called if the underlying file
+         * descriptor refers to a file (not a network connection). By default,
+         * readahead is disabled.
+         *
+         * @param True if readahead is to be enabled, or false if it is to be
+         * disabled.
+         */
+        void set_readahead(bool enabled) {
+            if (enabled) {
+                this->readahead_pos = platform::tell_file(this->fd);
+            } else {
+                this->readahead_pos = -1;
+            }
         }
 
         /**
@@ -577,6 +597,10 @@ namespace mage::util {
             std::size_t rv = platform::read_available_from_file(this->fd, &mapping[leftover], this->buffer.size() - leftover);
             this->active_size = leftover + rv;
             this->position = 0;
+            if (this->readahead_pos != -1 && rv != 0) {
+                this->readahead_pos += rv;
+                platform::prefetch_from_file_at(this->fd, this->readahead_pos, this->buffer.size());
+            }
             return rv != 0;
         }
 
@@ -587,6 +611,7 @@ namespace mage::util {
         util::StreamStats stats;
 
     private:
+        std::int64_t readahead_pos;
         std::size_t active_size;
         std::size_t position;
         platform::MappedFile<std::uint8_t> buffer;
@@ -597,7 +622,8 @@ namespace mage::util {
      * an API that allows zero-copy reads in reverse order.
      *
      * The stream is interpreted as a sequence of items with interspersed size
-     * markers, as would be written by BufferedFileWriter\<true\>.
+     * markers, as would be written by BufferedFileWriter\<true\>. Readahead is
+     * always enabled.
      *
      * @tparam backwards_readable Must be true.
      */
@@ -706,6 +732,13 @@ namespace mage::util {
             this->position += to_read;
             this->length_left -= to_read;
             platform::read_from_file_at(this->fd, mapping, to_read, this->length_left);
+            if (this->length_left < this->buffer.size()) {
+                if (this->length_left != 0) {
+                    platform::prefetch_from_file_at(this->fd, 0, this->length_left);
+                }
+            } else {
+                platform::prefetch_from_file_at(this->fd, this->length_left - this->buffer.size(), this->buffer.size());
+            }
         }
 
     protected:

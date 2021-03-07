@@ -179,7 +179,14 @@ namespace mage::platform {
 
     void seek_file(int fd, std::int64_t amount, bool relative) {
         if (lseek(fd, (off_t) amount, relative ? SEEK_CUR : SEEK_SET) == -1) {
-            std::perror("seek_in_file -> lseek");
+            std::perror("seek_file -> lseek");
+            std::abort();
+        }
+    }
+
+    void prefetch_from_file_at(int fd, std::uint64_t offset, std::size_t length) {
+        if (readahead(fd, (off64_t) offset, length) == -1) {
+            std::perror("prefetch_from_file -> readahead");
             std::abort();
         }
     }

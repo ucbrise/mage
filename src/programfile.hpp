@@ -215,6 +215,7 @@ namespace mage {
          */
         ProgramFileReader(std::string filename) : util::BufferedFileReader<backwards_readable>(filename.c_str()) {
             platform::read_from_file(this->fd, &this->header, sizeof(this->header));
+            this->set_readahead(true); // reset prefetch offset
         }
 
         /**
