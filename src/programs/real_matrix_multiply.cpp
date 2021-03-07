@@ -19,6 +19,7 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <cmath>
 #include <cstdint>
 #include "dsl/array.hpp"
 #include "dsl/integer.hpp"
@@ -109,8 +110,8 @@ namespace mage::programs::real_matrix_multiply {
 
         std::vector<LeveledBatch<level, true>> result;
         if constexpr (tiled) {
-            /* Hardcode tile size to work well for 1 GiB of memory. */
-            std::size_t tile_dimension = 16;
+            std::int64_t memory_size = (*args.worker_config)["num_pages"].as_int() << (*args.worker_config)["page_shift"].as_int();
+            std::size_t tile_dimension = static_cast<std::size_t>((std::sqrt(memory_size) / 2048.0) + 1.0);
             result = local_tiled_matrix_multiply(tile_dimension, my_matrix_a.data(), my_matrix_a.size() / matrix_dimension, my_matrix_b.data(), my_matrix_b.size() / matrix_dimension, matrix_dimension);
         } else {
             result = local_naive_matrix_multiply(my_matrix_a.data(), my_matrix_a.size() / matrix_dimension, my_matrix_b.data(), my_matrix_b.size() / matrix_dimension, matrix_dimension);
