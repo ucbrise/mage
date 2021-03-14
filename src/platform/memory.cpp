@@ -25,9 +25,9 @@
 #include <sys/mman.h>
 
 namespace mage::platform {
-    void* allocate_resident_memory(std::size_t num_bytes, bool swappable) {
+    void* allocate_resident_memory(std::size_t num_bytes, bool lazy) {
         int flags = MAP_PRIVATE | MAP_ANONYMOUS;
-        if (!swappable) {
+        if (!lazy) {
             flags |= (MAP_NORESERVE | MAP_POPULATE);
         }
         void* region = mmap(NULL, num_bytes, PROT_READ | PROT_WRITE, flags, -1, 0);
