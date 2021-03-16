@@ -119,15 +119,19 @@ namespace mage::memprog {
         }
     }
 
-    BackdatingScheduler::BackdatingScheduler(std::string input_file, std::string output_file, std::uint64_t backdate_gap, std::uint32_t max_in_flight)
-        : Scheduler(input_file, output_file), readahead(input_file), gap(backdate_gap), current_instruction(0), num_allocation_failures(0), num_synchronous_swapins(0) {
+    BackdatingScheduler::BackdatingScheduler(std::string input_file, std::string output_file, std::uint64_t lookahead, std::uint32_t prefetch_buffer_size)
+        : Scheduler(input_file, output_file), readahead(input_file), gap(lookahead), current_instruction(0), num_allocation_failures(0), num_synchronous_swapins(0) {
         const ProgramFileHeader& header = this->input.get_header();
-        this->output.set_page_count(header.num_pages + max_in_flight);
+        this->output.set_page_count(header.num_pages + prefetch_buffer_size);
         this->output.set_swap_page_count(header.num_swap_pages);
-        this->output.set_concurrent_swaps(max_in_flight + 1);
+        /*
+         * The "+ 1" is to account for a "synchronous swap" operation that
+         * bypasses the prefetch buffer when the prefetch buffer is full.
+         */
+        this->output.set_concurrent_swaps(prefetch_buffer_size + 1);
         this->output.set_page_shift(header.page_shift);
         PhysPageNumber last_page = header.num_pages;
-        std::uint64_t i = max_in_flight;
+        std::uint64_t i = prefetch_buffer_size;
         do {
             i--;
             this->free_pages.push_back(last_page + i);

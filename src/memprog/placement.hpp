@@ -19,6 +19,14 @@
  * along with MAGE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+/**
+ * @file memprog/placement.hpp
+ * @brief Placement stage for MAGE's planner
+ *
+ * The placement module is, in effect, a memory allocator for the MAGE-virtual
+ * address space.
+ */
+
 #ifndef MAGE_MEMPROG_PLACEMENT_HPP_
 #define MAGE_MEMPROG_PLACEMENT_HPP_
 
@@ -34,14 +42,27 @@
 #include "util/prioqueue.hpp"
 
 namespace mage::memprog {
+    /**
+     * @brief Integer type that can hold the size of a variable to place.
+     */
     using AllocationSize = std::uint64_t;
 
+    /**
+     * @brief Enumeration type that describes the type of a variable to place.
+     */
     enum class PlaceableType : std::uint64_t {
         Ciphertext = 0,
         Plaintext = 1,
         DenormalizedCiphertext = 2,
     };
 
+    /**
+     * @brief Obtains a human-readable name for the type of a variable to
+     * place.
+     *
+     * @param p The type of the variable to place.
+     * @return The human-readable name for the provided type.
+     */
     constexpr const char* placeable_type_name(PlaceableType p) {
         switch (p) {
         case PlaceableType::Ciphertext:
@@ -55,24 +76,77 @@ namespace mage::memprog {
         }
     }
 
+    /**
+     * @brief Type for a function that specifies the size for placement of each
+     * variable type (i.e., the space such a variable would occupy in the
+     * MAGE-virtual address space) for a target protocol.
+     */
     using PlacementPlugin = std::function<AllocationSize(std::uint64_t, PlaceableType)>;
 
+    /**
+     * @brief Exception type that indicates that placement of a variable was
+     * attempted, but it could not be completed with the current configuration.
+     */
     class InvalidPlacementException : public std::runtime_error {
     public:
+        /**
+         * @brief Creates an @p InvalidPlacementException object for the
+         * specified porotocol, allocation width, and variable type.
+         *
+         * @param protocol The specified protocol.
+         * @param logical_width The specified allocation width.
+         * @param type The specified variable type.
+         */
         InvalidPlacementException(const std::string& protocol, std::uint64_t logical_width, PlaceableType type)
             : std::runtime_error("Invalid placement for protocol \"" + protocol + "\": logical width = " + std::to_string(logical_width) + ", type = " + placeable_type_name(type)) {
         }
     };
 
+    /**
+     * @brief Abstract class for a Placement module in MAGE's planner.
+     */
     class Placer {
     public:
+        /**
+         * @brief Places a variable in the MAGE-virtual addres space.
+         *
+         * @param width The width of the variable to place (i.e., the amount of
+         * MAGE-virtual memory to allocate).
+         * @param[out] fresh_page Set to true if the variable is placed on a
+         * page on which no other variables have been placed.
+         * @return The MAGE-virtual address at which the variable is placed.
+         */
         virtual VirtAddr allocate_virtual(AllocationSize width, bool& fresh_page) = 0;
+
+        /**
+         * @brief Deallocates space for a previously-allocated variable,
+         * usually called when a variable goes out of scope.
+         *
+         * @param addr The address of the memory to deallocate.
+         * @param width The size of the memory to deallocate, in the
+         * MAGE-virtual address space.
+         */
         virtual void deallocate_virtual(VirtAddr addr, AllocationSize width) = 0;
+
+        /**
+         * @brief Returns the number of pages used in the MAGE-virtual address
+         * space.
+         *
+         * @return The number of pages used in the MAGE-virtual address space.
+         */
         virtual VirtPageNumber get_num_pages() const = 0;
     };
 
+    /**
+     * @brief Simple baseline placement module that never deallocates memory.
+     */
     class SimplePlacer {
     public:
+        /**
+         * @brief Creates a @p SimplePlacer with the specified page size.
+         *
+         * @param shift Base-2 logarithm of the page size.
+         */
         SimplePlacer(PageShift shift) : next_free_address(0), page_shift(shift) {
         }
 
@@ -106,8 +180,17 @@ namespace mage::memprog {
         PageShift page_shift;
     };
 
+    /**
+     * @brief Simple placement policy that places equal-width items on the same
+     * page and recycles slots using a FIFO policy.
+     */
     class FIFOPlacer {
     public:
+        /**
+         * @brief Creates a @p FIFOPlacer with the specified page size.
+         *
+         * @param shift Base-2 logarithm of the page size.
+         */
         FIFOPlacer(PageShift shift) : next_page(0), page_shift(shift) {
         }
 
@@ -153,12 +236,34 @@ namespace mage::memprog {
         PageShift page_shift;
     };
 
+    /**
+     * @brief Stores which slots are free in a given MAGE-virtual page, and
+     * which slots have been allocated before.
+     */
     struct PageInfo {
         std::vector<VirtAddr> reusable_slots;
         std::uint64_t next_free_offset;
     };
 
+    /**
+     * @brief Stores information for allocations of a particular size (used in
+     * the @p BinnedPlacer).
+     *
+     * Keeps track of all pages for allocations of a particular size, including
+     * information on how close to full each page is and the location of free
+     * slots within each page.
+     */
     struct AllocationSizeInfo {
+        /**
+         * @brief Creates an @p AllocationSizeInfo objct for allocations of the
+         * specified size.
+         *
+         * If the allocation size is too large for the given page size, then
+         * the process is aborted.
+         *
+         * @param shift Base-2 logarithm of the page size.
+         * @param width The specified allocation size.
+         */
         AllocationSizeInfo(PageShift shift, AllocationSize width) {
             this->fresh_page_free_slots = pg_size(shift) / width;
             if (this->fresh_page_free_slots == 0) {
@@ -171,8 +276,20 @@ namespace mage::memprog {
         std::uint64_t fresh_page_free_slots;
     };
 
+    /**
+     * @brief The placement module used by MAGE's default planning pipeline.
+     *
+     * In addition to the equal-width heuristic used by the @p FIFOPlacer, it
+     * aims to reduce fragmentation by trying to avoid keeping pages only
+     * partially filled.
+     */
     class BinnedPlacer {
     public:
+        /**
+         * @brief Creates a @p BinnedPlacer with the specified page size.
+         *
+         * @param shift Base-2 logarithm of the page size.
+         */
         BinnedPlacer(PageShift shift) : next_page(0), page_shift(shift) {
         }
 
@@ -284,6 +401,11 @@ namespace mage::memprog {
         }
 
     private:
+        /**
+         * @brief Obtains a reference to the @p AllocationSizeInfo object for a
+         * given allocation size, creating the @p AllocationSizeInfo object for
+         * that size if it does not yet exist.
+         */
         AllocationSizeInfo& get_info(AllocationSize width) {
             auto iter = this->slot_map.find(width);
             if (iter != this->slot_map.end()) {
