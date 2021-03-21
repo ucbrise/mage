@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
     std::string filename(argv[1]);
-    if (filename.ends_with(".memprog")) {
+    if (filename.ends_with(".memprog") || filename.ends_with(".repprog")) {
         mage::PhysProgramFileReader program(argv[1]);
         mage::InstructionNumber num_instructions = program.get_header().num_instructions;
         for (mage::InstructionNumber i = 0; i != num_instructions; i++) {
@@ -45,6 +45,9 @@ int main(int argc, char** argv) {
             std::cout << virt << std::endl;
             program.finish_instruction(virt.size());
         }
+    } else {
+        std::cout << "Error: could not infer bytecode type from file extension" << std::endl;
+        return EXIT_FAILURE;
     }
 
     return EXIT_SUCCESS;
