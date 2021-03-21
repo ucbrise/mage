@@ -24,6 +24,9 @@
  * @brief Terminal-based ASCII progress bar.
  */
 
+#ifndef MAGE_UTIL_PROGRESS_HPP_
+#define MAGE_UTIL_PROGRESS_HPP_
+
 #include <cstdint>
 #include <string>
 #include "util/misc.hpp"
@@ -50,7 +53,15 @@ namespace mage::util {
          * @param total_units The total number of units of work in the task
          * whose progress is being measured.
          */
-        ProgressBar(const std::string& label, std::uint64_t total_units);
+        ProgressBar(const std::string& label = "", std::uint64_t total_units = 0);
+
+        /**
+         * @brief Sets the label on a progress bar.
+         *
+         * @param label A string with the label to print out to the left of
+         * the progress bar.
+         */
+        void set_label(const std::string& label);
 
         /**
          * @brief Re-initializes a progress bar, resetting it to the state of a
@@ -64,10 +75,25 @@ namespace mage::util {
         void reset(const std::string& label, std::uint64_t total_units);
 
         /**
+         * @brief Re-initializes a progress bar, resetting it to the state of a
+         * newly constructed progress bar. Retains the label from before.
+         *
+         * @param total_units The total number of units of work in the task
+         * whose progress is being measured.
+         */
+        void reset(std::uint64_t total_units);
+
+        /**
          * @brief Erases the on-screen progress bar, replacing it with an
          * empty row in the terminal.
          */
         void erase() const;
+
+        /**
+         * @brief Displays the progress bar, causing it to re-appear after a
+         * previous call to @p erase().
+         */
+        void display() const;
 
         /**
          * @brief Advances the terminal to the next line, leaving the progress
@@ -79,16 +105,29 @@ namespace mage::util {
         void finish(bool fill = true);
 
         /**
-         * @brief Increases the progress displayed on the progress bar.
+         * @brief Increases the progress displayed on the progress bar by the
+         * specified amount.
+         *
+         * @param num_units The number of additional units of work completed
+         * for the task whose progress is being measured.
+         */
+        void advance(std::uint64_t num_units) {
+            this->refresh(this->current_count + num_units);
+        }
+
+        /**
+         * @brief Increases the progress displayed on the progress bar to the
+         * specified amount.
          *
          * @pre The argument @p num_units must be greater than or equal to the
          * value of @p num_units in previous calls to this function and less
          * than or equal to the value of @p total_units used to initialize this
          * progress bar, via the constructor or the @p reset function.
-         * @param num_units The number of units of work completed in the task
-         * whose progress is being measured.
+         * @param num_units The number of total units of work completed in the
+         * task whose progress is being measured.
          */
         void refresh(std::uint64_t num_units) {
+            this->current_count = num_units;
             if (num_units >= this->next_update) {
                 if (this->reconstruct_bar_if_necessary()) {
                     this->update(num_units);
@@ -103,7 +142,6 @@ namespace mage::util {
 
     private:
         void update(std::uint64_t num_units);
-        void display() const;
 
         bool reconstruct_bar_if_necessary();
         void construct_bar();
@@ -112,6 +150,7 @@ namespace mage::util {
 
         std::uint64_t update_threshold;
         std::uint64_t next_update;
+        std::uint64_t current_count;
         std::uint64_t total_count;
         std::uint32_t bar_start;
         std::uint32_t bar_capacity;
@@ -123,3 +162,5 @@ namespace mage::util {
         static constexpr const char bar_empty = '.';
     };
 }
+
+#endif

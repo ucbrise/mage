@@ -32,17 +32,35 @@
 
 namespace mage::util {
     ProgressBar::ProgressBar(const std::string& label, std::uint64_t total_units) :
-        display_name(label), next_update(0), total_count(total_units), current_width(0) {
+        display_name(label), next_update(0), current_count(0), total_count(total_units), current_width(0) {
+    }
+
+    void ProgressBar::set_label(const std::string& label) {
+        this->display_name = label;
+        this->current_width = 0;
     }
 
     void ProgressBar::reset(const std::string& label, std::uint64_t total_units) {
-        this->display_name = label;
+        this->set_label(label);
+        this->reset(total_units);
+    }
+
+    void ProgressBar::reset(std::uint64_t total_units) {
         this->next_update = 0;
+        this->current_count = 0;
         this->total_count = total_units;
     }
 
     void ProgressBar::erase() const {
-        std::cout << '\r';
+        if (this->current_width != 0) {
+            std::cout << '\r';
+        }
+    }
+
+    void ProgressBar::display() const {
+        if (this->current_width != 0) {
+            std::cout << this->bar << std::flush;
+        }
     }
 
     void ProgressBar::finish(bool fill) {
@@ -62,6 +80,7 @@ namespace mage::util {
 
         char* bar_start = this->get_bar_start();
         std::uint32_t bar_length = (this->bar_capacity * num_units) / this->total_count;
+        bar_length = std::min(bar_length, this->bar_capacity);
         std::uint32_t i;
         for (i = 0; i != bar_length; i++) {
             bar_start[i] = ProgressBar::bar_full;
@@ -69,10 +88,6 @@ namespace mage::util {
         for (; i != this->bar_capacity; i++) {
             bar_start[i] = ProgressBar::bar_empty;
         }
-    }
-
-    void ProgressBar::display() const {
-        std::cout << this->bar << std::flush;
     }
 
     bool ProgressBar::reconstruct_bar_if_necessary() {
