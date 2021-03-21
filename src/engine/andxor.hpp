@@ -83,11 +83,14 @@ namespace mage::engine {
          */
         void execute_program() {
             InstructionNumber num_instructions = this->input.get_header().num_instructions;
+            this->progress_bar.set_label("Execution");
+            this->input.set_progress_bar(&this->progress_bar);
             for (InstructionNumber i = 0; i != num_instructions; i++) {
                 PackedPhysInstruction& phys = this->input.start_instruction();
                 std::size_t size = this->execute_instruction(phys);
                 this->input.finish_instruction(size);
             }
+            this->progress_bar.finish();
         }
 
     private:

@@ -75,8 +75,11 @@ namespace mage::memprog {
         /**
          * @brief Computes replacement and writes out the resulting physical
          * bytecode.
+         *
+         * @param progress_bar Progress bar to use to show progress, or nullptr
+         * if none should be used.
          */
-        virtual void allocate() = 0;
+        virtual void allocate(util::ProgressBar* progress_bar = nullptr) = 0;
 
         /**
          * @brief Obtains the number of times that the emitted physical
@@ -339,7 +342,7 @@ namespace mage::memprog {
          */
         BeladyAllocator(std::string output_file, std::string virtual_program_file, std::string annotations_file, PhysPageNumber num_page_frames, PageShift shift);
 
-        void allocate() override;
+        void allocate(util::ProgressBar* progress_bar = nullptr) override;
 
     private:
         std::unordered_map<VirtPageNumber, PageTableEntry> page_table;

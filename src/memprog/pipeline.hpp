@@ -35,6 +35,7 @@
 #include "memprog/placement.hpp"
 #include "memprog/replacement.hpp"
 #include "util/config.hpp"
+#include "util/progress.hpp"
 
 namespace mage::memprog {
     /**
@@ -216,6 +217,7 @@ namespace mage::memprog {
         InstructionNumber prefetch_lookahead;
 
         DefaultPipelineStats stats;
+        util::ProgressBar progress_bar;
         bool verbose;
     };
 }

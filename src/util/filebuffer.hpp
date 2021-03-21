@@ -36,6 +36,7 @@
 #include <utility>
 #include "platform/filesystem.hpp"
 #include "platform/memory.hpp"
+#include "util/progress.hpp"
 #include "util/stats.hpp"
 
 /*
@@ -350,7 +351,8 @@ namespace mage::util {
          * @param buffer_size Size of the in-memory buffer.
          */
         BufferedFileReader(std::size_t buffer_size = 1 << 18)
-            : fd(-1), owns_fd(false), use_stats(false), position(0), buffer(buffer_size, true), active_size(0), readahead_pos(-1) {
+            : fd(-1), owns_fd(false), use_stats(false), position(0), buffer(buffer_size, true),
+            active_size(0), readahead_pos(-1), progress_bar(nullptr) {
         }
 
         /**
@@ -365,7 +367,7 @@ namespace mage::util {
          */
         BufferedFileReader(const char* filename, std::size_t buffer_size = 1 << 18)
             : owns_fd(true), use_stats(false), position(0), buffer(buffer_size, true), active_size(0),
-            readahead_pos(0) {
+            readahead_pos(0), progress_bar(nullptr) {
             this->fd = platform::open_file(filename, nullptr);
         }
 
@@ -391,7 +393,8 @@ namespace mage::util {
          */
         BufferedFileReader(BufferedFileReader<backwards_readable>&& other)
             : fd(other.fd), owns_fd(other.owns_fd), use_stats(other.use_stats), position(other.position),
-            buffer(std::move(other.buffer)), active_size(other.active_size), readahead_pos(other.readahead) {
+            buffer(std::move(other.buffer)), active_size(other.active_size), readahead_pos(other.readahead),
+            progress_bar(nullptr) {
             other.fd = -1;
             other.owns_fd = false;
             other.use_stats = false;
@@ -471,6 +474,20 @@ namespace mage::util {
          */
         util::StreamStats& get_stats() {
             return this->stats;
+        }
+
+        /**
+         * @brief Sets the progress bar to advance as bytes are read from the
+         * file.
+         *
+         * The progress bar is advanced only when rebuffering (i.e., only when
+         * reading data from the underlying file).
+         *
+         * @param pb A pointer to the progress bar to advance, or nullptr if no
+         * progress bar should be advanced.
+         */
+        void set_progress_bar(util::ProgressBar* pb) {
+            this->progress_bar = pb;
         }
 
         /**
@@ -591,6 +608,9 @@ namespace mage::util {
 
     private:
         bool _rebuffer() {
+            if (this->progress_bar != nullptr) {
+                this->progress_bar->advance(this->position);
+            }
             std::uint8_t* mapping = this->buffer.mapping();
             std::size_t leftover = this->active_size - this->position;
             std::copy(&mapping[this->position], &mapping[this->active_size], mapping);
@@ -615,6 +635,7 @@ namespace mage::util {
         std::size_t active_size;
         std::size_t position;
         platform::MappedFile<std::uint8_t> buffer;
+        util::ProgressBar* progress_bar;
     };
 
     /**
@@ -642,7 +663,8 @@ namespace mage::util {
          * @param buffer_size Size of the in-memory buffer.
          */
         BufferedReverseFileReader(const char* filename, std::size_t buffer_size = 1 << 18)
-            : owns_fd(true), position(0), buffer(buffer_size, true) {
+            : owns_fd(true), position(0), buffer(buffer_size, true), progress_bar(nullptr),
+            have_rebuffered(false) {
             this->fd = platform::open_file(filename, &this->length_left);
         }
 
@@ -656,7 +678,8 @@ namespace mage::util {
          * @param buffer_size Size of the in-memory buffer.
          */
         BufferedReverseFileReader(int file_descriptor, std::size_t buffer_size = 1 << 18)
-            : fd(file_descriptor), owns_fd(false), length_left(UINT64_MAX), position(0), buffer(buffer_size, true) {
+            : fd(file_descriptor), owns_fd(false), length_left(UINT64_MAX), position(0),
+            buffer(buffer_size, true), progress_bar(nullptr), have_rebuffered(false) {
         }
 
         /**
@@ -667,6 +690,20 @@ namespace mage::util {
             if (this->owns_fd) {
                 platform::close_file(this->fd);
             }
+        }
+
+        /**
+         * @brief Sets the progress bar to advance as bytes are read from the
+         * file.
+         *
+         * The progress bar is advanced only when rebuffering (i.e., only when
+         * reading data from the underlying file).
+         *
+         * @param pb A pointer to the progress bar to advance, or nullptr if no
+         * progress bar should be advanced.
+         */
+        void set_progress_bar(util::ProgressBar* pb) {
+            this->progress_bar = pb;
         }
 
         /**
@@ -723,9 +760,13 @@ namespace mage::util {
          * pointers and references returned by previous calls to read().
          */
         void rebuffer() {
-            std::uint8_t* mapping = this->buffer.mapping();
             std::size_t size = this->buffer.size() - slack;
             std::uint64_t to_read = size - this->position;
+            if (this->progress_bar != nullptr && this->have_rebuffered) {
+                this->progress_bar->advance(to_read);
+            }
+
+            std::uint8_t* mapping = this->buffer.mapping();
             to_read = std::min(to_read, this->length_left);
             std::copy_backward(mapping, &mapping[this->position], &mapping[to_read + this->position]);
 
@@ -739,6 +780,8 @@ namespace mage::util {
             } else {
                 platform::prefetch_from_file_at(this->fd, this->length_left - this->buffer.size(), this->buffer.size());
             }
+
+            this->have_rebuffered = true;
         }
 
     protected:
@@ -748,7 +791,10 @@ namespace mage::util {
 
     private:
         std::size_t position;
+        std::size_t active_size;
         platform::MappedFile<std::uint8_t> buffer;
+        util::ProgressBar* progress_bar;
+        bool have_rebuffered;
 
         /*
          * We need to rebuffer a few bytes early because at some optimization

@@ -104,8 +104,10 @@ namespace mage::memprog {
      * This sequence of instructions should be reverse-iterable (e.g., written
      * with a BufferedFileWriter with backwards_readable == true).
      * @param page_shift Base-2 logarithm of the page size.
+     * @param progress_bar Progress bar to use to show progress, or nullptr if
+     * none should be used.
      */
-    std::uint64_t annotate_program(std::string annotations, std::string program, PageShift page_shift);
+    std::uint64_t annotate_program(std::string annotations, std::string program, PageShift page_shift, util::ProgressBar* progress_bar = nullptr);
 }
 
 #endif

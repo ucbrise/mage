@@ -40,6 +40,7 @@
 #include "engine/cluster.hpp"
 #include "platform/filesystem.hpp"
 #include "platform/memory.hpp"
+#include "util/progress.hpp"
 #include "util/stats.hpp"
 
 namespace mage::engine {
@@ -72,7 +73,7 @@ namespace mage::engine {
         Engine(const std::shared_ptr<ClusterNetwork>& network) : memory(nullptr),
             memory_size(0), swapfd(-1), swap_in("SWAP-IN (ns)", true),
             swap_out("SWAP-OUT (ns)", true), swap_blocked("SWAP-BLOCKED (ns)", true),
-            cluster(network), aio_ctx(0) {
+            cluster(network), aio_ctx(0), progress_bar("Execution", 1024) {
         }
 
         virtual ~Engine();
@@ -247,6 +248,9 @@ namespace mage::engine {
 
         io_context_t aio_ctx;
         std::unordered_map<PhysAddr, struct iocb> in_flight_swaps;
+
+    protected:
+        util::ProgressBar progress_bar;
     };
 }
 

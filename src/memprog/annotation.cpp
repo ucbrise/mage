@@ -32,10 +32,12 @@
 #include "programfile.hpp"
 #include "platform/memory.hpp"
 #include "util/filebuffer.hpp"
+#include "util/progress.hpp"
 
 namespace mage::memprog {
-    std::uint64_t annotate_program(util::BufferedFileWriter<true>& output, std::string program, PageShift page_shift) {
+    std::uint64_t annotate_program(util::BufferedFileWriter<true>& output, std::string program, PageShift page_shift, util::ProgressBar* progress_bar) {
         VirtProgramReverseFileReader instructions(program);
+        instructions.set_progress_bar(progress_bar);
         InstructionNumber inum = instructions.get_header().num_instructions;
 
         std::unordered_map<VirtPageNumber, InstructionNumber> next_access;
@@ -75,8 +77,8 @@ namespace mage::memprog {
         return max_working_set_size;
     }
 
-    std::uint64_t annotate_program(std::string annotations, std::string program, PageShift page_shift) {
+    std::uint64_t annotate_program(std::string annotations, std::string program, PageShift page_shift, util::ProgressBar* progress_bar) {
         util::BufferedFileWriter<true> output(annotations.c_str());
-        return annotate_program(output, program, page_shift);
+        return annotate_program(output, program, page_shift, progress_bar);
     }
 }

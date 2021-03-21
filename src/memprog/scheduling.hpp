@@ -38,6 +38,7 @@
 #include "instruction.hpp"
 #include "programfile.hpp"
 #include "util/prioqueue.hpp"
+#include "util/progress.hpp"
 
 namespace mage::memprog {
     /**
@@ -68,8 +69,11 @@ namespace mage::memprog {
         /**
          * @brief Runs the scheduling algorithm and outputs the resulting
          * memory program.
+         *
+         * @param progress_bar Progress bar to use to show progress, or nullptr
+         * if none should be used.
          */
-        virtual void schedule() = 0;
+        virtual void schedule(util::ProgressBar* progress_bar = nullptr) = 0;
 
     protected:
         /**
@@ -149,7 +153,7 @@ namespace mage::memprog {
          */
         NOPScheduler(std::string input_file, std::string output_file);
 
-        void schedule() override;
+        void schedule(util::ProgressBar* progress_bar = nullptr) override;
     };
 
     /**
@@ -280,7 +284,7 @@ namespace mage::memprog {
          */
         void process_gap_decrease(PackedPhysInstruction& phys, InstructionNumber i);
 
-        void schedule() override;
+        void schedule(util::ProgressBar* progress_bar = nullptr) override;
 
     private:
         PhysProgramFileReader readahead;

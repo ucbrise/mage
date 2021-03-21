@@ -98,7 +98,7 @@ namespace mage::memprog {
         this->output.set_page_shift(header.page_shift);
     }
 
-    void NOPScheduler::schedule() {
+    void NOPScheduler::schedule(util::ProgressBar* progress_bar) {
         const ProgramFileHeader& header = this->input.get_header();
         for (std::uint64_t i = 0; i != header.num_instructions; i++) {
             const PackedPhysInstruction& phys = this->input.start_instruction();
@@ -307,7 +307,9 @@ namespace mage::memprog {
         }
     }
 
-    void BackdatingScheduler::schedule() {
+    void BackdatingScheduler::schedule(util::ProgressBar* progress_bar) {
+        this->input.set_progress_bar(progress_bar);
+
         std::uint64_t num_instructions = this->input.get_header().num_instructions;
         InstructionNumber i;
 
@@ -316,7 +318,6 @@ namespace mage::memprog {
             PackedPhysInstruction& phys = this->readahead.start_instruction();
             this->process_gap_increase(phys, i);
             this->readahead.finish_instruction(phys.size());
-
         }
 
         // Process the remaining instructions

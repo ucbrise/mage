@@ -64,14 +64,18 @@ namespace mage::memprog {
     }
 
     void DefaultPipeline::allocate(const std::string& prog_file, const std::string& repprog_file) {
+        this->progress_bar.set_label("Annotations Pass");
         std::string ann_file = this->program_name + ".ann";
-        annotate_program(ann_file, prog_file, this->page_shift);
+        annotate_program(ann_file, prog_file, this->page_shift, &this->progress_bar);
+        this->progress_bar.finish();
         if (this->verbose) {
             std::cout << "Computed annotations" << std::endl;
         }
 
+        this->progress_bar.set_label("Replacement Pass");
         BeladyAllocator allocator(repprog_file, prog_file, ann_file, this->num_pages, this->page_shift);
-        allocator.allocate();
+        allocator.allocate(&this->progress_bar);
+        this->progress_bar.finish();
         this->stats.num_swapouts = allocator.get_num_swapouts();
         this->stats.num_swapins = allocator.get_num_swapins();
         if (this->verbose) {
@@ -80,8 +84,10 @@ namespace mage::memprog {
     }
 
     void DefaultPipeline::schedule(const std::string& repprog_file, const std::string& memprog_file) {
+        this->progress_bar.set_label("Scheduling Pass");
         BackdatingScheduler scheduler(repprog_file, memprog_file, this->prefetch_lookahead, this->prefetch_buffer_size);
-        scheduler.schedule();
+        scheduler.schedule(&this->progress_bar);
+        this->progress_bar.finish();
         this->stats.num_prefetch_alloc_failures = scheduler.get_num_allocation_failures();
         this->stats.num_synchronous_swapins = scheduler.get_num_synchronous_swapins();
         if (this->verbose) {

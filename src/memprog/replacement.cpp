@@ -165,7 +165,8 @@ namespace mage::memprog {
         this->set_page_shift(this->virt_prog.get_header().page_shift);
     }
 
-    void BeladyAllocator::allocate() {
+    void BeladyAllocator::allocate(util::ProgressBar* progress_bar) {
+        this->virt_prog.set_progress_bar(progress_bar);
         InstructionNumber num_instructions = this->virt_prog.get_header().num_instructions;
         std::array<bool, 5> just_swapped_in;
         std::array<PhysPageNumber, 5> ppns;

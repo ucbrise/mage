@@ -228,6 +228,24 @@ namespace mage {
         }
 
         /**
+         * @brief Sets the progress bar to advance as bytes are read from the
+         * file.
+         *
+         * The progress bar is advanced only when rebuffering (i.e., only when
+         * reading data from the underlying file).
+         *
+         * @param label The label to use when initializing the progress bar.
+         * @param pb A pointer to the progress bar to advance, or nullptr if no
+         * progress bar should be advanced.
+         */
+        void set_progress_bar(util::ProgressBar* pb) {
+            if (pb != nullptr) {
+                pb->reset(platform::length_file(this->fd) - sizeof(this->header));
+            }
+            this->util::BufferedFileReader<backwards_readable>::set_progress_bar(pb);
+        }
+
+        /**
          * @brief Reads data containing the next instruction into a local
          * buffer and return a reference to it.
          *
@@ -298,6 +316,24 @@ namespace mage {
         ProgramReverseFileReader(std::string filename) : util::BufferedReverseFileReader<backwards_readable>(filename.c_str()) {
             platform::seek_file(this->fd, 0);
             platform::read_from_file(this->fd, &this->header, sizeof(this->header));
+        }
+
+        /**
+         * @brief Sets the progress bar to advance as bytes are read from the
+         * file.
+         *
+         * The progress bar is advanced only when rebuffering (i.e., only when
+         * reading data from the underlying file).
+         *
+         * @param label The label to use when initializing the progress bar.
+         * @param pb A pointer to the progress bar to advance, or nullptr if no
+         * progress bar should be advanced.
+         */
+        void set_progress_bar(util::ProgressBar* pb) {
+            if (pb != nullptr) {
+                pb->reset(platform::length_file(this->fd) - sizeof(this->header));
+            }
+            this->util::BufferedReverseFileReader<backwards_readable>::set_progress_bar(pb);
         }
 
         /**
