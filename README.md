@@ -1,57 +1,23 @@
 MAGE: Memory-Aware Garbling Engine
 ==================================
+MAGE is an execution engine for secure computation protocols, such as secure multi-party computation (SMPC) and homomorphic encryption (HE). MAGE is designed to execute secure computation efficiently even when it does not fit in memory.
 
-MAGE is a memory-aware garbling engine. It is written in C++. To build, use g++ version 9 or later or clang++ version 6 or later.
+The implementation of MAGE in this repository accompanies our OSDI 2021 paper:
 
-How to Build
-------------
-This is still in progress, but it's far enough along that you can run the code.
+Sam Kumar, David E. Culler, and Raluca Ada Popa. Nearly Zero-Cost Virtual Memory for Secure Computation. To appear at OSDI 2021.
 
-To build MAGE, first install OpenSSL. Also install version 0.63 of the yaml-cpp library (https://github.com/jbeder/yaml-cpp).
+**WARNING: This implementation is a prototype designed for academic study and proof-of-concept use cases. It has not received code review and is *not* production-ready.**
 
-On a Ubuntu install, you can install the dependencies as follows:
-1. Run `apt install build-essential clang cmake libssl-dev libaio-dev`.
-2. Install version 0.63 of the the yaml-cpp library (https://github.com/jbeder/yaml-cpp), using the `-DYAML_BUILD_SHARED_LIBS=ON` option when running `cmake`.
-3. Install the tfhe library (https://github.com/tfhe/tfhe).
-4. Install version 3.6.0 of the Microsoft SEAL library (https://github.com/Microsoft/SEAL), using the `-DSEAL_USE_ZLIB=OFF -DBUILD_SHARED_LIBS=ON` option when running `cmake`.
-5. You may need to run `sudo ldconfig` to refresh the shared library cache.
+Secure computation is inherently *oblivious*&mdash;that is, it contains no data-dependent memory accesses. The reason for this lies in maintaining security if memory accesses depended on the data, then an attacker could potentially analyze the memory access pattern and infer the contents of sensitive data. This is a problem because the point of using secure computation is to compute on sensitive data without revealing the contents of that data.
 
-Once you've done this, you should be able to run `make`. I've tested this on an Ubuntu 16.04 system. You will obtain three executables: `mage`, `planner`, and `example_input`.
+MAGE leverages the *oblivious* nature of secure computation to manage memory efficiently. Specifically, MAGE introduces a planning phase in which it analyzes in advance the computation it is going to perform. The result of MAGE's planning phase is a *memory program*, an execution plan for performing the computation. The memory program can be understood as (roughly) a pre-processed execution trace (with all functions inlined and all loops unrolled), including preplanned data transfers between memory and storage. At runtime, MAGE uses the memory program to transfer data between memory and storage very efficiently, in effect providing virtual memory at a very low cost.
 
-How to Run
-----------
-`planner` produces a memory program for one of the example programs built-in to the executable. `example_input` produces a file containing the input to a program. `mage` executes a memory program using secure multiparty computation.
+How to Build and Use MAGE
+-------------------------
+Instructions to build MAGE, and a tutorial for using it, are available on the [MAGE wiki](https://github.com/ucbrise/mage/wiki).
 
-To run the Aspirin Count problem, first create a `config.yaml` file. Here is an example of one that should work:
-```
-page_shift: 12
-num_pages: 1024
-prefetch_buffer_size: 256
-prefetch_lookahead: 10000
-
-garbler:
-    workers:
-        - internal_host: localhost
-          internal_port: 50000
-          external_host: localhost
-          external_port: 54321
-          storage_path: garbler_swapfile_1
-
-evaluator:
-    workers:
-        - internal_host: localhost
-          internal_port: 60000
-          external_host: localhost
-          external_port: 54324
-          storage_path: evaluator_swapfile_1
-```
-The internal host/port won't matter on a single machine. A page shift of 12 corresponds to 64 KiB pages, so this config will ask MAGE to run the program within 64 MiB of memory.
-
-As a quick check that everything works correctly, run `./planner aspirin ../config.yaml garbler 0 128` and `./example_input 128 1`. Here, 128 is the size of the program. You can increase it for a larger computation, but it should be a power of 2 (the code isn't written to work with anything else). Then run, in two separate terminal windows:
-`./mage ../config.yaml evaluate 0 aspirin_128`
-`./mage ../config.yaml garble 0 aspirin_128`
-Make sure to start the evaluator first. If you hexdump the output file, you should see `0xff`.
+To build documentation, run `doxygen` in the repository's root directory.
 
 License
 -------
-The code in this repository is open-source under version 3 of the GNU General Public License (GPL).
+The code in this repository is available under version 3 of the GNU General Public License (GPL).
