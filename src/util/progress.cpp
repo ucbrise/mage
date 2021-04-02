@@ -31,8 +31,8 @@
 #include "util/progress.hpp"
 
 namespace mage::util {
-    ProgressBar::ProgressBar(const std::string& label, std::uint64_t total_units) :
-        display_name(label), next_update(0), current_count(0), total_count(total_units), current_width(0) {
+    ProgressBar::ProgressBar(const std::string& label, std::uint64_t total_units) {
+        this->reset(label, total_units);
     }
 
     void ProgressBar::set_label(const std::string& label) {
@@ -46,6 +46,7 @@ namespace mage::util {
     }
 
     void ProgressBar::reset(std::uint64_t total_units) {
+        this->update_threshold = total_units;
         this->next_update = 0;
         this->current_count = 0;
         this->total_count = total_units;
@@ -123,6 +124,9 @@ namespace mage::util {
         this->bar = buffer.str();
 
         this->update_threshold = this->total_count / std::max(this->bar_capacity, UINT32_C(100));
+        if (this->update_threshold == 0) {
+            this->update_threshold = 1;
+        }
     }
 
     char* ProgressBar::get_bar_start() {
