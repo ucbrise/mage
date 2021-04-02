@@ -83,7 +83,7 @@ namespace mage::programs::real_matrix_multiply {
         return result;
     }
 
-    template <std::int32_t level, bool tiled>
+    template <std::int32_t level, bool tiled, std::size_t tile_size = 0>
     void create_real_matrix_multiply_circuit(const ProgramOptions& args) {
         int matrix_dimension = args.problem_size;
         int matrix_size = matrix_dimension * matrix_dimension;
@@ -110,8 +110,13 @@ namespace mage::programs::real_matrix_multiply {
 
         std::vector<LeveledBatch<level, true>> result;
         if constexpr (tiled) {
-            std::int64_t memory_size = (*args.worker_config)["num_pages"].as_int() << (*args.worker_config)["page_shift"].as_int();
-            std::size_t tile_dimension = static_cast<std::size_t>((std::sqrt(memory_size) / 2048.0) + 1.0);
+            std::size_t tile_dimension;
+            if constexpr (tile_size == 0) {
+                std::int64_t memory_size = (*args.worker_config)["num_pages"].as_int() << (*args.worker_config)["page_shift"].as_int();
+                tile_dimension = static_cast<std::size_t>((std::sqrt(memory_size) / 2048.0) + 1.0);
+            } else {
+                tile_dimension = tile_size;
+            }
             result = local_tiled_matrix_multiply(tile_dimension, my_matrix_a.data(), my_matrix_a.size() / matrix_dimension, my_matrix_b.data(), my_matrix_b.size() / matrix_dimension, matrix_dimension);
         } else {
             result = local_naive_matrix_multiply(my_matrix_a.data(), my_matrix_a.size() / matrix_dimension, my_matrix_b.data(), my_matrix_b.size() / matrix_dimension, matrix_dimension);
@@ -127,4 +132,6 @@ namespace mage::programs::real_matrix_multiply {
 
     RegisterProgram real_naive_matrix_multiply("real_naive_matrix_multiply", "Naive matrix multiply with real numbers (problem_size = number of elements in one side of matrix)", create_real_matrix_multiply_circuit<0, false>);
     RegisterProgram real_tiled_matrix_multiply("real_tiled_matrix_multiply", "Tiled matrix multiply with real numbers (problem_size = number of elements in one side of matrix)", create_real_matrix_multiply_circuit<0, true>);
+    RegisterProgram real_tiled_16_matrix_multiply("real_tiled_16_matrix_multiply", "Tiled matrix multiply with real numbers (problem_size = number of elements in one side of matrix)", create_real_matrix_multiply_circuit<0, true, 16>);
+    RegisterProgram real_tiled_64_matrix_multiply("real_tiled_64_matrix_multiply", "Tiled matrix multiply with real numbers (problem_size = number of elements in one side of matrix)", create_real_matrix_multiply_circuit<0, true, 64>);
 }
