@@ -467,7 +467,7 @@ int main(int argc, char** argv) {
         } else {
             std::cerr << "Unknown option " << option << std::endl;
         }
-    } else if (problem_name == "real_naive_matrix_multiply" || problem_name == "real_tiled_matrix_multiply") {
+    } else if (problem_name == "real_naive_matrix_multiply" || problem_name == "real_tiled_matrix_multiply" || problem_name == "real_tiled_16_matrix_multiply" || problem_name == "real_tiled_64_matrix_multiply") {
         /* Layout of A is row-major, blocked. */
         /* Layout of B is column-major, blocked. */
         /* Result matrix is 2D-blocked. */
