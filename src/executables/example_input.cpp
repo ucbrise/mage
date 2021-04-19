@@ -54,6 +54,13 @@ void write_record(mage::util::BinaryFileWriter* to, std::uint32_t key, std::uint
     to->write32(data3);
 }
 
+void write256(mage::util::BinaryFileWriter* to, std::uint64_t value0, std::uint64_t value1, std::uint64_t value2, std::uint64_t value3) {
+    to->write64(value0);
+    to->write64(value1);
+    to->write64(value2);
+    to->write64(value3);
+}
+
 int main(int argc, char** argv) {
     if (argc != 4 && argc != 5) {
         std::cout << "Usage: " << argv[0] << " problem_name problem_size num_workers [option]" << std::endl;
@@ -99,6 +106,36 @@ int main(int argc, char** argv) {
         /* Correct output is 1, (input_size - 1). */
         expected_writers[0]->write1(1);
         expected_writers[0]->write32(input_size - 1);
+    } else if (problem_name == "password") {
+        bool random = (option == "random");
+        std::default_random_engine generator;
+        std::uniform_int_distribution<std::uint8_t> distribution(0, 1);
+        for (std::uint64_t i = 0; i != input_size * 2; i++) {
+            std::uint64_t cyclic_party = get_cyclic_worker(i, num_workers, input_size * 2);
+            std::uint64_t blocked_party = get_blocked_worker(i, num_workers, input_size * 2);
+            if (i < input_size) {
+                std::uint32_t user = i + 1;
+                std::uint64_t hash;
+                if (random) {
+                    hash = distribution(generator);
+                } else {
+                    hash = (user == 1 ? 0 : 1);
+                    /* User 0 has password hash 0; rest have password hash 1. */
+                }
+                garbler_writers[cyclic_party]->write32(user);
+                write256(garbler_writers[cyclic_party].get(), hash, 0, 0, 0);
+                if (hash == 0) {
+                    expected_writers[blocked_party]->write32(user);
+                } else {
+                    expected_writers[blocked_party]->write32(0);
+                }
+            } else {
+                std::uint32_t user = 2 * input_size - i;
+                evaluator_writers[cyclic_party]->write32(user);
+                write256(evaluator_writers[cyclic_party].get(), 0, 0, 0, 0);
+                /* All users have password hash 0. */
+            }
+        }
     } else if (problem_name == "merge_sorted") {
         for (std::uint64_t i = 0; i != input_size * 2; i++) {
             std::uint64_t cyclic_party = get_cyclic_worker(i, num_workers, input_size * 2);
