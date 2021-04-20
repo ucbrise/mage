@@ -309,10 +309,10 @@ namespace mage::protocols::halfgates {
         void output(const Wire* data, unsigned int length) {
             while (length != 0) {
                 unsigned int to_write_this_iteration = std::min(static_cast<unsigned int>(this->bits_left_in_output_batch), length);
-                this->evaluator.output(&this->conn_output_writer, data, length);
+                this->evaluator.output(&this->conn_output_writer, data, to_write_this_iteration);
                 length -= to_write_this_iteration;
                 data += to_write_this_iteration;
-                this->bits_left_in_output_batch -= length;
+                this->bits_left_in_output_batch -= to_write_this_iteration;
                 if (this->bits_left_in_output_batch == 0) {
                     this->conn_writer.flush();
                     this->bits_left_in_output_batch = halfgates_output_batch_size;
