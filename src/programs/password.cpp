@@ -87,7 +87,7 @@ namespace mage::programs::password {
 
         inputs.for_each_pair([&](std::size_t i, auto& a, auto& b) {
             Bit equals = (a.value == b.value);
-            output.select(equals, a.get_user_id(), zero);
+            output = Integer<user_bits>::select(equals, a.get_user_id(), zero);
             output.mark_output();
         });
     }

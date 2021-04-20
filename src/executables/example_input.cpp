@@ -122,17 +122,21 @@ int main(int argc, char** argv) {
                     hash = (user == 1 ? 0 : 1);
                     /* User 0 has password hash 0; rest have password hash 1. */
                 }
-                garbler_writers[cyclic_party]->write32(user);
                 write256(garbler_writers[cyclic_party].get(), hash, 0, 0, 0);
+                garbler_writers[cyclic_party]->write32(user);
                 if (hash == 0) {
                     expected_writers[blocked_party]->write32(user);
                 } else {
                     expected_writers[blocked_party]->write32(0);
                 }
+                /* Accounts for comparisons between different users. */
+                if (i + 1 != input_size) {
+                    expected_writers[blocked_party]->write32(0);
+                }
             } else {
                 std::uint32_t user = 2 * input_size - i;
-                evaluator_writers[cyclic_party]->write32(user);
                 write256(evaluator_writers[cyclic_party].get(), 0, 0, 0, 0);
+                evaluator_writers[cyclic_party]->write32(user);
                 /* All users have password hash 0. */
             }
         }
