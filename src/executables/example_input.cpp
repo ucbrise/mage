@@ -112,7 +112,6 @@ int main(int argc, char** argv) {
         std::uniform_int_distribution<std::uint8_t> distribution(0, 1);
         for (std::uint64_t i = 0; i != input_size * 2; i++) {
             std::uint64_t cyclic_party = get_cyclic_worker(i, num_workers, input_size * 2);
-            std::uint64_t blocked_party = get_blocked_worker(i, num_workers, input_size * 2);
             if (i < input_size) {
                 std::uint32_t user = i + 1;
                 std::uint64_t hash;
@@ -125,13 +124,13 @@ int main(int argc, char** argv) {
                 write256(garbler_writers[cyclic_party].get(), hash, 0, 0, 0);
                 garbler_writers[cyclic_party]->write32(user);
                 if (hash == 0) {
-                    expected_writers[blocked_party]->write32(user);
+                    expected_writers[get_blocked_worker(2 * i, num_workers, input_size * 2 - 1)]->write32(user);
                 } else {
-                    expected_writers[blocked_party]->write32(0);
+                    expected_writers[get_blocked_worker(2 * i, num_workers, input_size * 2 - 1)]->write32(0);
                 }
                 /* Accounts for comparisons between different users. */
                 if (i + 1 != input_size) {
-                    expected_writers[blocked_party]->write32(0);
+                    expected_writers[get_blocked_worker(2 * i + 1, num_workers, input_size * 2 - 1)]->write32(0);
                 }
             } else {
                 std::uint32_t user = 2 * input_size - i;
