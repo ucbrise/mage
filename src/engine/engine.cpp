@@ -40,8 +40,9 @@ namespace mage::engine {
         assert(this->memory == nullptr);
         auto start = std::chrono::steady_clock::now();
 
-        if (io_setup(concurrent_swaps, &this->aio_ctx) != 0) {
-            std::perror("io_setup");
+        int errnum = io_setup(concurrent_swaps, &this->aio_ctx);
+        if (errnum != 0) {
+            std::cerr << "io_setup: " << std::strerror(-errnum) << std::endl;
             std::abort();
         }
 
