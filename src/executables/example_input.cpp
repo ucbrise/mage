@@ -444,6 +444,17 @@ int main(int argc, char** argv) {
         } else {
             std::cerr << "Unknown option " << option << std::endl;
         }
+    } else if (problem_name == "real_cpir") {
+        if (option == "") {
+            std::size_t output_index = 3;
+            for (std::size_t i = 0; i != input_size; i++) {
+                std::uint64_t w = get_blocked_worker(i, num_workers, input_size);
+                garbler_writers[w]->write_float(i == output_index ? 1.0 : 0.0);
+            }
+            for (std::size_t i = 0; i != input_size; i++) {
+                expected_writers[0]->write_float(static_cast<float>(1 + (i * input_size) + output_index));
+            }
+        }
     } else if (problem_name == "real_sum") {
         if (option == "") {
             std::size_t sum = 0;
