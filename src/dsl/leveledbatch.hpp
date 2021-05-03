@@ -517,6 +517,28 @@ namespace mage::dsl {
         }
 
         /**
+         * @brief Computes the element-wise product of this LeveledBatch and
+         * the specified batch of plaintexts, without normalizing the result.
+         *
+         * This allows one to delay normalization when it is more efficient to
+         * do so. For example, if one wants to compute an expression of the
+         * form ab + cd, one can compute ab and cd without normalization, add
+         * the non-normalized products and perform a single normalization of
+         * the overall result. This requires fewer normalizations, and is
+         * therefore more efficient, than normalizing ab and cd before
+         * computing the sum.
+         *
+         * @param other The batch of plaintexts to multiply with this one.
+         * @return A new LeveledBatch containing the element-wise product of
+         * this LeveledBatch and the specified batch of plaintexts.
+         */
+        LeveledBatch<level, false, Placer, p> multiply_without_normalizing(const LeveledPlaintextBatch<level, Placer, p>& plaintext) {
+            static_assert(level > 0);
+            static_assert(normalized);
+            return LeveledBatch<level, false, Placer, p>(OpCode::MultiplyPlaintextRaw, *this, plaintext);
+        }
+
+        /**
          * @brief Converts a non-normalized LeveledBatch into a normalized one,
          * decreasing its level by 1.
          *

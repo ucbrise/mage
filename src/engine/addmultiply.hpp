@@ -172,6 +172,9 @@ namespace mage::engine {
             case OpCode::MultiplyRaw:
                 this->protocol.op_multiply_raw(&this->memory[phys.two_args.output], &this->memory[phys.two_args.input1], &this->memory[phys.two_args.input2], phys.two_args.width);
                 return PackedPhysInstruction::size(OpCode::MultiplyRaw);
+            case OpCode::MultiplyPlaintextRaw:
+                this->protocol.op_multiply_plaintext_raw(&this->memory[phys.two_args.output], &this->memory[phys.two_args.input1], &this->memory[phys.two_args.input2], phys.two_args.width);
+                return PackedPhysInstruction::size(OpCode::MultiplyPlaintextRaw);
             case OpCode::Renormalize:
                 this->protocol.op_normalize(&this->memory[phys.one_arg.output], &this->memory[phys.one_arg.input1], phys.one_arg.width);
                 return PackedPhysInstruction::size(OpCode::Renormalize);

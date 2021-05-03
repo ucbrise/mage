@@ -151,6 +151,18 @@ namespace mage::protocols::ckks {
             this->serialize(c, output, level, false);
         }
 
+        void op_multiply_plaintext_raw(std::uint8_t* output, const std::uint8_t* input1, const std::uint8_t* input2, std::int32_t level) {
+            seal::Ciphertext a;
+            this->deserialize(a, input1, level, true);
+
+            seal::Plaintext b;
+            this->deserialize(b, input2, level);
+
+            seal::Ciphertext c;
+            this->evaluator.multiply_plain(a, b, c);
+            this->serialize(c, output, level, false);
+        }
+
         void op_normalize(std::uint8_t* output, const std::uint8_t* input, std::int32_t level) {
             seal::Ciphertext c;
             this->deserialize(c, input, level + 1, false);

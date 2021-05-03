@@ -75,6 +75,7 @@ namespace mage {
         AddPlaintext, // 2 arguments
         MultiplyPlaintext, // 2 arguments
         MultiplyRaw, // 2 arguments
+        MultiplyPlaintextRaw, // 2 arguments
         Renormalize, // 1 argument
         Encode, // 1 argument
     };
@@ -159,6 +160,8 @@ namespace mage {
             return "MultiplyPlaintext";
         case OpCode::MultiplyRaw:
             return "MultiplyRaw";
+        case OpCode::MultiplyPlaintextRaw:
+            return "MultiplyPlaintextRaw";
         case OpCode::Renormalize:
             return "Renormalize";
         case OpCode::Encode:
@@ -355,6 +358,7 @@ namespace mage {
             case OpCode::AddPlaintext:
             case OpCode::MultiplyPlaintext:
             case OpCode::MultiplyRaw:
+            case OpCode::MultiplyPlaintextRaw:
                 this->layout = InstructionFormat::TwoArgs;
                 this->single_bit = false;
                 this->has_output = true;
