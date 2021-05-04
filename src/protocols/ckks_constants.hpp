@@ -53,13 +53,12 @@ namespace mage::protocols::ckks {
     }
 
     constexpr std::uint64_t ckks_plaintext_size(std::int32_t level) {
-        /* For now, I've just taken the ciphertext sizes... */
         if (level == 0) {
-            return 131689;
+            return 65624;
         } else if (level == 1) {
-            return 263273;
+            return 131160;
         } else if (level == 2) {
-            return 394857;
+            return 196696;
         } else {
             return UINT64_MAX;
         }
