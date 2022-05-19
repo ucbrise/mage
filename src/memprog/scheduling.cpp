@@ -277,8 +277,7 @@ namespace mage::memprog {
              * synchronously.
              */
             PhysPageNumber ppn;
-            if (this->allocate_page_frame(ppn)) {
-                this->emit_page_copy(phys.swap.memory, ppn);
+            {
                 auto iter2 = this->in_flight_swapouts.find(spn);
                 if (iter2 != this->in_flight_swapouts.end()) {
                     /*
@@ -292,6 +291,9 @@ namespace mage::memprog {
                     this->in_flight_swapout_queue.erase(spn);
                     this->in_flight_swapouts.erase(iter2);
                 }
+            }
+            if (this->allocate_page_frame(ppn)) {
+                this->emit_page_copy(phys.swap.memory, ppn);
                 this->emit_issue_swapout(ppn, spn);
                 this->in_flight_swapouts[spn] = std::make_pair(i, ppn);
                 this->in_flight_swapout_queue.insert(i, spn);
