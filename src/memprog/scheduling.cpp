@@ -99,6 +99,8 @@ namespace mage::memprog {
     }
 
     void NOPScheduler::schedule(util::ProgressBar* progress_bar) {
+        this->input.set_progress_bar(progress_bar);
+
         const ProgramFileHeader& header = this->input.get_header();
         for (std::uint64_t i = 0; i != header.num_instructions; i++) {
             const PackedPhysInstruction& phys = this->input.start_instruction();
