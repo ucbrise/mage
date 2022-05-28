@@ -183,7 +183,10 @@ namespace mage::engine {
         PhysAddr to_paddr = to * this->page_size_bytes;
         PhysAddr from_paddr = from * this->page_size_bytes;
 
+        auto start = std::chrono::steady_clock::now();
         std::copy(&this->memory[from_paddr], &this->memory[from_paddr + this->page_size_bytes], &this->memory[to_paddr]);
+        auto end = std::chrono::steady_clock::now();
+        this->swap_copy.event(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count());
     }
 
     MessageChannel& Engine::contact_worker_checked(WorkerID worker_id) {

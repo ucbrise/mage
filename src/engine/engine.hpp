@@ -73,7 +73,8 @@ namespace mage::engine {
         Engine(const std::shared_ptr<ClusterNetwork>& network) : memory(nullptr),
             memory_size(0), swapfd(-1), swap_in("SWAP-IN (ns)", true),
             swap_out("SWAP-OUT (ns)", true), swap_blocked("SWAP-BLOCKED (ns)", true),
-            cluster(network), aio_ctx(0), progress_bar("Execution", 1024) {
+            swap_copy("SWAP-COPY (ns)", true), cluster(network), aio_ctx(0),
+            progress_bar("Execution", 1024) {
         }
 
         virtual ~Engine();
@@ -202,6 +203,7 @@ namespace mage::engine {
             std::cout << this->swap_in << std::endl;
             std::cout << this->swap_out << std::endl;
             std::cout << this->swap_blocked << std::endl;
+            std::cout << this->swap_copy << std::endl;
         }
 
         /**
@@ -236,6 +238,7 @@ namespace mage::engine {
         util::StreamStats swap_in;
         util::StreamStats swap_out;
         util::StreamStats swap_blocked;
+        util::StreamStats swap_copy;
 
         std::uint8_t* memory;
         PageSize page_size_bytes;
