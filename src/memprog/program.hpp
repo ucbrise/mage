@@ -124,7 +124,7 @@ namespace mage::memprog {
          * @param addr The address of the memory to deallocate.
          * @param width The amount of memory to deallocate.
          */
-        void recycle(VirtAddr addr, BitWidth width) {
+        void recycle(VirtAddr addr, memprog::AllocationSize width) {
             this->placer.deallocate_virtual(addr, width);
         }
 
