@@ -299,6 +299,9 @@ namespace mage::memprog {
         std::vector<PhysPageNumber> free_pages;
         InstructionNumber current_instruction;
 
+        std::vector<PhysPageNumber> translation_map;
+        PageShift page_shift;
+
         std::uint64_t num_allocation_failures;
         std::uint64_t num_synchronous_swapins;
     };

@@ -30,6 +30,8 @@
 #include "programfile.hpp"
 
 namespace mage::memprog {
+    static constexpr bool elide_page_copies = true;
+
     Scheduler::Scheduler(std::string input_file, std::string output_file)
         : input(input_file), output(output_file) {
     }
@@ -138,6 +140,13 @@ namespace mage::memprog {
             i--;
             this->free_pages.push_back(last_page + i);
         } while (i != 0);
+
+        this->translation_map.resize(header.num_pages);
+        for (PhysPageNumber ppn = 0; ppn != header.num_pages; ppn++) {
+            this->translation_map[ppn] = ppn;
+        }
+
+        this->page_shift = header.page_shift;
     }
 
     std::uint64_t BackdatingScheduler::get_num_allocation_failures() const {
@@ -239,16 +248,27 @@ namespace mage::memprog {
              * Otherwise, check if the corresponding swapout was elided: if so,
              * copy the page from the place it was copied to.
              */
-            PhysPageNumber ppn = phys.swap.memory;
+            PhysPageNumber ppn = this->translation_map[phys.swap.memory];
             StoragePageNumber spn = phys.swap.storage;
             auto iter = this->in_flight_swapins.find(spn);
             if (iter != this->in_flight_swapins.end()) {
-                this->emit_finish_swapin(iter->second);
-                this->emit_page_copy(iter->second, ppn); // allocated when handling swapin
-                this->deallocate_page_frame(iter->second);
+                if constexpr (elide_page_copies) {
+                    this->emit_finish_swapin(iter->second);
+                    this->translation_map[phys.swap.memory] = iter->second;
+                    this->deallocate_page_frame(ppn);
+                } else {
+                    this->emit_finish_swapin(iter->second);
+                    this->emit_page_copy(iter->second, ppn); // allocated when handling swapin
+                    this->deallocate_page_frame(iter->second);
+                }
                 this->in_flight_swapins.erase(iter);
             } else if (this->in_flight_swapout_queue.contains(spn)) {
                 auto map_iter = this->in_flight_swapouts.find(spn);
+                /*
+                 * This copy can't be elided using translation_map because any
+                 * mutations made to the physical page by subsequent
+                 * instructions may cause the swapout to not happen correctly.
+                 */
                 this->emit_page_copy(map_iter->second.second, ppn);
             } else {
                 this->emit_issue_swapin(spn, ppn);
@@ -293,13 +313,19 @@ namespace mage::memprog {
                 }
             }
             if (this->allocate_page_frame(ppn)) {
-                this->emit_page_copy(phys.swap.memory, ppn);
-                this->emit_issue_swapout(ppn, spn);
-                this->in_flight_swapouts[spn] = std::make_pair(i, ppn);
+                if constexpr (elide_page_copies) {
+                    this->emit_issue_swapout(this->translation_map[phys.swap.memory], spn);
+                    this->in_flight_swapouts[spn] = std::make_pair(i, this->translation_map[phys.swap.memory]);
+                    this->translation_map[phys.swap.memory] = ppn;
+                } else {
+                    this->emit_page_copy(this->translation_map[phys.swap.memory], ppn);
+                    this->emit_issue_swapout(ppn, spn);
+                    this->in_flight_swapouts[spn] = std::make_pair(i, ppn);
+                }
                 this->in_flight_swapout_queue.insert(i, spn);
             } else {
-                this->emit_issue_swapout(phys.swap.memory, spn);
-                this->emit_finish_swapout(phys.swap.memory);
+                this->emit_issue_swapout(this->translation_map[phys.swap.memory], spn);
+                this->emit_finish_swapout(this->translation_map[phys.swap.memory]);
             }
         } else {
             /* Copy instruction to output. */
@@ -307,6 +333,15 @@ namespace mage::memprog {
             std::size_t phys_size = phys.size();
             PackedPhysInstruction& into = this->output.start_instruction();
             std::copy(phys_start, phys_start + phys_size, reinterpret_cast<std::uint8_t*>(&into));
+
+            /* Translate address according to the translation map. */
+            std::array<PhysPageNumber, 5> ppns;
+            std::uint8_t num_pages = into.store_page_numbers(ppns.data(), this->page_shift);
+            for (std::uint8_t j = 0; j != num_pages; j++) {
+                ppns[j] = this->translation_map[ppns[j]];
+            }
+            into.restore_page_numbers(phys, ppns.data(), this->page_shift);
+
             this->output.finish_instruction(phys_size);
         }
     }
