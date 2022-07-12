@@ -26,6 +26,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <string>
 #include "addr.hpp"
 #include "engine/cluster.hpp"
