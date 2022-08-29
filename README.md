@@ -4,7 +4,7 @@ MAGE is an execution engine for secure computation protocols, such as secure mul
 
 The implementation of MAGE in this repository accompanies our OSDI 2021 paper:
 
-Sam Kumar, David E. Culler, and Raluca Ada Popa. Nearly Zero-Cost Virtual Memory for Secure Computation. To appear at OSDI 2021.
+Sam Kumar, David E. Culler, and Raluca Ada Popa. MAGE: Nearly Zero-Cost Virtual Memory for Secure Computation. OSDI 2021.
 
 **WARNING: This implementation is a prototype designed for academic study and proof-of-concept use cases. It has not received code review and is *not* production-ready.**
 
